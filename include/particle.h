@@ -17,24 +17,15 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+#ifndef PARTICLE_H
+#define PARTICLE_H
 
-#include "message.h"
-#include "params.h"
-#include "units.h"
-#include "cosmology.h"
-#include "strooklat.h"
-#include "grid_io.h"
-#include "random.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "fft_kernels.h"
-#include "gaussian_field.h"
-#include "perturb_data.h"
-#include "initial_conditions.h"
-#include "particle.h"
-#include "mesh_grav.h"
-#include "mass_deposit.h"
+struct particle {
+    long long int id;
+    char type;
+    double x[3];
+    double v[3];
+    double m;    
+};
 
 #endif

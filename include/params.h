@@ -31,6 +31,11 @@ struct params {
     
     /* Perturbation file parameters */
     char *TransferFunctionsFile;
+    
+    /* Simulation box parameters */
+    long long GridSize;
+    double BoxLength;
+    double z_start;
 
 };
 

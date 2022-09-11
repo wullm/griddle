@@ -29,6 +29,9 @@
 
 int readParams(struct params *pars, const char *fname) {
      pars->Seed = ini_getl("Random", "Seed", 1, fname);
+     pars->GridSize = ini_getl("Simulation", "GridSize", 64, fname);
+     pars->BoxLength = ini_getd("Simulation", "BoxLength", 1000, fname);
+     pars->z_start = ini_getd("Simulation", "z_start", 1000, fname);
     
      /* Read strings */
      int len = DEFAULT_STRING_LENGTH;

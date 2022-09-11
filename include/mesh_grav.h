@@ -1,6 +1,6 @@
 /*******************************************************************************
  * This file is part of griddle.
- * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
+ * Copyright (c) 2021 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -17,24 +17,21 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+#ifndef MESH_GRAVITY_H
+#define MESH_GRAVITY_H
 
-#include "message.h"
-#include "params.h"
-#include "units.h"
-#include "cosmology.h"
-#include "strooklat.h"
-#include "grid_io.h"
-#include "random.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "fft_kernels.h"
-#include "gaussian_field.h"
-#include "perturb_data.h"
-#include "initial_conditions.h"
-#include "particle.h"
-#include "mesh_grav.h"
-#include "mass_deposit.h"
+#include "../include/distributed_grid.h"
 
+double gridNGP(const struct distributed_grid *dg, int N, double boxlen,
+               double x, double y, double z);
+double gridCIC(const struct distributed_grid *dg, int N, double boxlen,
+               double x, double y, double z);
+double gridInterp(const struct distributed_grid *dg, int N, double boxlen,
+                  double x, double y, double z, int order);
+void accelNGP(const struct distributed_grid *dg, int N, double boxlen,
+              double *x, double *a);
+void accelCIC(const struct distributed_grid *dg, int N, double boxlen,
+              double *x, double *a);
+void accelInterp(const struct distributed_grid *dg, int N, double boxlen,
+                 double *x, double *a, int order);
 #endif

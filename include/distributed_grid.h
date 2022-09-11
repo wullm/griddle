@@ -87,6 +87,17 @@ static inline long long int row_major_dg(int i, int j, int k, const struct distr
     return (long long int) i*dg->N*(dg->N+2) + j*(dg->N+2) + k;
 }
 
+static inline long long int row_major_dg2(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Wrap global coordinates */
+    i = wrap(i,dg->N);
+    j = wrap(j,dg->N);
+    k = wrap(k,dg->N);
+
+    /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0;
+    return (long long int) i*dg->N*(dg->N+2) + j*(dg->N+2) + k;
+}
+
 static inline long long int row_major_half_dg(int i, int j, int k, const struct distributed_grid *dg) {
     /* Wrap global coordinates */
     i = wrap(i,dg->N);

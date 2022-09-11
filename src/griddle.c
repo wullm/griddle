@@ -87,6 +87,50 @@ int main(int argc, char *argv[]) {
     /* Seed the random number generator */
     rng_state seed = rand_uint64_init(pars.Seed + rank);
     
+    /* Create or read a Gaussian random field */
+    int N = pars.GridSize;
+    double boxlen = pars.BoxLength;
+    struct distributed_grid lpt_potential;
+    
+    /* The velocity pre-factor a * H * f */
+    const double z_start = pars.z_start;
+    
+        
+    /* Allocate distributed memory arrays (one complex & one real) */
+    alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
+    
+    /* Generate LPT potential grid */
+    generate_potential_grid(&lpt_potential, &seed, &ptdat, &cosmo, z_start);
+    
+    /* Allocate memory for a particle lattice */
+    struct particle *particles = malloc(N * N * N * sizeof(struct particle));
+    
+    /* Generate a particle lattice */
+    generate_particle_lattice(&lpt_potential, &ptdat, particles, z_start);
+    
+    
+        
+    /* Allocate distributed memory arrays (one complex & one real) */
+    struct distributed_grid mass;
+    alloc_local_grid(&mass, N, boxlen, MPI_COMM_WORLD);
+    mass.momentum_space = 0;
+    
+    mass_deposition(&mass, particles);
+    
+    /* Export the GRF */
+    writeFieldFile_dg(&mass, "mass.hdf5");
+    
+    
+    
+    /* Free the particle lattice */
+    free(particles);   
+                                
+    /* Free the LPT potential grids */
+    free_local_grid(&lpt_potential);
+    
+    /* Free the mass grid */
+    free_local_grid(&mass);
+    
     /* Done with MPI parallelization */
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();

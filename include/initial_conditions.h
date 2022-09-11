@@ -17,24 +17,20 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+#ifndef ICS_H
+#define ICS_H
 
-#include "message.h"
-#include "params.h"
-#include "units.h"
-#include "cosmology.h"
-#include "strooklat.h"
-#include "grid_io.h"
-#include "random.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "fft_kernels.h"
-#include "gaussian_field.h"
-#include "perturb_data.h"
-#include "initial_conditions.h"
-#include "particle.h"
-#include "mesh_grav.h"
-#include "mass_deposit.h"
+#include "../include/random.h"
+#include "../include/perturb_data.h"
+#include "../include/cosmology.h"
+#include "../include/distributed_grid.h"
+#include "../include/particle.h"
 
+int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
+                            struct perturb_data *ptdat,
+                            struct cosmology *cosmo, double z_start);
+
+int generate_particle_lattice(struct distributed_grid *lpt_potential, 
+                              struct perturb_data *ptdat,
+                              struct particle *parts, double z_start);
 #endif
