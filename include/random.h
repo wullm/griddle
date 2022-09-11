@@ -17,12 +17,26 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+#ifndef RANDOM_H
+#define RANDOM_H
 
-#include "message.h"
-#include "params.h"
-#include "grid_io.h"
-#include "random.h"
+/* We use the xoshiro256** pseudo-random number generator */
+#include "../include/random_xorshift.h"
+typedef struct xoshiro256ss_state rng_state;
+
+static inline uint64_t rand_uint64(rng_state *state) {
+    return xoshiro256ss(state);
+}
+
+static inline rng_state rand_uint64_init(uint64_t seed) {
+    return xoshiro256ss_init(seed);
+}
+
+/* Sample a uniform variable on the open unit interval */
+double sampleUniform(rng_state *state);
+
+/* Sample a standard Gaussian random number */
+double sampleNorm(rng_state *state);
+
 
 #endif

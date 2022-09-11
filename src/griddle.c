@@ -63,6 +63,9 @@ int main(int argc, char *argv[]) {
     
     /* Store the MPI rank */
     pars.rank = rank;
+    
+    /* Seed the random number generator */
+    rng_state seed = rand_uint64_init(pars.Seed + rank);
 
     /* Done with MPI parallelization */
     MPI_Barrier(MPI_COMM_WORLD);
