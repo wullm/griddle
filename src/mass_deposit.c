@@ -27,8 +27,10 @@
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
 
-    long long int N = dgrid->N;
-    double boxlen = dgrid->boxlen;
+    const long long int N = dgrid->N;
+    const double boxlen = dgrid->boxlen;
+    const double cell_factor = N / boxlen;
+    const double cell_factor_3 = cell_factor * cell_factor * cell_factor;
     double total_mass = 0;
 
     /* Empty the grid */
@@ -77,7 +79,7 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
             				double part_y = yy < 1.0 ? (1.0 - yy) : 0.;
             				double part_z = zz < 1.0 ? (1.0 - zz) : 0.;
 
-                            dgrid->box[row_major_dg2(iX+x, iY+y, iZ+z, dgrid)] += M/1.0 * (part_x*part_y*part_z);
+                            dgrid->box[row_major_dg2(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
         				}
         			}
         		}
@@ -100,6 +102,7 @@ int compute_potential(struct distributed_grid *dgrid,
     fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson, NULL);
 
     /* Multiply by Newton's constant */
+    double boxlen = dgrid->boxlen;
     double factor = -4.0 * M_PI * pcs->GravityG;
     fft_apply_kernel_dg(dgrid, dgrid, kernel_constant, &factor);
 
