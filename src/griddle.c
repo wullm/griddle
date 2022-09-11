@@ -59,25 +59,47 @@ int main(int argc, char *argv[]) {
     struct params pars;
     struct units us;
     struct physical_consts pcs;
+    struct cosmology cosmo;
+    
+    /* Structures for dealing with perturbation data (transfer functions) */
+    struct perturb_data ptdat;
+    struct perturb_params ptpars;
         
     /* Read parameter file for parameters, units, and cosmological values */
     readParams(&pars, fname);
     readUnits(&us, fname);
     set_physical_constants(&us, &pcs);
-    
+    readCosmology(&cosmo, fname);
+        
+    /* Read the perturbation data file */
+    readPerturb(&us, &ptdat, pars.TransferFunctionsFile);
+    readPerturbParams(&us, &ptpars, pars.TransferFunctionsFile);
+        
+    /* Create interpolation splines for redshifts and wavenumbers */
+    struct strooklat spline_z = {ptdat.redshift, ptdat.tau_size};
+    struct strooklat spline_k = {ptdat.k, ptdat.k_size};
+    init_strooklat_spline(&spline_z, 100);
+    init_strooklat_spline(&spline_k, 100);
+        
     /* Store the MPI rank */
     pars.rank = rank;
     
     /* Seed the random number generator */
     rng_state seed = rand_uint64_init(pars.Seed + rank);
-
+    
     /* Done with MPI parallelization */
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
 
     /* Clean up */
     cleanParams(&pars);
-
+    cleanPerturb(&ptdat);
+    cleanPerturbParams(&ptpars);
+    
+    /* Clean up strooklat interpolation splines */
+    free_strooklat_spline(&spline_z);
+    free_strooklat_spline(&spline_k);
+    
     /* Timer */
     gettimeofday(&time_stop, NULL);
     long unsigned microsec = (time_stop.tv_sec - time_start.tv_sec) * 1000000

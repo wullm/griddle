@@ -17,30 +17,18 @@
  *
  ******************************************************************************/
 
-#include <stdlib.h>
-#include <string.h>
-#include <hdf5.h>
-#include <assert.h>
-#include <math.h>
-#include "../include/params.h"
-
-/* The .ini parser library is minIni */
-#include "../parser/minIni.h"
-
-int readParams(struct params *pars, const char *fname) {
-     pars->Seed = ini_getl("Random", "Seed", 1, fname);
-    
-     /* Read strings */
-     int len = DEFAULT_STRING_LENGTH;
-     pars->TransferFunctionsFile = malloc(len);
-     ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
-    
-     return 0;
-}
+#ifndef COSMOLOGY_H
+#define COSMOLOGY_H
 
 
-int cleanParams(struct params *pars) {
-    free(pars->TransferFunctionsFile);
-    
-    return 0;
-}
+struct cosmology {
+    double h;
+    double n_s;
+    double A_s;
+    double k_pivot;
+};
+
+int readCosmology(struct cosmology *cosmo, const char *fname);
+double primordialPower(const double k, const struct cosmology *cosmo);
+
+#endif

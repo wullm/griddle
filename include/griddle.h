@@ -23,10 +23,14 @@
 #include "message.h"
 #include "params.h"
 #include "units.h"
+#include "cosmology.h"
+#include "strooklat.h"
 #include "grid_io.h"
 #include "random.h"
 #include "distributed_grid.h"
 #include "fft.h"
+#include "fft_kernels.h"
 #include "gaussian_field.h"
+#include "perturb_data.h"
 
 #endif

@@ -18,29 +18,28 @@
  ******************************************************************************/
 
 #include <stdlib.h>
-#include <string.h>
-#include <hdf5.h>
-#include <assert.h>
 #include <math.h>
-#include "../include/params.h"
+
+#include "../include/cosmology.h"
 
 /* The .ini parser library is minIni */
 #include "../parser/minIni.h"
 
-int readParams(struct params *pars, const char *fname) {
-     pars->Seed = ini_getl("Random", "Seed", 1, fname);
-    
-     /* Read strings */
-     int len = DEFAULT_STRING_LENGTH;
-     pars->TransferFunctionsFile = malloc(len);
-     ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
-    
-     return 0;
+int readCosmology(struct cosmology *cosmo, const char *fname) {
+    cosmo->h = ini_getd("Cosmology", "h", 0.70, fname);
+    cosmo->n_s = ini_getd("Cosmology", "n_s", 0.97, fname);
+    cosmo->A_s = ini_getd("Cosmology", "A_s", 2.215e-9, fname);
+    cosmo->k_pivot = ini_getd("Cosmology", "k_pivot", 0.05, fname);
+
+    return 0;
 }
 
+double primordialPower(const double k, const struct cosmology *cosmo) {
+    if (k == 0) return 0;
 
-int cleanParams(struct params *pars) {
-    free(pars->TransferFunctionsFile);
-    
-    return 0;
+    double A_s = cosmo->A_s;
+    double n_s = cosmo->n_s;
+    double k_pivot = cosmo->k_pivot;
+
+    return A_s * pow(k/k_pivot, n_s - 1.) * k * (2. * M_PI * M_PI);
 }

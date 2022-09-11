@@ -28,6 +28,9 @@ struct params {
 
     /* Random parameters */
     long int Seed;
+    
+    /* Perturbation file parameters */
+    char *TransferFunctionsFile;
 
 };
 
