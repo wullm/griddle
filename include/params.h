@@ -17,8 +17,8 @@
  *
  ******************************************************************************/
 
-#ifndef INPUT_H
-#define INPUT_H
+#ifndef PARAMS_H
+#define PARAMS_H
 
 #define DEFAULT_STRING_LENGTH 150
 

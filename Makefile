@@ -25,6 +25,7 @@ all:
 	make minIni
 	mkdir -p lib
 	$(GCC) src/params.c -c -o lib/params.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/grid_io.c -c -o lib/grid_io.o $(INCLUDES) $(CFLAGS)
 
 	$(GCC) src/griddle.c -o griddle $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 

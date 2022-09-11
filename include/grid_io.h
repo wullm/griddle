@@ -17,11 +17,12 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+#ifndef GRIDIO_H
+#define GRIDIO_H
 
-#include "message.h"
-#include "params.h"
-#include "grid_io.h"
+int readFieldFile(double **box, int *N, double *box_len, const char *fname);
+int writeFieldFile(const double *box, int N, double boxlen, const char *fname);
+int writeFieldFileCompressed(const double *box, int N, double boxlen,
+                             const char *fname, int digits);
 
 #endif
