@@ -21,6 +21,6 @@
 #define GRIDDLE_H
 
 #include "message.h"
-#include "input.h"
+#include "params.h"
 
 #endif

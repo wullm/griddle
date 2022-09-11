@@ -24,7 +24,7 @@ OBJECTS = lib/*.o
 all:
 	make minIni
 	mkdir -p lib
-	$(GCC) src/input.c -c -o lib/input.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/params.c -c -o lib/params.o $(INCLUDES) $(CFLAGS)
 
 	$(GCC) src/griddle.c -o griddle $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 

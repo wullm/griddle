@@ -22,7 +22,7 @@
 #include <hdf5.h>
 #include <assert.h>
 #include <math.h>
-#include "../include/input.h"
+#include "../include/params.h"
 
 int readParams(struct params *pars, const char *fname) {
      pars->Seed = ini_getl("Random", "Seed", 1, fname);
