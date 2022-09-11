@@ -22,9 +22,6 @@
 
 #define DEFAULT_STRING_LENGTH 150
 
-/* The .ini parser library is minIni */
-#include "../parser/minIni.h"
-
 struct params {
     /* MPI rank (generated automatically) */
     int rank;

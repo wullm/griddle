@@ -57,9 +57,13 @@ int main(int argc, char *argv[]) {
     
     /* Main griddle structuress */
     struct params pars;
+    struct units us;
+    struct physical_consts pcs;
         
     /* Read parameter file for parameters, units, and cosmological values */
     readParams(&pars, fname);
+    readUnits(&us, fname);
+    set_physical_constants(&us, &pcs);
     
     /* Store the MPI rank */
     pars.rank = rank;

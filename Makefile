@@ -25,6 +25,7 @@ all:
 	make minIni
 	mkdir -p lib
 	$(GCC) src/params.c -c -o lib/params.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/units.c -c -o lib/units.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/grid_io.c -c -o lib/grid_io.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/random.c -c -o lib/random.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/distributed_grid.c -c -o lib/distributed_grid.o $(INCLUDES) $(CFLAGS)

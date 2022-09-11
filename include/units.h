@@ -17,16 +17,36 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+#ifndef UNITS_H
+#define UNITS_H
 
-#include "message.h"
-#include "params.h"
-#include "units.h"
-#include "grid_io.h"
-#include "random.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "gaussian_field.h"
+#define KM_METRES 1000
+#define MPC_METRES 3.085677581282e22
+
+#define SPEED_OF_LIGHT_METRES_SECONDS 2.99792e8
+#define GRAVITY_G_SI_UNITS 6.67428e-11 // m^3 / kg / s^2
+#define PLANCK_CONST_SI_UNITS 6.62607015e-34 //J s
+#define BOLTZMANN_CONST_SI_UNITS 1.380649e-23 //J / K
+#define ELECTRONVOLT_SI_UNITS 1.602176634e-19 // J
+
+struct units {
+    double UnitLengthMetres;
+    double UnitTimeSeconds;
+    double UnitMassKilogram;
+    double UnitTemperatureKelvin;
+    double UnitCurrentAmpere;
+};
+
+struct physical_consts {
+    /* Physical constants in internal units */
+    double SpeedOfLight;
+    double GravityG;
+    double hPlanck;
+    double kBoltzmann;
+    double ElectronVolt;
+};
+
+int readUnits(struct units *us, const char *fname);
+int set_physical_constants(struct units *us, struct physical_consts *pcs);
 
 #endif

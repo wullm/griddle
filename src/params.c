@@ -24,9 +24,11 @@
 #include <math.h>
 #include "../include/params.h"
 
+/* The .ini parser library is minIni */
+#include "../parser/minIni.h"
+
 int readParams(struct params *pars, const char *fname) {
      pars->Seed = ini_getl("Random", "Seed", 1, fname);
-
     
      return 0;
 }
