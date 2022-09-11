@@ -24,5 +24,8 @@
 #include "params.h"
 #include "grid_io.h"
 #include "random.h"
+#include "distributed_grid.h"
+#include "fft.h"
+#include "gaussian_field.h"
 
 #endif

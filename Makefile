@@ -27,6 +27,9 @@ all:
 	$(GCC) src/params.c -c -o lib/params.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/grid_io.c -c -o lib/grid_io.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/random.c -c -o lib/random.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/distributed_grid.c -c -o lib/distributed_grid.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/fft.c -c -o lib/fft.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/gaussian_field.c -c -o lib/gaussian_field.o $(INCLUDES) $(CFLAGS)
 
 	$(GCC) src/griddle.c -o griddle $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 

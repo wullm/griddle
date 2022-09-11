@@ -17,14 +17,20 @@
  *
  ******************************************************************************/
 
-/* Methods for input and output of data cubes, using the HDF5 format */
+/* Methods for generating Gaussian random fields */
 
-#ifndef GRIDIO_H
-#define GRIDIO_H
+#ifndef GAUSSIAN_FIELD_H
+#define GAUSSIAN_FIELD_H
 
-int readFieldFile(double **box, int *N, double *box_len, const char *fname);
-int writeFieldFile(const double *box, int N, double boxlen, const char *fname);
-int writeFieldFileCompressed(const double *box, int N, double boxlen,
-                             const char *fname, int digits);
+#include <complex.h>
+#include <fftw3.h>
+#include <mpi.h>
+
+#include "random.h"
+#include "distributed_grid.h"
+
+int generate_complex_grf(struct distributed_grid *dg, rng_state *state);
+int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed);
+int enforce_hermiticity(struct distributed_grid *dg);
 
 #endif

@@ -17,6 +17,8 @@
  *
  ******************************************************************************/
 
+/* Methods for input and output of data cubes, using the HDF5 format */
+
 #include <stdlib.h>
 #include <string.h>
 #include <hdf5.h>
