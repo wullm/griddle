@@ -43,6 +43,8 @@ struct perturb_data {
     double *log_tau;
     /* Vector of corresponding redshifts (tau_size) */
     double *redshift;
+    /* Vector of corresponding logarithmic growth factors (tau_size) */
+    double *f_growth;
     /* Vector of corresponding Hubble rates (tau_size) */
     double *Hubble_H;
     /* Titles of the transfer functions */

@@ -123,7 +123,8 @@ int readPerturb(struct units *us, struct perturb_data *pt, char *fname) {
     /* Allocate memory */
     pt->k = calloc(pt->k_size, sizeof(double));
     pt->log_tau = calloc(pt->tau_size, sizeof(double));
-    pt->redshift = calloc(pt->tau_size, sizeof(double));
+    pt->redshift = calloc(pt->tau_size, sizeof(double));    
+    pt->f_growth = calloc(pt->tau_size, sizeof(double));
     pt->Hubble_H = calloc(pt->tau_size, sizeof(double));
     pt->delta = malloc(pt->n_functions * pt->k_size * pt->tau_size * sizeof(double));
     pt->Omega = malloc(pt->n_functions * pt->tau_size * sizeof(double));
@@ -150,6 +151,11 @@ int readPerturb(struct units *us, struct perturb_data *pt, char *fname) {
     /* Read the redshifts */
     h_data = H5Dopen2(h_grp, "Redshifts", H5P_DEFAULT);
     h_err = H5Dread(h_data, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, pt->redshift);
+    H5Dclose(h_data);
+    
+    /* Read the logarithmic growth rates */
+    h_data = H5Dopen2(h_grp, "Logarithmic growth rates (f)", H5P_DEFAULT);
+    h_err = H5Dread(h_data, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, pt->f_growth);
     H5Dclose(h_data);
 
     /* Read the Hubble rates */
@@ -273,6 +279,7 @@ int cleanPerturb(struct perturb_data *pt) {
     free(pt->k);
     free(pt->log_tau);
     free(pt->redshift);
+    free(pt->f_growth);
     free(pt->Hubble_H);
     free(pt->delta);
     free(pt->Omega);
