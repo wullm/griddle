@@ -22,12 +22,23 @@
 #include <assert.h>
 #include <math.h>
 #include "../include/mass_deposit.h"
+#include "../include/fft.h"
+#include "../include/fft_kernels.h"
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
 
     long long int N = dgrid->N;
     double boxlen = dgrid->boxlen;
     double total_mass = 0;
+
+    /* Empty the grid */
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                dgrid->box[row_major_dg2(i, j, k, dgrid)] = 0;
+            }
+        }
+    }
 
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
@@ -76,5 +87,24 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
     
     // printf("The total mass is %g\n", total_mass);
     
+    return 0;
+}
+
+int compute_potential(struct distributed_grid *dgrid,
+                      struct physical_consts *pcs) {
+
+    /* Carry out the forward Fourier transform */
+    fft_r2c_dg(dgrid);
+
+    /* Apply the inverse Poisson kernel */
+    fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson, NULL);
+
+    /* Multiply by Newton's constant */
+    double factor = -4.0 * M_PI * pcs->GravityG;
+    fft_apply_kernel_dg(dgrid, dgrid, kernel_constant, &factor);
+
+    /* Carry out the backward Fourier transform */
+    fft_c2r_dg(dgrid);
+
     return 0;
 }

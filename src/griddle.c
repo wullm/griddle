@@ -92,9 +92,11 @@ int main(int argc, char *argv[]) {
     double boxlen = pars.BoxLength;
     struct distributed_grid lpt_potential;
     
-    /* The velocity pre-factor a * H * f */
-    const double z_start = pars.z_start;
-    
+    /* Integration limits */
+    const double a_begin = pars.ScaleFactorBegin;
+    const double a_end = pars.ScaleFactorEnd;
+    const double a_factor = 1.0 + pars.ScaleFactorStep;
+    const double z_start = 1.0 / a_begin - 1.0;
         
     /* Allocate distributed memory arrays (one complex & one real) */
     alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
@@ -106,17 +108,108 @@ int main(int argc, char *argv[]) {
     struct particle *particles = malloc(N * N * N * sizeof(struct particle));
     
     /* Generate a particle lattice */
-    generate_particle_lattice(&lpt_potential, &ptdat, particles, z_start);
-    
+    generate_particle_lattice(&lpt_potential, &ptdat, &ptpars, particles,
+                              &cosmo, &us, &pcs, z_start);
     
         
     /* Allocate distributed memory arrays (one complex & one real) */
     struct distributed_grid mass;
     alloc_local_grid(&mass, N, boxlen, MPI_COMM_WORLD);
     mass.momentum_space = 0;
-    
+
+    /* First mass deposition */
     mass_deposition(&mass, particles);
-    
+
+    /* Compute the gravitational potential */
+    compute_potential(&mass, &pcs);
+
+    /* Start at the beginning */
+    double a = a_begin;
+
+    /* Prepare integration */
+    int MAX_ITER = (log(a_end) - log(a_begin))/log(a_factor) + 1;
+
+    /* The main loop */
+    for (int ITER = 0; ITER < MAX_ITER; ITER++) {
+
+        /* Determine the next scale factor */
+        double a_next;
+        if (ITER == 0) {
+            a_next = a; //start with a step that does nothing
+        } else if (ITER < MAX_ITER - 1) {
+            a_next = a * a_factor;
+        } else {
+            a_next = a_end;
+        }
+
+        /* Compute the current redshift and log conformal time */
+        double z = 1./a - 1.;
+        double log_tau = strooklat_interp(&spline_z, ptdat.log_tau, z);
+
+        /* Determine the half-step scale factor */
+        double a_half = sqrt(a_next * a);
+
+        /* Find the next and half-step conformal times */
+        double z_next = 1./a_next - 1.;
+        double z_half = 1./a_half - 1.;
+        double log_tau_next = strooklat_interp(&spline_z, ptdat.log_tau, z_next);
+        double log_tau_half = strooklat_interp(&spline_z, ptdat.log_tau, z_half);
+        double dtau1 = exp(log_tau_half) - exp(log_tau);
+        double dtau2 = exp(log_tau_next) - exp(log_tau_half);
+        double dtau = dtau1 + dtau2;
+
+        /* Skip the particle integration during the first step */
+        if (ITER == 0)
+            continue;
+
+        /* Integrate the particles */
+        for (long long i = 0; i < N*N*N; i++) {
+            struct particle *p = &particles[i];
+
+            /* Obtain the acceleration by differentiating the potential */
+            double acc[3] = {0, 0, 0};
+            accelCIC(&mass, N, boxlen, p->x, acc);
+
+            /* Execute first half-kick */
+            p->v[0] += acc[0] * dtau1;
+            p->v[1] += acc[1] * dtau1;
+            p->v[2] += acc[2] * dtau1;
+
+            /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
+            p->x[0] += p->v[0] * dtau;
+            p->x[1] += p->v[1] * dtau;
+            p->x[2] += p->v[2] * dtau;
+        }
+
+        /* Initiate mass deposition */
+        mass_deposition(&mass, particles);
+
+        /* Re-compute the gravitational potential */
+        compute_potential(&mass, &pcs);
+
+        /* Integrate the particles */
+        for (long long i = 0; i < N*N*N; i++) {
+            struct particle *p = &particles[i];
+
+            /* Obtain the acceleration by differentiating the potential */
+            double acc[3] = {0, 0, 0};
+            accelCIC(&mass, N, boxlen, p->x, acc);
+
+            /* Execute second half-kick */
+            p->v[0] += acc[0] * dtau2;
+            p->v[1] += acc[1] * dtau2;
+            p->v[2] += acc[2] * dtau2;
+        }
+
+        /* Step forward */
+        a = a_next;
+
+        printf("%d %g %g\n", ITER, a, z);
+    }
+
+    /* Initiate mass deposition */
+    mass_deposition(&mass, particles);
+
     /* Export the GRF */
     writeFieldFile_dg(&mass, "mass.hdf5");
     

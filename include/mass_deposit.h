@@ -22,7 +22,10 @@
 
 #include "../include/distributed_grid.h"
 #include "../include/particle.h"
+#include "../include/units.h"
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts);
+int compute_potential(struct distributed_grid *dgrid,
+                      struct physical_consts *pcs);
 
 #endif

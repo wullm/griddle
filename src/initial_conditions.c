@@ -74,7 +74,10 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
 
 int generate_particle_lattice(struct distributed_grid *lpt_potential, 
                               struct perturb_data *ptdat,
-                              struct particle *parts, double z_start) {
+                              struct perturb_params *ptpars,
+                              struct particle *parts, struct cosmology *cosmo,
+                              struct units *us, struct physical_consts *pcs,
+                              double z_start) {
 
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
@@ -86,10 +89,17 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
     const double vel_fact = a_start * f_start * H_start;
     
-    /* Other constants */
+    /* Grid constants */
     const int N = lpt_potential->N;
     const double boxlen = lpt_potential->boxlen;
     
+    /* Cosmological constants */
+    const double h = cosmo->h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double Omega_m = ptpars->Omega_m;
+    const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
+
     /* Generate a particle lattice */
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
@@ -109,10 +119,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[1] -= dx[1];
                 part->x[2] -= dx[2];
                 
-                part->v[0] = vel_fact * dx[0];
-                part->v[1] = vel_fact * dx[1];
-                part->v[2] = vel_fact * dx[2];
-                part->m = 1.0;
+                part->v[0] = -vel_fact * dx[0];
+                part->v[1] = -vel_fact * dx[1];
+                part->v[2] = -vel_fact * dx[2];
+                part->m = part_mass;
             }
         }
     }

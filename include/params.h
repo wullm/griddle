@@ -35,7 +35,9 @@ struct params {
     /* Simulation box parameters */
     long long GridSize;
     double BoxLength;
-    double z_start;
+    double ScaleFactorBegin;
+    double ScaleFactorEnd;
+    double ScaleFactorStep;
 
 };
 
