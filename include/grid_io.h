@@ -22,9 +22,11 @@
 #ifndef GRIDIO_H
 #define GRIDIO_H
 
+#include "distributed_grid.h"
+
 int readFieldFile(double **box, int *N, double *box_len, const char *fname);
 int writeFieldFile(const double *box, int N, double boxlen, const char *fname);
 int writeFieldFileCompressed(const double *box, int N, double boxlen,
                              const char *fname, int digits);
-
+int writeFieldFile_dg(struct distributed_grid *dg, const char *fname);
 #endif
