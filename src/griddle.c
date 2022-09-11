@@ -213,7 +213,8 @@ int main(int argc, char *argv[]) {
     /* Export the GRF */
     writeFieldFile_dg(&mass, "mass.hdf5");
     
-    
+    /* Export a snapshot */
+    exportSnapshot(&pars, &us, particles, "snap.hdf5", N);
     
     /* Free the particle lattice */
     free(particles);   

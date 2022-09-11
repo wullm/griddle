@@ -17,25 +17,21 @@
  *
  ******************************************************************************/
 
-#ifndef GRIDDLE_H
-#define GRIDDLE_H
+/* Methods for input and output of particle snapshots */
 
-#include "message.h"
+#ifndef SNAP_IO_H
+#define SNAP_IO_H
+
+#include <hdf5.h>
+
+#include "particle.h"
 #include "params.h"
 #include "units.h"
-#include "cosmology.h"
-#include "strooklat.h"
-#include "grid_io.h"
-#include "random.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "fft_kernels.h"
-#include "gaussian_field.h"
-#include "perturb_data.h"
-#include "initial_conditions.h"
-#include "particle.h"
-#include "mesh_grav.h"
-#include "mass_deposit.h"
-#include "snap_io.h"
+
+int exportSnapshot(struct params *pars, struct units *us,
+                   struct particle *particles, const char *fname, int N);
+int writeHeaderAttributes(struct params *pars, struct units *us,
+                          long long int Npart_local, long long int Npart_total,
+                          hid_t h_file);
 
 #endif

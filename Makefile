@@ -36,6 +36,7 @@ all:
 	$(GCC) src/initial_conditions.c -c -o lib/initial_conditions.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/mesh_grav.c -c -o lib/mesh_grav.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/mass_deposit.c -c -o lib/mass_deposit.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/snap_io.c -c -o lib/snap_io.o $(INCLUDES) $(CFLAGS)
 
 	$(GCC) src/griddle.c -o griddle $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 
