@@ -48,7 +48,7 @@ int generate_complex_grf(struct distributed_grid *dg, rng_state *state) {
      * we loop over x in {X0, ..., X0 + NX - 1}, y in {0, ..., N-1},
      * and z in {0, ..., N/2}.
      */
-    
+
     double kx,ky,kz,k;
     for (int x=X0; x<X0 + NX; x++) {
         for (int y=0; y<N; y++) {
@@ -97,16 +97,16 @@ int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed) {
      * we loop over x in {X0, ..., X0 + NX - 1}, y in {0, ..., N-1},
      * and z in {0, ..., N/2}.
      */
-     
+
     /* Allocate a table of RNG seeds */
     unsigned int *seedtable = malloc(N * N * sizeof(unsigned int));
-    
+
     /* GSL random number generator */
     gsl_rng *random_generator = gsl_rng_alloc(gsl_rng_ranlxd1);
     gsl_rng_set(random_generator, Seed);
 
     /* Generate a table of RNG seeds like ngenIC */
-        
+
     for (int i = 0; i < N / 2; i++) {
         for (int j = 0; j < i; j++)
             seedtable[i * N + j] = 0x7fffffff * gsl_rng_uniform(random_generator);
@@ -125,17 +125,17 @@ int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed) {
         for (int j = 0; j < i + 1; j++)
 	        seedtable[(N - 1 - j) * N + (N - 1 - i)] = 0x7fffffff * gsl_rng_uniform(random_generator);
     }
-    
+
     double kx,ky,kz,k;
     for (int x=X0; x<X0 + NX; x++) {
         for (int y=0; y<N; y++) {
             /* Update the RNG with the seed for this 2D slice */
-            gsl_rng_set (random_generator, seedtable[(x + X0) * N + y]);                
-            
+            gsl_rng_set (random_generator, seedtable[(x + X0) * N + y]);
+
             for (int z=0; z<=N/2; z++) {
                 /* Calculate the wavevector */
                 fft_wavevector(x, y, z, N, dk, &kx, &ky, &kz, &k);
-            
+
                 /* Sample the phase and amplitude */
                 double phase = gsl_rng_uniform(random_generator) * 2 * M_PI;
                 double ampl = gsl_rng_uniform(random_generator);
@@ -211,14 +211,14 @@ int enforce_hermiticity(struct distributed_grid *dg) {
             for (int y=0; y<N; y++) {
                 if (x != 0 && x < N/2) continue; //skip the lower half
                 if ((x == 0 || x == N/2) && y < N/2) continue; //skip two strips
-                
-                
+
+
                 int invx = (x > 0) ? N - x : 0;
                 int invy = (y > 0) ? N - y : 0;
                 int invz = (z > 0) ? N - z : 0; //maps 0->0 and (N/2)->(N/2)
 
                 long long int id = row_major_half_dg(x,y,z,dg);
-                                
+
                 /* If the point maps to itself, throw away the imaginary part */
                 if (invx == x && invy == y && invz == z) {
                     dg->fbox[id] = creal(dg->fbox[id]);
@@ -238,6 +238,37 @@ int enforce_hermiticity(struct distributed_grid *dg) {
     fftw_free(full_plane);
     free(slice_sizes);
     free(slice_offsets);
+
+    return 0;
+}
+
+int fix_and_pairing(struct distributed_grid *dg, char fixing, char inverting) {
+    /* The complex array is N * N * (N/2 + 1), locally we have NX * N * (N/2 + 1) */
+    const int N = dg->N;
+    const int NX = dg->NX; //the local slice is NX rows wide
+    const int X0 = dg->X0; //the local slice starts at X = X0
+    const double sqrt2 = sqrt(2.0);
+
+    /* Apply the fixing and/or inverting of Fourier modes */
+    for (int x = X0; x < X0 + NX; x++) {
+        for (int y = 0; y < N; y++) {
+            for (int z = 0; z <= N/2; z++) {
+                /* The current real and imaginary parts and absolute value */
+                double a = creal(dg->fbox[row_major_half_dg(x,y,z,dg)]);
+                double b = cimag(dg->fbox[row_major_half_dg(x,y,z,dg)]);
+                double norm = hypot(a, b);
+
+                /* Ignore the constant DC mode */
+                if (norm > 0) {
+                    double fixing_factor = (fixing ? sqrt2 / norm : 1.0);
+                    double invert_factor = (inverting ? -1.0 : 1.0);
+                    double fact = fixing_factor * invert_factor;
+
+                    dg->fbox[row_major_half_dg(x,y,z,dg)] = (a + b * I) * fact;
+                }
+            }
+        }
+    }
 
     return 0;
 }

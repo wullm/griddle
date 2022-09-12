@@ -30,6 +30,7 @@
 #include "../include/mesh_grav.h"
 
 int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
+                            char fix_modes, char invert_modes,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start) {
 
@@ -39,6 +40,11 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     /* Generate a complex Hermitian Gaussian random field */
     generate_complex_grf(dgrid, seed);
     enforce_hermiticity(dgrid);
+
+    /* Apply fixing and/or inverting of the modes for variance reduction? */
+    if (fix_modes || invert_modes) {
+        fix_and_pairing(dgrid, fix_modes, invert_modes);
+    }
 
     /* Apply the primordial power spectrum without transfer functions */
     fft_apply_kernel_dg(dgrid, dgrid, kernel_power_no_transfer, cosmo);

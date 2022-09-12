@@ -29,6 +29,8 @@
 
 int readParams(struct params *pars, const char *fname) {
      pars->Seed = ini_getl("Random", "Seed", 1, fname);
+     pars->FixedModes = ini_getl("Random", "FixedModes", 0, fname);
+     pars->InvertedModes = ini_getl("Random", "InvertedModes", 0, fname);
      pars->GridSize = ini_getl("Simulation", "GridSize", 64, fname);
      pars->BoxLength = ini_getd("Simulation", "BoxLength", 1000.0, fname);
      pars->ScaleFactorBegin = ini_getd("Simulation", "ScaleFactorBegin", 0.03125, fname);

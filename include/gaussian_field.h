@@ -32,5 +32,6 @@
 int generate_complex_grf(struct distributed_grid *dg, rng_state *state);
 int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed);
 int enforce_hermiticity(struct distributed_grid *dg);
+int fix_and_pairing(struct distributed_grid *dg, char fixing, char inverting);
 
 #endif

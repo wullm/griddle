@@ -27,6 +27,7 @@
 #include "../include/particle.h"
 
 int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
+                            char fix_modes, char invert_modes,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start);
 int generate_2lpt_grid(struct distributed_grid *dgrid,

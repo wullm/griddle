@@ -111,7 +111,8 @@ int main(int argc, char *argv[]) {
     alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
 
     /* Generate LPT potential grid */
-    generate_potential_grid(&lpt_potential, &seed, &ptdat, &cosmo, z_start);
+    generate_potential_grid(&lpt_potential, &seed, pars.FixedModes,
+                            pars.InvertedModes, &ptdat, &cosmo, z_start);
 
     /* Allocate additional arrays */
     struct distributed_grid temp2;
