@@ -40,6 +40,7 @@ struct params {
     double ScaleFactorBegin;
     double ScaleFactorEnd;
     double ScaleFactorStep;
+    char WithCOLA;
 
 };
 

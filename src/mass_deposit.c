@@ -102,7 +102,6 @@ int compute_potential(struct distributed_grid *dgrid,
     fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson, NULL);
 
     /* Multiply by Newton's constant */
-    double boxlen = dgrid->boxlen;
     double factor = -4.0 * M_PI * pcs->GravityG;
     fft_apply_kernel_dg(dgrid, dgrid, kernel_constant, &factor);
 

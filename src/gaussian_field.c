@@ -248,6 +248,9 @@ int fix_and_pairing(struct distributed_grid *dg, char fixing, char inverting) {
     const int NX = dg->NX; //the local slice is NX rows wide
     const int X0 = dg->X0; //the local slice starts at X = X0
     const double sqrt2 = sqrt(2.0);
+    const double boxlen = dg->boxlen;
+    const double boxvol = boxlen*boxlen*boxlen;
+    const double factor = sqrt(boxvol/2);
 
     /* Apply the fixing and/or inverting of Fourier modes */
     for (int x = X0; x < X0 + NX; x++) {
@@ -260,7 +263,7 @@ int fix_and_pairing(struct distributed_grid *dg, char fixing, char inverting) {
 
                 /* Ignore the constant DC mode */
                 if (norm > 0) {
-                    double fixing_factor = (fixing ? sqrt2 / norm : 1.0);
+                    double fixing_factor = (fixing ? factor * sqrt2 / norm : 1.0);
                     double invert_factor = (inverting ? -1.0 : 1.0);
                     double fact = fixing_factor * invert_factor;
 

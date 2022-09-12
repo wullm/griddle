@@ -106,6 +106,11 @@ int main(int argc, char *argv[]) {
     const double a_end = pars.ScaleFactorEnd;
     const double a_factor = 1.0 + pars.ScaleFactorStep;
     const double z_start = 1.0 / a_begin - 1.0;
+    const double D_start = strooklat_interp(&spline_z, ptdat.D_growth, z_start);
+
+    /* The 2LPT factor */
+    const double factor_2lpt = 3. / 7.;
+    const double factor_vel_2lpt = factor_2lpt * 2.0;
 
     /* Allocate distributed memory arrays (one complex & one real) */
     alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
@@ -137,6 +142,17 @@ int main(int argc, char *argv[]) {
     generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
                               particles, &cosmo, &us, &pcs, z_start);
 
+
+    /* Set velocities to zero when running with COLA */
+    if (pars.WithCOLA) {
+        for (long long i = 0; i < N*N*N; i++) {
+            struct particle *p = &particles[i];
+
+            p->v[0] = 0.;
+            p->v[1] = 0.;
+            p->v[2] = 0.;
+        }
+    }
 
     /* Allocate distributed memory arrays (one complex & one real) */
     struct distributed_grid mass;
@@ -184,6 +200,52 @@ int main(int argc, char *argv[]) {
         double dtau2 = exp(log_tau_next) - exp(log_tau_half);
         double dtau = dtau1 + dtau2;
 
+        /* Obtain the growth factors */
+        double D = strooklat_interp(&spline_z, ptdat.D_growth, z);
+        double D_half = strooklat_interp(&spline_z, ptdat.D_growth, z_half);
+        double D_next = strooklat_interp(&spline_z, ptdat.D_growth, z_next);
+
+        /* Obtain the velocity factor derivatives */
+        double d_vf = 0., d_vf_2 = 0., d_vf_half = 0., d_vf_2_half = 0.;
+        if (pars.WithCOLA) {
+            double f = strooklat_interp(&spline_z, ptdat.f_growth, z);
+            double f_half = strooklat_interp(&spline_z, ptdat.f_growth, z_half);
+            double H = strooklat_interp(&spline_z, ptdat.Hubble_H, z);
+            double H_half = strooklat_interp(&spline_z, ptdat.Hubble_H, z_half);
+            double vel_fact = a * a * f * H;
+            double vel_fact_half = a_half * a_half * f_half * H_half;
+
+            /* Differentiate the velocity factor at time a */
+            double a_bit = a * 1.01;
+            double z_bit = 1./a_bit - 1.;
+            double log_tau_bit = strooklat_interp(&spline_z, ptdat.log_tau, z_bit);
+            double tau_bit = exp(log_tau_bit);
+
+            double f_bit = strooklat_interp(&spline_z, ptdat.f_growth, z_bit);
+            double D_bit = strooklat_interp(&spline_z, ptdat.D_growth, z_bit);
+            double H_bit = strooklat_interp(&spline_z, ptdat.Hubble_H, z_bit);
+            double vel_fact_bit = a_bit * a_bit * f_bit * H_bit;
+
+            /* Derivative of the first- and second-order velocity factors */
+            d_vf = (vel_fact_bit * D_bit - vel_fact * D) / (tau_bit - exp(log_tau));
+            d_vf_2 = (vel_fact_bit * D_bit * D_bit - vel_fact * D * D) / (tau_bit - exp(log_tau));
+
+            /* Differentiate the velocity factor at time a_half */
+            double a_hbit = a_half * 1.01;
+            double z_hbit = 1./a_hbit - 1.;
+            double log_tau_hbit = strooklat_interp(&spline_z, ptdat.log_tau, z_hbit);
+            double tau_hbit = exp(log_tau_hbit);
+
+            double f_hbit = strooklat_interp(&spline_z, ptdat.f_growth, z_hbit);
+            double D_hbit = strooklat_interp(&spline_z, ptdat.D_growth, z_hbit);
+            double H_hbit = strooklat_interp(&spline_z, ptdat.Hubble_H, z_hbit);
+            double vel_fact_hbit = a_hbit * a_hbit * f_hbit * H_hbit;
+
+            /* Derivative of the first- and second-order velocity factors */
+            d_vf_half = (vel_fact_hbit * D_hbit - vel_fact_half * D_half) / (tau_hbit - exp(log_tau_half));
+            d_vf_2_half = (vel_fact_hbit * D_hbit * D_hbit - vel_fact_half * D_half * D_half) / (tau_hbit - exp(log_tau_half));
+        }
+
         /* Skip the particle integration during the first step */
         if (ITER == 0)
             continue;
@@ -201,10 +263,24 @@ int main(int argc, char *argv[]) {
             p->v[1] += acc[1] * dtau1;
             p->v[2] += acc[2] * dtau1;
 
+            /* COLA half-kick */
+            if (pars.WithCOLA) {
+                p->v[0] += d_vf * dtau1 * p->dx[0] / D_start - d_vf_2 * dtau1 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[1] += d_vf * dtau1 * p->dx[1] / D_start - d_vf_2 * dtau1 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[2] += d_vf * dtau1 * p->dx[2] / D_start - d_vf_2 * dtau1 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
+            }
+
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
             p->x[0] += p->v[0] * dtau / a_half;
             p->x[1] += p->v[1] * dtau / a_half;
             p->x[2] += p->v[2] * dtau / a_half;
+
+            /* COLA drift */
+            if (pars.WithCOLA) {
+                p->x[0] -= p->dx[0] * (D_next - D) / D_start - factor_2lpt * p->dx2[0] * (D_next * D_next - D * D) / (D_start * D_start);
+                p->x[1] -= p->dx[1] * (D_next - D) / D_start - factor_2lpt * p->dx2[1] * (D_next * D_next - D * D) / (D_start * D_start);
+                p->x[2] -= p->dx[2] * (D_next - D) / D_start - factor_2lpt * p->dx2[2] * (D_next * D_next - D * D) / (D_start * D_start);
+            }
         }
 
         /* Initiate mass deposition */
@@ -225,6 +301,13 @@ int main(int argc, char *argv[]) {
             p->v[0] += acc[0] * dtau2;
             p->v[1] += acc[1] * dtau2;
             p->v[2] += acc[2] * dtau2;
+
+            /* COLA half-kick */
+            if (pars.WithCOLA) {
+                p->v[0] += d_vf_half * dtau2 * p->dx[0] / D_start - d_vf_2_half * dtau2 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[1] += d_vf_half * dtau2 * p->dx[1] / D_start - d_vf_2_half * dtau2 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[2] += d_vf_half * dtau2 * p->dx[2] / D_start - d_vf_2_half * dtau2 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
+            }
         }
 
         /* Step forward */

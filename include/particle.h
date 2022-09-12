@@ -21,11 +21,16 @@
 #define PARTICLE_H
 
 struct particle {
+    /* Basic particle data */
     long long int id;
     char type;
     double x[3];
     double v[3];
     double m;
+
+    /* LPT displacements (first- and second-order) */
+    double dx[3];
+    double dx2[3];
 };
 
 #endif
