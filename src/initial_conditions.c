@@ -83,11 +83,11 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
     init_strooklat_spline(&spline_z, 100);
     
-    /* The velocity factor aHf */
+    /* The velocity factor a^2Hf (a^2 for the internal velocity variable) */
     const double a_start = 1.0 / (1.0 + z_start);
     const double f_start = strooklat_interp(&spline_z, ptdat->f_growth, z_start);
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
-    const double vel_fact = a_start * f_start * H_start;
+    const double vel_fact = a_start * a_start * f_start * H_start;
     
     /* Grid constants */
     const int N = lpt_potential->N;
@@ -109,7 +109,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 
                 part->x[0] = i * boxlen / N;
                 part->x[1] = j * boxlen / N;
-                part->x[2] = k * boxlen / N;                
+                part->x[2] = k * boxlen / N;
                 
                 double dx[3] = {0,0,0};
                 

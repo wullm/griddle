@@ -176,9 +176,9 @@ int main(int argc, char *argv[]) {
             p->v[2] += acc[2] * dtau1;
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
-            p->x[0] += p->v[0] * dtau;
-            p->x[1] += p->v[1] * dtau;
-            p->x[2] += p->v[2] * dtau;
+            p->x[0] += p->v[0] * dtau / a;
+            p->x[1] += p->v[1] * dtau / a;
+            p->x[2] += p->v[2] * dtau / a;
         }
 
         /* Initiate mass deposition */
