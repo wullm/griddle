@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -34,18 +34,18 @@ int readParams(struct params *pars, const char *fname) {
      pars->ScaleFactorBegin = ini_getd("Simulation", "ScaleFactorBegin", 0.03125, fname);
      pars->ScaleFactorEnd = ini_getd("Simulation", "ScaleFactorEnd", 1.0, fname);
      pars->ScaleFactorStep = ini_getd("Simulation", "ScaleFactorStep", 0.05, fname);
-    
+
      /* Read strings */
      int len = DEFAULT_STRING_LENGTH;
      pars->TransferFunctionsFile = malloc(len);
      ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
-    
+
      return 0;
 }
 
 
 int cleanParams(struct params *pars) {
     free(pars->TransferFunctionsFile);
-    
+
     return 0;
 }

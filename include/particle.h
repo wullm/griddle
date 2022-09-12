@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ struct particle {
     char type;
     double x[3];
     double v[3];
-    double m;    
+    double m;
 };
 
 #endif

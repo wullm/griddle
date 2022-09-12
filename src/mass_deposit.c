@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2020 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
             for (int k = 0; k < N; k++) {
                 struct particle *part = &parts[i * N * N + j * N + k];
                 part->id = (long long int) i * N * N + j * N + k;
-                
+
                 double X = part->x[0] / (boxlen/N);
                 double Y = part->x[1] / (boxlen/N);
                 double Z = part->x[2] / (boxlen/N);
@@ -58,7 +58,7 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
                 int iX = (int) floor(X);
                 int iY = (int) floor(Y);
                 int iZ = (int) floor(Z);
-                
+
                 /* The search window with respect to the top-left-upper corner */
         		int lookLftX = (int) floor((X-iX) - 1);
         		int lookRgtX = (int) floor((X-iX) + 1);
@@ -86,9 +86,9 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts) {
             }
         }
     }
-    
+
     // printf("The total mass is %g\n", total_mass);
-    
+
     return 0;
 }
 

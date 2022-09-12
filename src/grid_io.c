@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -250,11 +250,11 @@ int writeFieldFile_dg(struct distributed_grid *dg, const char *fname) {
         printf("Error: attempting to export while in momentum space.\n");
         return 1;
     }
-        
+
     /* Property list for MPI file access */
     hid_t prop_faxs = H5Pcreate(H5P_FILE_ACCESS);
     H5Pset_fapl_mpio(prop_faxs, MPI_COMM_WORLD, MPI_INFO_NULL);
-    
+
     /* Create the hdf5 file */
     hid_t h_file = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, prop_faxs);
     H5Pclose(prop_faxs);

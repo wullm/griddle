@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -101,7 +101,7 @@ int fft_apply_kernel(fftw_complex *write, const fftw_complex *read, int N,
 int fft_apply_kernel_float(fftwf_complex *write, const fftwf_complex *read, int N,
                            double boxlen, void (*compute)(struct kernel* the_kernel),
                            const void *params);
-                                          
+
 /* Functions for distributed grids */
 int fft_r2c_dg(struct distributed_grid *dg);
 int fft_c2r_dg(struct distributed_grid *dg);

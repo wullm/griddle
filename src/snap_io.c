@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -35,15 +35,15 @@ int exportSnapshot(struct params *pars, struct units *us,
                    struct particle *particles, const char *fname, int N) {
     /* Create the output file */
     hid_t h_out_file = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-    
-    long long int total_part_num = N * N * N; 
+
+    long long int total_part_num = N * N * N;
     long long int parts_in_file = N * N * N;
     long long int localParticleNumber = N * N * N;
 
     /* Writing attributes into the Header & Cosmology groups */
     int err = writeHeaderAttributes(pars, us, parts_in_file, total_part_num, h_out_file);
     if (err > 0) exit(1);
-    
+
     /* The ExportName */
     const char *ExportName = "PartType1"; // cdm
 
@@ -154,7 +154,7 @@ int exportSnapshot(struct params *pars, struct units *us,
 
     /* Close the file */
     H5Fclose(h_out_file);
-    
+
     return 0;
 }
 

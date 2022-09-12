@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -28,10 +28,10 @@ struct params {
 
     /* Random parameters */
     long int Seed;
-    
+
     /* Perturbation file parameters */
     char *TransferFunctionsFile;
-    
+
     /* Simulation box parameters */
     long long GridSize;
     double BoxLength;

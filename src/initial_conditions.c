@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -35,40 +35,40 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
 
     /* Find the transfer function index for CDM */
     int index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
-    
+
     /* Generate a complex Hermitian Gaussian random field */
     generate_complex_grf(dgrid, seed);
     enforce_hermiticity(dgrid);
-    
+
     /* Apply the primordial power spectrum without transfer functions */
     fft_apply_kernel_dg(dgrid, dgrid, kernel_power_no_transfer, cosmo);
-    
+
     /* Pointer to the CDM density transfer function */
     double *tf = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_cdm;
-    
+
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
     struct strooklat spline_k = {ptdat->k, ptdat->k_size};
     init_strooklat_spline(&spline_z, 100);
     init_strooklat_spline(&spline_k, 100);
-    
+
     /* Apply the CDM density transfer function */
-    struct spline_params sp = {&spline_z, &spline_k, /* z = */ z_start, tf};    
+    struct spline_params sp = {&spline_z, &spline_k, /* z = */ z_start, tf};
     fft_apply_kernel_dg(dgrid, dgrid, kernel_transfer_function, &sp);
-    
+
     /* Compute the potential by applying the inverse Poisosn kernel */
     fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson, NULL);
-    
+
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
     free_strooklat_spline(&spline_k);
-        
+
     /* Execute the Fourier transform and normalize */
     fft_c2r_dg(dgrid);
-    
+
     /* Export the GRF */
     // writeFieldFile_dg(dgrid, "grid.hdf5");
-    
+
     return 0;
 }
 
@@ -184,13 +184,13 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
     init_strooklat_spline(&spline_z, 100);
-    
+
     /* The velocity factor a^2Hf (a^2 for the internal velocity variable) */
     const double a_start = 1.0 / (1.0 + z_start);
     const double f_start = strooklat_interp(&spline_z, ptdat->f_growth, z_start);
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
     const double vel_fact = a_start * a_start * f_start * H_start;
-    
+
     /* The 2LPT factor */
     const double factor_2lpt = 3. / 7.;
     const double factor_vel_2lpt = factor_2lpt * 2.0;
@@ -198,7 +198,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     /* Grid constants */
     const int N = lpt_potential->N;
     const double boxlen = lpt_potential->boxlen;
-    
+
     /* Cosmological constants */
     const double h = cosmo->h;
     const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
@@ -212,18 +212,18 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
             for (int k = 0; k < N; k++) {
                 struct particle *part = &parts[i * N * N + j * N + k];
                 part->id = (long long int) i * N * N + j * N + k;
-                
+
                 part->x[0] = i * boxlen / N;
                 part->x[1] = j * boxlen / N;
                 part->x[2] = k * boxlen / N;
                 part->v[0] = 0.;
                 part->v[1] = 0.;
                 part->v[2] = 0.;
-                
+
                 /* Zel'dovich displacement */
                 double dx[3] = {0,0,0};
                 accelCIC(lpt_potential, N, boxlen, part->x, dx);
-                
+
                 /* The 2LPT displacement */
                 double dx2[3] = {0,0,0};
                 accelCIC(lpt_potential_2, N, boxlen, part->x, dx2);
@@ -239,9 +239,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
             }
         }
     }
-    
+
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
-    
+
     return 0;
 }

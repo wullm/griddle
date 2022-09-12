@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 
-#include "../include/griddle.h"
+#include "../include/nyver.h"
 
 int main(int argc, char *argv[]) {
     if (argc == 1) {
@@ -47,51 +47,60 @@ int main(int argc, char *argv[]) {
     const char *fname = argv[1];
     if (rank == 0) {
         message(rank, "\n");
-        header(rank, "Welcome to griddle; please wait a little.\n");
+        message(rank, "            .  .  \n", fname);
+        message(rank, "    | \\ | | _  _ __   __ ___  _ __ \n");
+        message(rank, "    |  \\| || || |\\ \\ / // _ \\| '__|    \n");
+        message(rank, "    | |\\  ||_|| | \\ V /|  __/| |   \n");
+        message(rank, "    |_| \\_|   / |  \\_/  \\___||_|   \n");
+        message(rank, "            |__/                   \n");
+        message(rank, "\n");
         message(rank, "The parameter file is '%s'\n", fname);
     }
+
+
+
 
     /* Timer */
     struct timeval time_stop, time_start;
     gettimeofday(&time_start, NULL);
-    
-    /* Main griddle structuress */
+
+    /* Main nyver structuress */
     struct params pars;
     struct units us;
     struct physical_consts pcs;
     struct cosmology cosmo;
-    
+
     /* Structures for dealing with perturbation data (transfer functions) */
     struct perturb_data ptdat;
     struct perturb_params ptpars;
-        
+
     /* Read parameter file for parameters, units, and cosmological values */
     readParams(&pars, fname);
     readUnits(&us, fname);
     set_physical_constants(&us, &pcs);
     readCosmology(&cosmo, fname);
-        
+
     /* Read the perturbation data file */
     readPerturb(&us, &ptdat, pars.TransferFunctionsFile);
     readPerturbParams(&us, &ptpars, pars.TransferFunctionsFile);
-        
+
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat.redshift, ptdat.tau_size};
     struct strooklat spline_k = {ptdat.k, ptdat.k_size};
     init_strooklat_spline(&spline_z, 100);
     init_strooklat_spline(&spline_k, 100);
-        
+
     /* Store the MPI rank */
     pars.rank = rank;
-    
+
     /* Seed the random number generator */
     rng_state seed = rand_uint64_init(pars.Seed + rank);
-    
+
     /* Create or read a Gaussian random field */
     int N = pars.GridSize;
     double boxlen = pars.BoxLength;
     struct distributed_grid lpt_potential;
-    
+
     /* Integration limits */
     const double a_begin = pars.ScaleFactorBegin;
     const double a_end = pars.ScaleFactorEnd;
@@ -100,7 +109,7 @@ int main(int argc, char *argv[]) {
 
     /* Allocate distributed memory arrays (one complex & one real) */
     alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
-    
+
     /* Generate LPT potential grid */
     generate_potential_grid(&lpt_potential, &seed, &ptdat, &cosmo, z_start);
 
@@ -115,19 +124,19 @@ int main(int argc, char *argv[]) {
     /* Generate the 2LPT potential grid */
     generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2, &ptdat,
                        &cosmo, z_start);
-    
+
     /* Free working memory used in the 2LPT calculation */
     free_local_grid(&temp1);
     free_local_grid(&temp2);
 
     /* Allocate memory for a particle lattice */
     struct particle *particles = malloc(N * N * N * sizeof(struct particle));
-    
+
     /* Generate a particle lattice */
     generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
                               particles, &cosmo, &us, &pcs, z_start);
-    
-        
+
+
     /* Allocate distributed memory arrays (one complex & one real) */
     struct distributed_grid mass;
     alloc_local_grid(&mass, N, boxlen, MPI_COMM_WORLD);
@@ -228,19 +237,19 @@ int main(int argc, char *argv[]) {
 
     /* Export the GRF */
     writeFieldFile_dg(&mass, "mass.hdf5");
-    
+
     /* Export a snapshot */
     exportSnapshot(&pars, &us, particles, "snap.hdf5", N);
-    
+
     /* Free the particle lattice */
-    free(particles);   
-                                
+    free(particles);
+
     /* Free the LPT potential grids */
     free_local_grid(&lpt_potential);
-    
+
     /* Free the mass grid */
     free_local_grid(&mass);
-    
+
     /* Done with MPI parallelization */
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
@@ -249,11 +258,11 @@ int main(int argc, char *argv[]) {
     cleanParams(&pars);
     cleanPerturb(&ptdat);
     cleanPerturbParams(&ptpars);
-    
+
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
     free_strooklat_spline(&spline_k);
-    
+
     /* Timer */
     gettimeofday(&time_stop, NULL);
     long unsigned microsec = (time_stop.tv_sec - time_start.tv_sec) * 1000000

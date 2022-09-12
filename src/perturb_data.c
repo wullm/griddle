@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -123,7 +123,7 @@ int readPerturb(struct units *us, struct perturb_data *pt, char *fname) {
     /* Allocate memory */
     pt->k = calloc(pt->k_size, sizeof(double));
     pt->log_tau = calloc(pt->tau_size, sizeof(double));
-    pt->redshift = calloc(pt->tau_size, sizeof(double));    
+    pt->redshift = calloc(pt->tau_size, sizeof(double));
     pt->f_growth = calloc(pt->tau_size, sizeof(double));
     pt->Hubble_H = calloc(pt->tau_size, sizeof(double));
     pt->delta = malloc(pt->n_functions * pt->k_size * pt->tau_size * sizeof(double));
@@ -152,7 +152,7 @@ int readPerturb(struct units *us, struct perturb_data *pt, char *fname) {
     h_data = H5Dopen2(h_grp, "Redshifts", H5P_DEFAULT);
     h_err = H5Dread(h_data, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, pt->redshift);
     H5Dclose(h_data);
-    
+
     /* Read the logarithmic growth rates */
     h_data = H5Dopen2(h_grp, "Logarithmic growth rates (f)", H5P_DEFAULT);
     h_err = H5Dread(h_data, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, pt->f_growth);

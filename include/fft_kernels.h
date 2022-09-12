@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of griddle.
+ * This file is part of Nyver.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -138,7 +138,7 @@ struct spline_params {
     struct strooklat *spline_z;
     struct strooklat *spline_k;
     double z; //redshift
-    double *tf; //the transfer function    
+    double *tf; //the transfer function
 };
 
 /* Multiply by the transfer function */
@@ -151,7 +151,7 @@ static inline void kernel_transfer_function(struct kernel *the_kernel) {
     } else {
         /* Unpack the spline parameters */
         struct spline_params *sp = (struct spline_params *) the_kernel->params;
-        
+
         /* Evaluate the transfer function T(z,k) using bilinear interpolation */
         the_kernel->kern = strooklat_interp_2d(sp->spline_z, sp->spline_k, sp->tf, sp->z, k);
     }
@@ -167,7 +167,7 @@ static inline void kernel_inv_transfer_function(struct kernel *the_kernel) {
     } else {
         /* Unpack the spline parameters */
         struct spline_params *sp = (struct spline_params *) the_kernel->params;
-        
+
         /* Evaluate the transfer function T(z,k) using bilinear interpolation */
         the_kernel->kern = 1.0 / strooklat_interp_2d(sp->spline_z, sp->spline_k, sp->tf, sp->z, k);
     }
