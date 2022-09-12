@@ -97,19 +97,35 @@ int main(int argc, char *argv[]) {
     const double a_end = pars.ScaleFactorEnd;
     const double a_factor = 1.0 + pars.ScaleFactorStep;
     const double z_start = 1.0 / a_begin - 1.0;
-        
+
     /* Allocate distributed memory arrays (one complex & one real) */
     alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
     
     /* Generate LPT potential grid */
     generate_potential_grid(&lpt_potential, &seed, &ptdat, &cosmo, z_start);
+
+    /* Allocate additional arrays */
+    struct distributed_grid temp2;
+    struct distributed_grid temp1;
+    struct distributed_grid lpt_potential_2;
+    alloc_local_grid(&temp1, N, boxlen, MPI_COMM_WORLD);
+    alloc_local_grid(&temp2, N, boxlen, MPI_COMM_WORLD);
+    alloc_local_grid(&lpt_potential_2, N, boxlen, MPI_COMM_WORLD);
+
+    /* Generate the 2LPT potential grid */
+    generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2, &ptdat,
+                       &cosmo, z_start);
     
+    /* Free working memory used in the 2LPT calculation */
+    free_local_grid(&temp1);
+    free_local_grid(&temp2);
+
     /* Allocate memory for a particle lattice */
     struct particle *particles = malloc(N * N * N * sizeof(struct particle));
     
     /* Generate a particle lattice */
-    generate_particle_lattice(&lpt_potential, &ptdat, &ptpars, particles,
-                              &cosmo, &us, &pcs, z_start);
+    generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
+                              particles, &cosmo, &us, &pcs, z_start);
     
         
     /* Allocate distributed memory arrays (one complex & one real) */
@@ -176,9 +192,9 @@ int main(int argc, char *argv[]) {
             p->v[2] += acc[2] * dtau1;
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
-            p->x[0] += p->v[0] * dtau / a;
-            p->x[1] += p->v[1] * dtau / a;
-            p->x[2] += p->v[2] * dtau / a;
+            p->x[0] += p->v[0] * dtau / a_half;
+            p->x[1] += p->v[1] * dtau / a_half;
+            p->x[2] += p->v[2] * dtau / a_half;
         }
 
         /* Initiate mass deposition */

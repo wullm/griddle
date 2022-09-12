@@ -29,8 +29,14 @@
 int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start);
-
-int generate_particle_lattice(struct distributed_grid *lpt_potential, 
+int generate_2lpt_grid(struct distributed_grid *dgrid,
+                       struct distributed_grid *temp1,
+                       struct distributed_grid *temp2,
+                       struct distributed_grid *dgrid_2lpt,
+                       struct perturb_data *ptdat,
+                       struct cosmology *cosmo, double z_start);
+int generate_particle_lattice(struct distributed_grid *lpt_potential,
+                              struct distributed_grid *lpt_potential_2,
                               struct perturb_data *ptdat,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,

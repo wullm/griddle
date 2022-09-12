@@ -72,7 +72,109 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     return 0;
 }
 
-int generate_particle_lattice(struct distributed_grid *lpt_potential, 
+/* Compute the 2LPT potential. This requires two additional working memory
+   grids to be allocated. */
+int generate_2lpt_grid(struct distributed_grid *dgrid,
+                       struct distributed_grid *temp1,
+                       struct distributed_grid *temp2,
+                       struct distributed_grid *dgrid_2lpt,
+                       struct perturb_data *ptdat,
+                       struct cosmology *cosmo, double z_start) {
+
+    /* Execute the Fourier transform and normalize */
+    fft_r2c_dg(dgrid);
+
+    /* The complex array is N * N * (N/2 + 1), locally we have NX * N * (N/2 + 1) */
+    const int N = dgrid->N;
+    const int NX = dgrid->NX;
+    const int X0 = dgrid->X0; //the local portion starts at X = X0
+
+    /* We calculate derivatives using FFT kernels */
+    const kernel_func derivatives[] = {kernel_dx, kernel_dy, kernel_dz};
+
+    /* Erase the current data */
+    for (int x = X0; x < X0 + NX; x++) {
+        for (int y = 0; y < N; y++) {
+            for (int z = 0; z < N; z++) {
+                dgrid_2lpt->box[row_major_dg(x, y, z, dgrid)] = 0.;
+            }
+        }
+    }
+
+    /* First add the (xx)*(yy) + (xx)*(zz) + (yy)*(zz) terms */
+
+    /* We need xy, xz, yz to compute the Hessian */
+    const int index_a[] = {0, 0, 1};
+    const int index_b[] = {1, 2, 2};
+
+    /* Compute the 3 derivative components of the Hessian */
+    for (int j=0; j<3; j++) {
+        /* Compute the derivative d^2 phi / (dx_i dx_j) */
+        fft_apply_kernel_dg(temp1, dgrid, derivatives[index_a[j]], NULL);
+        fft_apply_kernel_dg(temp1, temp1, derivatives[index_a[j]], NULL);
+
+        /* Compute the derivative d^2 phi / (dx_i dx_j) */
+        fft_apply_kernel_dg(temp2, dgrid, derivatives[index_b[j]], NULL);
+        fft_apply_kernel_dg(temp2, temp2, derivatives[index_b[j]], NULL);
+
+        /* Fourier transform to configuration space */
+        fft_c2r_dg(temp1);
+        fft_c2r_dg(temp2);
+
+        /* Add the product (=convolution) to the intermediate answer */
+        for (int x = X0; x < X0 + NX; x++) {
+            for (int y = 0; y < N; y++) {
+                for (int z = 0; z < N; z++) {
+                    long long int id = row_major_dg(x, y, z, dgrid);
+                    dgrid_2lpt->box[id] += temp1->box[id] * temp1->box[id];
+                }
+            }
+        }
+    }
+
+    /* Now add the (xy)*(xy) + (xz)*(xz) + (yz)*(yz) terms */
+
+    /* Compute the 3 derivative components of the Hessian */
+    for (int j=0; j<3; j++) {
+        /* Compute the derivative d^2 phi / (dx_i dx_j) */
+        fft_apply_kernel_dg(temp1, dgrid, derivatives[index_a[j]], NULL);
+        fft_apply_kernel_dg(temp1, temp1, derivatives[index_b[j]], NULL);
+
+        /* Fourier transform to configuration space */
+        fft_c2r_dg(temp1);
+
+        /* Subtract the square (=convolution) from the intermediate answer */
+        for (int x = X0; x < X0 + NX; x++) {
+            for (int y = 0; y < N; y++) {
+                for (int z = 0; z < N; z++) {
+                    long long int id = row_major_dg(x, y, z, dgrid);
+                    dgrid_2lpt->box[id] -= temp1->box[id] * temp1->box[id];
+                }
+            }
+        }
+    }
+
+    /* Fourier transform to momentum space */
+    fft_r2c_dg(dgrid_2lpt);
+
+    /* Compute the potential by applying the inverse Poisosn kernel */
+    fft_apply_kernel_dg(dgrid_2lpt, dgrid_2lpt, kernel_inv_poisson, NULL);
+
+    /* Divide the potential by two */
+    double factor = 0.5;
+    fft_apply_kernel_dg(dgrid_2lpt, dgrid_2lpt, kernel_constant, &factor);
+
+    /* Fourier transform to configuration space */
+    fft_c2r_dg(dgrid_2lpt);
+
+    /* Export the 2LPT potential grid */
+    writeFieldFile_dg(dgrid_2lpt, "2lpt.hdf5");
+
+    return 0;
+}
+
+int generate_particle_lattice(struct distributed_grid *lpt_potential,
+                              struct distributed_grid *lpt_potential_2,
                               struct perturb_data *ptdat,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
@@ -89,6 +191,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
     const double vel_fact = a_start * a_start * f_start * H_start;
     
+    /* The 2LPT factor */
+    const double factor_2lpt = 3. / 7.;
+    const double factor_vel_2lpt = factor_2lpt * 2.0;
+
     /* Grid constants */
     const int N = lpt_potential->N;
     const double boxlen = lpt_potential->boxlen;
@@ -110,18 +216,25 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[0] = i * boxlen / N;
                 part->x[1] = j * boxlen / N;
                 part->x[2] = k * boxlen / N;
+                part->v[0] = 0.;
+                part->v[1] = 0.;
+                part->v[2] = 0.;
                 
+                /* Zel'dovich displacement */
                 double dx[3] = {0,0,0};
-                
                 accelCIC(lpt_potential, N, boxlen, part->x, dx);
-                                
-                part->x[0] -= dx[0];
-                part->x[1] -= dx[1];
-                part->x[2] -= dx[2];
                 
-                part->v[0] = -vel_fact * dx[0];
-                part->v[1] = -vel_fact * dx[1];
-                part->v[2] = -vel_fact * dx[2];
+                /* The 2LPT displacement */
+                double dx2[3] = {0,0,0};
+                accelCIC(lpt_potential_2, N, boxlen, part->x, dx2);
+
+                part->x[0] -= dx[0] + factor_2lpt * dx2[0];
+                part->x[1] -= dx[1] + factor_2lpt * dx2[1];
+                part->x[2] -= dx[2] + factor_2lpt * dx2[1];
+
+                part->v[0] -= vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
+                part->v[1] -= vel_fact * (dx[1] + factor_vel_2lpt * dx2[1]);
+                part->v[2] -= vel_fact * (dx[2] + factor_vel_2lpt * dx2[2]);
                 part->m = part_mass;
             }
         }
