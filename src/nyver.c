@@ -47,8 +47,7 @@ int main(int argc, char *argv[]) {
     const char *fname = argv[1];
     if (rank == 0) {
         message(rank, "\n");
-        message(rank, "            .  .  \n", fname);
-        message(rank, "    | \\ | | _  _ __   __ ___  _ __ \n");
+        message(rank, "    | \\ | | `  ` __   __ ___  _ __ \n");
         message(rank, "    |  \\| || || |\\ \\ / // _ \\| '__|    \n");
         message(rank, "    | |\\  ||_|| | \\ V /|  __/| |   \n");
         message(rank, "    |_| \\_|   / |  \\_/  \\___||_|   \n");
