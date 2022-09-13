@@ -29,11 +29,6 @@
 #include "../include/nyver.h"
 
 int main(int argc, char *argv[]) {
-    if (argc == 1) {
-        printf("No parameter file specified.\n");
-        return 0;
-    }
-
     /* Initialize MPI for distributed memory parallelization */
     MPI_Init(&argc, &argv);
     fftw_mpi_init();
@@ -53,11 +48,13 @@ int main(int argc, char *argv[]) {
         message(rank, "    |_| \\_|   / |  \\_/  \\___||_|   \n");
         message(rank, "            |__/                   \n");
         message(rank, "\n");
-        message(rank, "The parameter file is '%s'\n", fname);
+        if (argc == 1) {
+            printf("No parameter file specified.\n");
+            return 0;
+        } else {
+            message(rank, "The parameter file is '%s'.\n", fname);
+        }
     }
-
-
-
 
     /* Timer */
     struct timeval time_stop, time_start;
