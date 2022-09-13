@@ -282,7 +282,14 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            accelCIC(&mass, N, boxlen, p->x, acc);
+
+            if (ITER == 1) {
+                accelCIC(&mass, N, boxlen, p->x, acc);
+            } else {
+                acc[0] = p->a[0];
+                acc[1] = p->a[1];
+                acc[2] = p->a[2];
+            }
 
             /* Execute first half-kick */
             p->v[0] += acc[0] * dtau1;
@@ -549,6 +556,10 @@ int main(int argc, char *argv[]) {
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             accelCIC(&mass, N, boxlen, p->x, acc);
+
+            p->a[0] = acc[0];
+            p->a[1] = acc[1];
+            p->a[2] = acc[2];
 
             /* Execute second half-kick */
             p->v[0] += acc[0] * dtau2;

@@ -78,25 +78,24 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         for (int x=lookLftX; x<=lookRgtX; x++) {
             for (int y=lookLftY; y<=lookRgtY; y++) {
                 for (int z=lookLftZ; z<=lookRgtZ; z++) {
-                    double xx = fabs(X - (iX+x));
-                    double yy = fabs(Y - (iY+y));
-                    double zz = fabs(Z - (iZ+z));
+                    int ii = iX + x;
+                    int jj = iY + y;
+                    int kk = iZ + z;
+
+                    double xx = fabs(X - ii);
+                    double yy = fabs(Y - jj);
+                    double zz = fabs(Z - kk);
 
                     double part_x = xx < 1.0 ? (1.0 - xx) : 0.;
                     double part_y = yy < 1.0 ? (1.0 - yy) : 0.;
                     double part_z = zz < 1.0 ? (1.0 - zz) : 0.;
 
-                    /* Catch the single-rank case first */
-                    if (dgrid->NX == dgrid->N) {
-                        dgrid->box[row_major_dg2(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
-                    } else if (iX+x >= dgrid->X0 && iX+x < dgrid->X0 + dgrid->NX) {
-                        dgrid->box[row_major_dg2(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
-                    } else if (iX+x >= dgrid->X0 - dgrid->buffer_size && iX+x < dgrid->X0) {
-                        dgrid->buffer_left[row_major_dg_buffer_left(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
-                    } else if (iX+x < dgrid->X0 + dgrid->NX + dgrid->buffer_size) {
-                        dgrid->buffer_right[row_major_dg_buffer_right(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
+                    if (ii < dgrid->X0) {
+                        dgrid->buffer_left[row_major_dg_buffer_left(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
+                    } else if (ii >= dgrid->X0 + dgrid->NX) {
+                        dgrid->buffer_right[row_major_dg_buffer_right(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
                     } else {
-                        printf("this should not happen or the buffers are too small.\n");
+                        dgrid->box[row_major_dg2(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
                     }
 				}
 			}

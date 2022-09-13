@@ -32,6 +32,9 @@ struct particle {
     double dx[3];
     double dx2[3];
 
+    /* Most recent accelerations */
+    double a[3];
+
     int rank;
 };
 
