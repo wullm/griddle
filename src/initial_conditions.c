@@ -185,7 +185,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              double z_start) {
+                              long long X0, long long NX, double z_start) {
 
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
@@ -213,10 +213,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
 
     /* Generate a particle lattice */
-    for (int i = 0; i < N; i++) {
+    for (int i = X0; i < X0+NX; i++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
-                struct particle *part = &parts[i * N * N + j * N + k];
+                struct particle *part = &parts[(i-X0) * N * N + j * N + k];
                 part->id = (long long int) i * N * N + j * N + k;
 
                 part->x[0] = i * boxlen / N;

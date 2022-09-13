@@ -26,7 +26,16 @@
 static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
 
-    return dg->box[row_major_dg2(i, j, k, dg)];
+    if (i >= dg->X0 && i < dg->X0 + dg->NX) {
+        return dg->box[row_major_dg2(i, j, k, dg)];
+    } else if (i >= dg->X0 - dg->buffer_size && i < dg->X0) {
+        return dg->buffer_left[row_major_dg_buffer_left(i, j, k, dg)];
+    } else if (i < dg->X0 + dg->NX + dg->buffer_size) {
+        return dg->buffer_right[row_major_dg_buffer_right(i, j, k, dg)];
+    } else {
+        printf("this should not happen or the buffers are too small.\n");
+        return 0.;
+    }
 }
 
 /* Direct cloud in cell interpolation */
@@ -34,14 +43,14 @@ static inline double fastCIC(const struct distributed_grid *dg, int N, int i,
                              int j, int k, double dx, double dy, double dz,
                              double tx, double ty, double tz) {
 
-    return dg->box[row_major_dg2(i, j, k, dg)] * tx * ty * tz
-         + dg->box[row_major_dg2(i, j, k+1, dg)] * tx * ty * dz
-         + dg->box[row_major_dg2(i, j+1, k, dg)] * tx * dy * tz
-         + dg->box[row_major_dg2(i, j+1, k+1, dg)] * tx * dy * dz
-         + dg->box[row_major_dg2(i+1, j, k, dg)] * dx * ty * tz
-         + dg->box[row_major_dg2(i+1, j, k+1, dg)] * dx * ty * dz
-         + dg->box[row_major_dg2(i+1, j+1, k, dg)] * dx * dy * tz
-         + dg->box[row_major_dg2(i+1, j+1, k+1, dg)] * dx * dy * dz;
+    return fastNGP(dg, N, i, j, k) * tx * ty * tz
+         + fastNGP(dg, N, i, j, k+1) * tx * ty * dz
+         + fastNGP(dg, N, i, j+1, k) * tx * dy * tz
+         + fastNGP(dg, N, i, j+1, k+1) * tx * dy * dz
+         + fastNGP(dg, N, i+1, j, k) * dx * ty * tz
+         + fastNGP(dg, N, i+1, j, k+1) * dx * ty * dz
+         + fastNGP(dg, N, i+1, j+1, k) * dx * dy * tz
+         + fastNGP(dg, N, i+1, j+1, k+1) * dx * dy * dz;
 }
 
 /* Nearest grid point interpolation */

@@ -42,5 +42,5 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              double z_start);
+                              long long X0, long long NX, double z_start);
 #endif

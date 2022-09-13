@@ -43,6 +43,11 @@ struct distributed_grid {
     fftw_complex *fbox;
     double *box;
 
+    /* Additional buffers on the left and right (real only) */
+    double *buffer_left;
+    double *buffer_right;
+    int buffer_size;
+
     /* GLOBAL SIZES:
      * fbox:    N * N * (N/2 + 1)               fftw_complex type
      * box:     N * N * (N + 2)                 double type
@@ -59,22 +64,15 @@ struct distributed_grid {
      */
 };
 
-struct left_right_slice {
-    double *left_slice;
-    double *local_slice;
-    double *right_slice;
-    int left_NX;
-    int left_X0;
-    int local_NX;
-    int local_X0;
-    int right_NX;
-    int right_X0;
-};
-
 int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm comm);
 int free_local_grid(struct distributed_grid *dg);
 int free_local_real_grid(struct distributed_grid *dg);
 int free_local_complex_grid(struct distributed_grid *dg);
+
+int alloc_local_buffers(struct distributed_grid *dg, int buffer_size);
+int free_local_buffers(struct distributed_grid *dg);
+int create_local_buffers(struct distributed_grid *dg);
+int add_local_buffers(struct distributed_grid *dg);
 
 static inline long long int row_major_dg(int i, int j, int k, const struct distributed_grid *dg) {
     /* Wrap global coordinates */
@@ -96,6 +94,28 @@ static inline long long int row_major_dg2(int i, int j, int k, const struct dist
     /* Map to local slice (no out of bounds handling) */
     i = i - dg->X0;
     return (long long int) i*dg->N*(dg->N+2) + j*(dg->N+2) + k;
+}
+
+static inline long long int row_major_dg_buffer_left(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Wrap global coordinates */
+    //i = wrap(i,dg->N);
+    j = wrap(j,dg->N);
+    k = wrap(k,dg->N);
+
+    /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0 + dg->buffer_size;
+    return (long long int) i*dg->N*(dg->N) + j*(dg->N) + k;
+}
+
+static inline long long int row_major_dg_buffer_right(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Wrap global coordinates */
+    // i = wrap(i,dg->N);
+    j = wrap(j,dg->N);
+    k = wrap(k,dg->N);
+
+    /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0 - dg->NX;
+    return (long long int) i*dg->N*(dg->N) + j*(dg->N) + k;
 }
 
 static inline long long int row_major_half_dg(int i, int j, int k, const struct distributed_grid *dg) {

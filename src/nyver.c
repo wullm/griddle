@@ -53,6 +53,7 @@ int main(int argc, char *argv[]) {
             return 0;
         } else {
             message(rank, "The parameter file is '%s'.\n", fname);
+            message(rank, "\n");
         }
     }
 
@@ -131,17 +132,27 @@ int main(int argc, char *argv[]) {
     free_local_grid(&temp1);
     free_local_grid(&temp2);
 
+    /* Create buffers for the LPT potentials */
+    alloc_local_buffers(&lpt_potential, 10);
+    alloc_local_buffers(&lpt_potential_2, 10);
+    create_local_buffers(&lpt_potential);
+    create_local_buffers(&lpt_potential_2);
+
     /* Allocate memory for a particle lattice */
-    struct particle *particles = malloc(N * N * N * sizeof(struct particle));
+    long long X0 = lpt_potential.X0;
+    long long NX = lpt_potential.NX;
+    long long foreign_buffer = 10; //extra memory for exchanging particles
+    long long local_partnum = NX * N * N;
+    long long max_partnum = (NX + foreign_buffer) * N * N;
+    struct particle *particles = malloc(max_partnum * sizeof(struct particle));
 
     /* Generate a particle lattice */
     generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
-                              particles, &cosmo, &us, &pcs, z_start);
-
+                              particles, &cosmo, &us, &pcs, X0, NX, z_start);
 
     /* Set velocities to zero when running with COLA */
     if (pars.WithCOLA) {
-        for (long long i = 0; i < N*N*N; i++) {
+        for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
             p->v[0] = 0.;
@@ -155,11 +166,23 @@ int main(int argc, char *argv[]) {
     alloc_local_grid(&mass, N, boxlen, MPI_COMM_WORLD);
     mass.momentum_space = 0;
 
+    /* Create buffers for the mass grid */
+    alloc_local_buffers(&mass, 10);
+
     /* First mass deposition */
-    mass_deposition(&mass, particles);
+    mass_deposition(&mass, particles, local_partnum);
+
+    /* Merge the buffers with the main grid */
+    add_local_buffers(&mass);
+
+    /* Export the GRF */
+    writeFieldFile_dg(&mass, "ini_mass.hdf5");
 
     /* Compute the gravitational potential */
     compute_potential(&mass, &pcs);
+
+    /* Copy buffers and communicate them to the neighbour ranks */
+    create_local_buffers(&mass);
 
     /* Start at the beginning */
     double a = a_begin;
@@ -246,8 +269,11 @@ int main(int argc, char *argv[]) {
         if (ITER == 0)
             continue;
 
+        message(rank, "Step %d at z = %g\n", ITER, z);
+        message(rank, "Computing particle kicks.\n");
+
         /* Integrate the particles */
-        for (long long i = 0; i < N*N*N; i++) {
+        for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
             /* Obtain the acceleration by differentiating the potential */
@@ -265,6 +291,13 @@ int main(int argc, char *argv[]) {
                 p->v[1] += d_vf * dtau1 * p->dx[1] / D_start - d_vf_2 * dtau1 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[2] += d_vf * dtau1 * p->dx[2] / D_start - d_vf_2 * dtau1 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
             }
+        }
+
+        message(rank, "Computing particle drifts.\n");
+
+        /* Integrate the particles */
+        for (long long i = 0; i < local_partnum; i++) {
+            struct particle *p = &particles[i];
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
             p->x[0] += p->v[0] * dtau / a_half;
@@ -277,16 +310,227 @@ int main(int argc, char *argv[]) {
                 p->x[1] -= p->dx[1] * (D_next - D) / D_start - factor_2lpt * p->dx2[1] * (D_next * D_next - D * D) / (D_start * D_start);
                 p->x[2] -= p->dx[2] * (D_next - D) / D_start - factor_2lpt * p->dx2[2] * (D_next * D_next - D * D) / (D_start * D_start);
             }
+
+            /* Wrap particles in the periodic domain */
+            p->x[0] = fwrap(p->x[0], boxlen);
+            p->x[1] = fwrap(p->x[1], boxlen);
+            p->x[2] = fwrap(p->x[2], boxlen);
         }
 
+        message(rank, "Starting particle exchange.\n");
+
+        /* Timer */
+        struct timeval time_sort_0, time_sort_1;
+        gettimeofday(&time_sort_0, NULL);
+
+        /* Count the number of local particles that belong on each MPI rank */
+        long long int *rank_num_parts = calloc(MPI_Rank_Count, sizeof(long long int));
+        for (long long i = 0; i < local_partnum; i++) {
+            struct particle *p = &particles[i];
+
+            int on_rank = (int) ((p->x[0] / boxlen) * MPI_Rank_Count);
+            rank_num_parts[on_rank]++;
+
+            p->rank = on_rank;
+        }
+
+        /* Sort particles by their desired MPI rank */
+        qsort(particles, local_partnum, sizeof(struct particle), particleSort);
+
+        /* The MPI ranks are placed along a periodic ring */
+        int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
+        int rank_right = (rank + 1) % MPI_Rank_Count;
+
+        /* Decide whether particles should be sent left or right */
+        long long int num_send_left = 0;
+        long long int num_send_right = 0;
+        long long int first_send_left = INT64_MAX - 1; // = infinity
+        long long int first_send_right = INT64_MAX - 1; // = infinity
+        for (long long i = 0; i < local_partnum; i++) {
+            struct particle *p = &particles[i];
+
+            if (p->rank != rank) {
+                if (abs(p->rank - rank_left) < abs(p->rank - rank_right)) {
+                    num_send_left++;
+                    if (i < first_send_left) first_send_left = i;
+                } else {
+                    num_send_right++;
+                    if (i < first_send_right) first_send_right = i;
+                }
+            }
+        }
+
+        /** **/
+        /* First, send particles to the right */
+        /** **/
+
+        /* Communicate the number of particles to be received */
+        long long int receive_from_left;
+        if (rank > 0) {
+            MPI_Recv(&receive_from_left, 1, MPI_LONG_LONG, rank_left, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        MPI_Send(&num_send_right, 1, MPI_LONG_LONG, rank_right,
+                 0, MPI_COMM_WORLD);
+        if (rank == 0) {
+            MPI_Recv(&receive_from_left, 1, MPI_LONG_LONG, rank_left,
+                     0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        /* Allocate memory for particles to be received */
+        struct particle *receive_parts_left = malloc(receive_from_left * sizeof(struct particle));
+
+        if (rank > 0) {
+            MPI_Recv(receive_parts_left, receive_from_left * sizeof(struct particle),
+                     MPI_CHAR, rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        MPI_Send(&particles[first_send_right], num_send_right * sizeof(struct particle),
+                 MPI_CHAR, rank_right, 0, MPI_COMM_WORLD);
+        if (rank == 0) {
+            MPI_Recv(receive_parts_left, receive_from_left * sizeof(struct particle),
+                     MPI_CHAR, rank_left, 0, MPI_COMM_WORLD,
+                     MPI_STATUS_IGNORE);
+        }
+
+        /** **/
+        /* Next, send particles to the left */
+        /** **/
+
+        /* Communicate the number of particles to be received */
+        long long int receive_from_right;
+        if (rank > 0) {
+            MPI_Recv(&receive_from_right, 1, MPI_LONG_LONG, rank_right, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        MPI_Send(&num_send_left, 1, MPI_LONG_LONG, rank_left,
+                 0, MPI_COMM_WORLD);
+        if (rank == 0) {
+            MPI_Recv(&receive_from_right, 1, MPI_LONG_LONG, rank_right,
+                     0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        /* Allocate memory for particles to be received */
+        struct particle *receive_parts_right = malloc(receive_from_right * sizeof(struct particle));
+
+        if (rank < MPI_Rank_Count - 1) {
+            MPI_Recv(receive_parts_right, receive_from_right * sizeof(struct particle),
+                     MPI_CHAR, rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        MPI_Send(&particles[first_send_left], num_send_left * sizeof(struct particle),
+                 MPI_CHAR, rank_left, 0, MPI_COMM_WORLD);
+        if (rank == MPI_Rank_Count - 1) {
+            MPI_Recv(receive_parts_right, receive_from_right * sizeof(struct particle),
+                     MPI_CHAR, rank_right, 0, MPI_COMM_WORLD,
+                     MPI_STATUS_IGNORE);
+        }
+
+        /* Move data around, overwriting particles that were sent away */
+        if (rank == 0) {
+            /* Insert the particles received from the right */
+            memmove(particles + local_partnum - num_send_left - num_send_right,
+                    receive_parts_right, receive_from_right * sizeof(struct particle));
+            /* Insert the particles received from the left */
+            memmove(particles + local_partnum - num_send_left - num_send_right + receive_from_right,
+                    receive_parts_left, receive_from_left * sizeof(struct particle));
+        } else if (rank > 0 && rank < MPI_Rank_Count - 1) {
+            /* Make space for particles on the left */
+            memmove(particles + receive_from_left, particles + num_send_left,
+                    (local_partnum - num_send_left) * sizeof(struct particle));
+            /* Insert the particles received from the left */
+            memmove(particles, receive_parts_left, receive_from_left * sizeof(struct particle));
+            /* Insert the particles received from the right at the end */
+            memmove(particles + local_partnum - num_send_left - num_send_right + receive_from_left,
+                    receive_parts_right, receive_from_right * sizeof(struct particle));
+        } else {
+            /* Make space for particles on the left */
+            memmove(particles + receive_from_left + receive_from_right,
+                    particles + num_send_left + num_send_right,
+                    (local_partnum - num_send_left - num_send_right) * sizeof(struct particle));
+            /* Insert the particles received from the left */
+            memmove(particles, receive_parts_left, receive_from_left * sizeof(struct particle));
+            /* Insert the particles received from the right */
+            memmove(particles + receive_from_left,
+                    receive_parts_right, receive_from_right * sizeof(struct particle));
+        }
+
+        /* Update the particle numbers */
+        local_partnum = local_partnum - num_send_left + receive_from_left - num_send_right  + receive_from_right;
+
+        /* Free memory used for receiving particle data */
+        free(receive_parts_left);
+        free(receive_parts_right);
+
+        /* Check that everything is now where it should be */
+        for (int i = 0; i < MPI_Rank_Count; i++) {
+            rank_num_parts[i] = 0;
+        }
+        for (long long i = 0; i < local_partnum; i++) {
+            struct particle *p = &particles[i];
+            rank_num_parts[p->rank]++;
+
+            if (p->rank != rank) {
+                printf("A particle ended up on the wrong MPI rank! (%d != %d)\n", rank, p->rank);
+                exit(1);
+            }
+        }
+
+        /* Free particle rank count array */
+        free(rank_num_parts);
+
+        gettimeofday(&time_sort_1, NULL);
+        message(rank, "Exchanging particles took %.5f s\n",
+                               ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
+                               + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
+
+        message(rank, "Computing the gravitational potential.\n");
+
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles);
+        mass_deposition(&mass, particles, local_partnum);
+
+        /* Timer */
+        struct timeval time_sort_2;
+        gettimeofday(&time_sort_2, NULL);
+        message(rank, "Computing mass density took %.5f s\n",
+                               ((time_sort_2.tv_sec - time_sort_1.tv_sec) * 1000000
+                               + time_sort_2.tv_usec - time_sort_1.tv_usec)/1e6);
+
+        /* Merge the buffers with the main grid */
+        add_local_buffers(&mass);
+
+        /* Export the GRF */
+        writeFieldFile_dg(&mass, "mass.hdf5");
+
+        /* Timer */
+        struct timeval time_sort_3;
+        gettimeofday(&time_sort_3, NULL);
+        message(rank, "Communicating buffers took %.5f s\n",
+                               ((time_sort_3.tv_sec - time_sort_2.tv_sec) * 1000000
+                               + time_sort_3.tv_usec - time_sort_2.tv_usec)/1e6);
 
         /* Re-compute the gravitational potential */
         compute_potential(&mass, &pcs);
 
+        /* Timer */
+        struct timeval time_sort_4;
+        gettimeofday(&time_sort_4, NULL);
+        message(rank, "Computing the potential took %.5f s\n",
+                               ((time_sort_4.tv_sec - time_sort_3.tv_sec) * 1000000
+                               + time_sort_4.tv_usec - time_sort_3.tv_usec)/1e6);
+
+        /* Copy buffers and communicate them to the neighbour ranks */
+        create_local_buffers(&mass);
+
+        /* Timer */
+        struct timeval time_sort_5;
+        gettimeofday(&time_sort_5, NULL);
+        message(rank, "Communicating buffers took %.5f s\n",
+                               ((time_sort_5.tv_sec - time_sort_4.tv_sec) * 1000000
+                               + time_sort_5.tv_usec - time_sort_4.tv_usec)/1e6);
+
+        message(rank, "Computing particle kicks.\n");
+
         /* Integrate the particles */
-        for (long long i = 0; i < N*N*N; i++) {
+        for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
             /* Obtain the acceleration by differentiating the potential */
@@ -309,11 +553,11 @@ int main(int argc, char *argv[]) {
         /* Step forward */
         a = a_next;
 
-        printf("%d %g %g\n", ITER, a, z);
+        message(rank, "\n");
     }
 
     /* Initiate mass deposition */
-    mass_deposition(&mass, particles);
+    mass_deposition(&mass, particles, local_partnum);
 
     /* Export the GRF */
     writeFieldFile_dg(&mass, "mass.hdf5");

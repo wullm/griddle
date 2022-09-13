@@ -31,6 +31,14 @@ struct particle {
     /* LPT displacements (first- and second-order) */
     double dx[3];
     double dx2[3];
+
+    int rank;
 };
+
+static inline int particleSort(const void *a, const void *b) {
+    struct particle *pa = (struct particle*) a;
+    struct particle *pb = (struct particle*) b;
+    return pa->rank >= pb->rank;
+}
 
 #endif
