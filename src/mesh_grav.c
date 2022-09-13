@@ -26,7 +26,10 @@
 static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
 
-    if (i >= dg->X0 && i < dg->X0 + dg->NX) {
+    /* Catch the single-rank case first */
+    if (dg->NX == dg->N) {
+        return dg->box[row_major_dg2(i, j, k, dg)];
+    } else if (i >= dg->X0 && i < dg->X0 + dg->NX) {
         return dg->box[row_major_dg2(i, j, k, dg)];
     } else if (i >= dg->X0 - dg->buffer_size && i < dg->X0) {
         return dg->buffer_left[row_major_dg_buffer_left(i, j, k, dg)];

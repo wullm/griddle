@@ -86,7 +86,10 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     double part_y = yy < 1.0 ? (1.0 - yy) : 0.;
                     double part_z = zz < 1.0 ? (1.0 - zz) : 0.;
 
-                    if (iX+x >= dgrid->X0 && iX+x < dgrid->X0 + dgrid->NX) {
+                    /* Catch the single-rank case first */
+                    if (dgrid->NX == dgrid->N) {
+                        dgrid->box[row_major_dg2(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
+                    } else if (iX+x >= dgrid->X0 && iX+x < dgrid->X0 + dgrid->NX) {
                         dgrid->box[row_major_dg2(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
                     } else if (iX+x >= dgrid->X0 - dgrid->buffer_size && iX+x < dgrid->X0) {
                         dgrid->buffer_left[row_major_dg_buffer_left(iX+x, iY+y, iZ+z, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);

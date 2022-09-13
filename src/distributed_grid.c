@@ -85,6 +85,9 @@ int create_local_buffers(struct distributed_grid *dg) {
     MPI_Comm_rank(dg->comm, &rank);
     MPI_Comm_size(dg->comm, &MPI_Rank_Count);
 
+    /* Is there anything to do? */
+    if (MPI_Rank_Count < 2) return 0;
+
     /* The MPI ranks are placed along a periodic ring */
     int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
     int rank_right = (rank + 1) % MPI_Rank_Count;
@@ -151,6 +154,9 @@ int add_local_buffers(struct distributed_grid *dg) {
     int rank, MPI_Rank_Count;
     MPI_Comm_rank(dg->comm, &rank);
     MPI_Comm_size(dg->comm, &MPI_Rank_Count);
+
+    /* Is there anything to do? */
+    if (MPI_Rank_Count < 2) return 0;
 
     /* The MPI ranks are placed along a periodic ring */
     int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
