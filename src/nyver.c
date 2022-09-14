@@ -316,7 +316,7 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            if (ITER == 0) {
+            if (ITER == 1) {
                 accelCIC(&mass, N, boxlen, p->x, acc);
             } else {
                 acc[0] = p->a[0];
@@ -369,159 +369,7 @@ int main(int argc, char *argv[]) {
             struct timeval time_sort_0;
             gettimeofday(&time_sort_0, NULL);
 
-            /* Count the number of local particles that belong on each MPI rank */
-            long long int *rank_num_parts = calloc(MPI_Rank_Count, sizeof(long long int));
-            for (long long i = 0; i < local_partnum; i++) {
-                struct particle *p = &particles[i];
-
-                int on_rank = (int) ((p->x[0] / boxlen) * MPI_Rank_Count);
-                rank_num_parts[on_rank]++;
-
-                p->rank = on_rank;
-            }
-
-            /* Sort particles by their desired MPI rank */
-            qsort(particles, local_partnum, sizeof(struct particle), particleSort);
-
-            /* The MPI ranks are placed along a periodic ring */
-            int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
-            int rank_right = (rank + 1) % MPI_Rank_Count;
-
-            /* Decide whether particles should be sent left or right */
-            long long int num_send_left = 0;
-            long long int num_send_right = 0;
-            long long int first_send_left = INT64_MAX - 1; // = infinity
-            long long int first_send_right = INT64_MAX - 1; // = infinity
-            for (long long i = 0; i < local_partnum; i++) {
-                struct particle *p = &particles[i];
-
-                if (p->rank != rank) {
-                    if (abs(p->rank - rank_left) < abs(p->rank - rank_right)) {
-                        num_send_left++;
-                        if (i < first_send_left) first_send_left = i;
-                    } else {
-                        num_send_right++;
-                        if (i < first_send_right) first_send_right = i;
-                    }
-                }
-            }
-
-            /** **/
-            /* First, send particles to the right */
-            /** **/
-
-            /* Communicate the number of particles to be received */
-            long long int receive_from_left;
-            if (rank > 0) {
-                MPI_Recv(&receive_from_left, 1, MPI_LONG_LONG, rank_left, 0,
-                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            MPI_Send(&num_send_right, 1, MPI_LONG_LONG, rank_right,
-                     0, MPI_COMM_WORLD);
-            if (rank == 0) {
-                MPI_Recv(&receive_from_left, 1, MPI_LONG_LONG, rank_left,
-                         0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-
-            /* Allocate memory for particles to be received */
-            struct particle *receive_parts_left = malloc(receive_from_left * sizeof(struct particle));
-
-            if (rank > 0) {
-                MPI_Recv(receive_parts_left, receive_from_left * sizeof(struct particle),
-                         MPI_CHAR, rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            MPI_Send(&particles[first_send_right], num_send_right * sizeof(struct particle),
-                     MPI_CHAR, rank_right, 0, MPI_COMM_WORLD);
-            if (rank == 0) {
-                MPI_Recv(receive_parts_left, receive_from_left * sizeof(struct particle),
-                         MPI_CHAR, rank_left, 0, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
-            }
-
-            /** **/
-            /* Next, send particles to the left */
-            /** **/
-
-            /* Communicate the number of particles to be received */
-            long long int receive_from_right;
-            if (rank > 0) {
-                MPI_Recv(&receive_from_right, 1, MPI_LONG_LONG, rank_right, 0,
-                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            MPI_Send(&num_send_left, 1, MPI_LONG_LONG, rank_left,
-                     0, MPI_COMM_WORLD);
-            if (rank == 0) {
-                MPI_Recv(&receive_from_right, 1, MPI_LONG_LONG, rank_right,
-                         0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-
-            /* Allocate memory for particles to be received */
-            struct particle *receive_parts_right = malloc(receive_from_right * sizeof(struct particle));
-
-            if (rank < MPI_Rank_Count - 1) {
-                MPI_Recv(receive_parts_right, receive_from_right * sizeof(struct particle),
-                         MPI_CHAR, rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            MPI_Send(&particles[first_send_left], num_send_left * sizeof(struct particle),
-                     MPI_CHAR, rank_left, 0, MPI_COMM_WORLD);
-            if (rank == MPI_Rank_Count - 1) {
-                MPI_Recv(receive_parts_right, receive_from_right * sizeof(struct particle),
-                         MPI_CHAR, rank_right, 0, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
-            }
-
-            /* Move data around, overwriting particles that were sent away */
-            if (rank == 0) {
-                /* Insert the particles received from the right */
-                memmove(particles + local_partnum - num_send_left - num_send_right,
-                        receive_parts_right, receive_from_right * sizeof(struct particle));
-                /* Insert the particles received from the left */
-                memmove(particles + local_partnum - num_send_left - num_send_right + receive_from_right,
-                        receive_parts_left, receive_from_left * sizeof(struct particle));
-            } else if (rank > 0 && rank < MPI_Rank_Count - 1) {
-                /* Make space for particles on the left */
-                memmove(particles + receive_from_left, particles + num_send_left,
-                        (local_partnum - num_send_left) * sizeof(struct particle));
-                /* Insert the particles received from the left */
-                memmove(particles, receive_parts_left, receive_from_left * sizeof(struct particle));
-                /* Insert the particles received from the right at the end */
-                memmove(particles + local_partnum - num_send_left - num_send_right + receive_from_left,
-                        receive_parts_right, receive_from_right * sizeof(struct particle));
-            } else {
-                /* Make space for particles on the left */
-                memmove(particles + receive_from_left + receive_from_right,
-                        particles + num_send_left + num_send_right,
-                        (local_partnum - num_send_left - num_send_right) * sizeof(struct particle));
-                /* Insert the particles received from the left */
-                memmove(particles, receive_parts_left, receive_from_left * sizeof(struct particle));
-                /* Insert the particles received from the right */
-                memmove(particles + receive_from_left,
-                        receive_parts_right, receive_from_right * sizeof(struct particle));
-            }
-
-            /* Update the particle numbers */
-            local_partnum = local_partnum - num_send_left + receive_from_left - num_send_right  + receive_from_right;
-
-            /* Free memory used for receiving particle data */
-            free(receive_parts_left);
-            free(receive_parts_right);
-
-            /* Check that everything is now where it should be */
-            for (int i = 0; i < MPI_Rank_Count; i++) {
-                rank_num_parts[i] = 0;
-            }
-            for (long long i = 0; i < local_partnum; i++) {
-                struct particle *p = &particles[i];
-                rank_num_parts[p->rank]++;
-
-                if (p->rank != rank) {
-                    printf("A particle ended up on the wrong MPI rank! (%d != %d)\n", rank, p->rank);
-                    exit(1);
-                }
-            }
-
-            /* Free particle rank count array */
-            free(rank_num_parts);
+            exchange_particles(particles, boxlen, &local_partnum);
 
             /* Timer */
             struct timeval time_sort_1;
@@ -549,9 +397,6 @@ int main(int argc, char *argv[]) {
 
         /* Merge the buffers with the main grid */
         add_local_buffers(&mass);
-
-        /* Export the GRF */
-        writeFieldFile_dg(&mass, "mass.hdf5");
 
         /* Timer */
         struct timeval time_sort_3;

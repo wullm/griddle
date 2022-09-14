@@ -20,6 +20,7 @@
 #ifndef COSMOLOGY_H
 #define COSMOLOGY_H
 
+#include "units.h"
 
 struct cosmology {
     double h;
@@ -44,5 +45,27 @@ struct cosmology {
 int readCosmology(struct cosmology *cosmo, const char *fname);
 int cleanCosmology(struct cosmology *cosmo);
 double primordialPower(const double k, const struct cosmology *cosmo);
+
+struct cosmology_tables {
+    double *avec;
+    double *Avec;
+    double *Bvec;
+    double *Hvec;
+    double *f_nu_nr;
+    double *f_nu_nr_tot;
+    double *kick_factors;
+    double *drift_factors;
+    int size;
+};
+
+void integrate_cosmology_tables(struct cosmology *c, struct units *us,
+                                struct physical_consts *pcs,
+                                struct cosmology_tables *tab, double a_start,
+                                double a_final, int size);
+void free_cosmology_tables(struct cosmology_tables *tab);
+
+double get_H_of_a(struct cosmology_tables *tab, double a);
+double get_f_nu_nr_tot_of_a(struct cosmology_tables *tab, double a);
+
 
 #endif

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * This file is part of Nyver.
- * Copyright (c) 2021 Willem Elbers (whe@willemelbers.com)
+ * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -17,31 +17,14 @@
  *
  ******************************************************************************/
 
-#ifndef COSMOLOGY_TABLES_H
-#define COSMOLOGY_TABLES_H
+/* Methods for generating Gaussian random fields */
 
-#include "units.h"
-#include "cosmology.h"
+#ifndef PARTICLE_EXCHANGE_H
+#define PARTICLE_EXCHANGE_H
 
-struct cosmology_tables {
-    double *avec;
-    double *Avec;
-    double *Bvec;
-    double *Hvec;
-    double *f_nu_nr;
-    double *f_nu_nr_tot;
-    double *kick_factors;
-    double *drift_factors;
-    int size;
-};
+#include "particle.h"
 
-void integrate_cosmology_tables(struct cosmology *c, struct units *us,
-                                struct physical_consts *pcs,
-                                struct cosmology_tables *tab, double a_start,
-                                double a_final, int size);
-void free_cosmology_tables(struct cosmology_tables *tab);
-
-double get_H_of_a(struct cosmology_tables *tab, double a);
-double get_f_nu_nr_tot_of_a(struct cosmology_tables *tab, double a);
+int exchange_particles(struct particle *parts, double boxlen,
+                       long long int *num_localpart);
 
 #endif
