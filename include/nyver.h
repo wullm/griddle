@@ -24,6 +24,7 @@
 #include "params.h"
 #include "units.h"
 #include "cosmology.h"
+#include "cosmology_tables.h"
 #include "strooklat.h"
 #include "grid_io.h"
 #include "random.h"

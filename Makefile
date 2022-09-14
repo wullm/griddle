@@ -33,6 +33,7 @@ all:
 	$(GCC) src/gaussian_field.c -c -o lib/gaussian_field.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/perturb_data.c -c -o lib/perturb_data.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/cosmology.c -c -o lib/cosmology.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/cosmology_tables.c -c -o lib/cosmology_tables.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/initial_conditions.c -c -o lib/initial_conditions.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/mesh_grav.c -c -o lib/mesh_grav.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/mass_deposit.c -c -o lib/mass_deposit.o $(INCLUDES) $(CFLAGS)

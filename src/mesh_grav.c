@@ -23,10 +23,9 @@
 #include "../include/fft.h"
 
 /* Direct nearest grid point interpolation */
-static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
+static inline double safeNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
 
-    /* Catch the single-rank case first */
     if (i < dg->X0) {
         return dg->buffer_left[row_major_dg_buffer_left(i, j, k, dg)];
     } else if (i >= dg->X0 + dg->NX) {
@@ -35,6 +34,27 @@ static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
         return dg->box[row_major_dg2(i, j, k, dg)];
     }
 
+}
+
+/* Direct nearest grid point interpolation */
+static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
+                             int j, int k) {
+    return dg->box[row_major_dg2(i, j, k, dg)];
+}
+
+/* Direct cloud in cell interpolation */
+static inline double safeCIC(const struct distributed_grid *dg, int N, int i,
+                             int j, int k, double dx, double dy, double dz,
+                             double tx, double ty, double tz) {
+
+    return safeNGP(dg, N, i, j, k) * tx * ty * tz
+         + safeNGP(dg, N, i, j, k+1) * tx * ty * dz
+         + safeNGP(dg, N, i, j+1, k) * tx * dy * tz
+         + safeNGP(dg, N, i, j+1, k+1) * tx * dy * dz
+         + safeNGP(dg, N, i+1, j, k) * dx * ty * tz
+         + safeNGP(dg, N, i+1, j, k+1) * dx * ty * dz
+         + safeNGP(dg, N, i+1, j+1, k) * dx * dy * tz
+         + safeNGP(dg, N, i+1, j+1, k+1) * dx * dy * dz;
 }
 
 /* Direct cloud in cell interpolation */
@@ -175,26 +195,50 @@ void accelCIC(const struct distributed_grid *dg, int N, double boxlen,
     double ty = 1.0 - dy;
     double tz = 1.0 - dz;
 
-    a[0] = 0.0;
-    a[0] -= fastCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-    a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[0] += fastCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-    a[0] *= fac_over_12;
+    if (iX < dg->X0 + 4 || iX > dg->X0 + dg->NX - 4) {
+        a[0] = 0.0;
+        a[0] -= safeCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+        a[0] += safeCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[0] -= safeCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[0] += safeCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+        a[0] *= fac_over_12;
 
-    a[1] = 0.0;
-    a[1] -= fastCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
-    a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[1] += fastCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
-    a[1] *= fac_over_12;
+        a[1] = 0.0;
+        a[1] -= safeCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
+        a[1] += safeCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[1] -= safeCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[1] += safeCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
+        a[1] *= fac_over_12;
 
-    a[2] = 0.0;
-    a[2] -= fastCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
-    a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
-    a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
-    a[2] += fastCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
-    a[2] *= fac_over_12;
+        a[2] = 0.0;
+        a[2] -= safeCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
+        a[2] += safeCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
+        a[2] -= safeCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
+        a[2] += safeCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
+        a[2] *= fac_over_12;
+    } else {
+        a[0] = 0.0;
+        a[0] -= fastCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+        a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[0] += fastCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+        a[0] *= fac_over_12;
+
+        a[1] = 0.0;
+        a[1] -= fastCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
+        a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+        a[1] += fastCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
+        a[1] *= fac_over_12;
+
+        a[2] = 0.0;
+        a[2] -= fastCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
+        a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
+        a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
+        a[2] += fastCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
+        a[2] *= fac_over_12;
+    }
+
 }
 
 /* Generic grid interpolation method for the acceleration vector */

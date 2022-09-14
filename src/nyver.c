@@ -66,6 +66,7 @@ int main(int argc, char *argv[]) {
     struct units us;
     struct physical_consts pcs;
     struct cosmology cosmo;
+    struct cosmology_tables ctabs;
 
     /* Structures for dealing with perturbation data (transfer functions) */
     struct perturb_data ptdat;
@@ -77,6 +78,30 @@ int main(int argc, char *argv[]) {
     set_physical_constants(&us, &pcs);
     readCosmology(&cosmo, fname);
 
+    /* Print a string about the neutrino species */
+    if (cosmo.N_nu > 0) {
+        message(rank, "We have %d neutrino species (", cosmo.N_nu);
+        for (int i = 0; i < cosmo.N_nu; i++) {
+            message(rank, "%g", cosmo.M_nu[i]);
+            if (i < cosmo.N_nu - 1) message(rank, ", ");
+        }
+        message(rank, ") x (");
+        for (int i = 0; i < cosmo.N_nu; i++) {
+            message(rank, "%g", cosmo.deg_nu[i]);
+            if (i < cosmo.N_nu - 1) message(rank, ", ");
+        }
+        message(rank, ").\n");
+    }
+
+    /* Integration limits */
+    const double a_begin = pars.ScaleFactorBegin;
+    const double a_end = pars.ScaleFactorEnd;
+    const double a_factor = 1.0 + pars.ScaleFactorStep;
+    const double z_start = 1.0 / a_begin - 1.0;
+
+    /* Integrate the background cosmology */
+    integrate_cosmology_tables(&cosmo, &us, &pcs, &ctabs, 1e-3, fmax(1.0, a_end) * 1.01, 1000);
+
     /* Read the perturbation data file */
     readPerturb(&us, &ptdat, pars.TransferFunctionsFile);
     readPerturbParams(&us, &ptpars, pars.TransferFunctionsFile);
@@ -86,6 +111,10 @@ int main(int argc, char *argv[]) {
     struct strooklat spline_k = {ptdat.k, ptdat.k_size};
     init_strooklat_spline(&spline_z, 100);
     init_strooklat_spline(&spline_k, 100);
+
+    /* Additional interpolation spline for the background cosmology scale factors */
+    struct strooklat spline_bg_a = {ctabs.avec, ctabs.size};
+    init_strooklat_spline(&spline_bg_a, 100);
 
     /* Store the MPI rank */
     pars.rank = rank;
@@ -98,14 +127,8 @@ int main(int argc, char *argv[]) {
     double boxlen = pars.BoxLength;
     struct distributed_grid lpt_potential;
 
-    /* Integration limits */
-    const double a_begin = pars.ScaleFactorBegin;
-    const double a_end = pars.ScaleFactorEnd;
-    const double a_factor = 1.0 + pars.ScaleFactorStep;
-    const double z_start = 1.0 / a_begin - 1.0;
-    const double D_start = strooklat_interp(&spline_z, ptdat.D_growth, z_start);
-
     /* The 2LPT factor */
+    const double D_start = strooklat_interp(&spline_z, ptdat.D_growth, z_start);
     const double factor_2lpt = 3. / 7.;
     const double factor_vel_2lpt = factor_2lpt * 2.0;
 
@@ -149,6 +172,10 @@ int main(int argc, char *argv[]) {
     /* Generate a particle lattice */
     generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
                               particles, &cosmo, &us, &pcs, X0, NX, z_start);
+
+    /* We are done with the LPT potentials */
+    free_local_grid(&lpt_potential);
+    free_local_grid(&lpt_potential_2);
 
     /* Set velocities to zero when running with COLA */
     if (pars.WithCOLA) {
@@ -205,37 +232,44 @@ int main(int argc, char *argv[]) {
 
         /* Compute the current redshift and log conformal time */
         double z = 1./a - 1.;
-        double log_tau = strooklat_interp(&spline_z, ptdat.log_tau, z);
 
         /* Determine the half-step scale factor */
         double a_half = sqrt(a_next * a);
 
         /* Find the next and half-step conformal times */
         double z_next = 1./a_next - 1.;
-        double z_half = 1./a_half - 1.;
-        double log_tau_next = strooklat_interp(&spline_z, ptdat.log_tau, z_next);
-        double log_tau_half = strooklat_interp(&spline_z, ptdat.log_tau, z_half);
-        double dtau1 = exp(log_tau_half) - exp(log_tau);
-        double dtau2 = exp(log_tau_next) - exp(log_tau_half);
-        double dtau = dtau1 + dtau2;
 
-        /* Obtain the growth factors */
-        double D = strooklat_interp(&spline_z, ptdat.D_growth, z);
-        double D_half = strooklat_interp(&spline_z, ptdat.D_growth, z_half);
-        double D_next = strooklat_interp(&spline_z, ptdat.D_growth, z_next);
+        /* Obtain the kick and drift time steps */
+        double kick_dtau1 = strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half) -
+                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a);
+        double kick_dtau2 = strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next) -
+                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half);
+        double drift_dtau = strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next) -
+                            strooklat_interp(&spline_bg_a, ctabs.drift_factors, a);
 
         /* Obtain the velocity factor derivatives */
-        double d_vf = 0., d_vf_2 = 0., d_vf_half = 0., d_vf_2_half = 0.;
+        double D = 0., D_next = 0.;
+        double d_vf = 0., d_vf_2 = 0.;
+        double d_vf_next = 0., d_vf_2_next = 0.;
         if (pars.WithCOLA) {
+            /* Conformal time intervals */
+            double log_tau = strooklat_interp(&spline_z, ptdat.log_tau, z);
+            double log_tau_next = strooklat_interp(&spline_z, ptdat.log_tau, z_next);
+
+            /* Obtain the growth factors */
+            D = strooklat_interp(&spline_z, ptdat.D_growth, z);
+            D_next = strooklat_interp(&spline_z, ptdat.D_growth, z_next);
+
             double f = strooklat_interp(&spline_z, ptdat.f_growth, z);
-            double f_half = strooklat_interp(&spline_z, ptdat.f_growth, z_half);
             double H = strooklat_interp(&spline_z, ptdat.Hubble_H, z);
-            double H_half = strooklat_interp(&spline_z, ptdat.Hubble_H, z_half);
             double vel_fact = a * a * f * H;
-            double vel_fact_half = a_half * a_half * f_half * H_half;
+
+            double f_next = strooklat_interp(&spline_z, ptdat.f_growth, z_next);
+            double H_next = strooklat_interp(&spline_z, ptdat.Hubble_H, z_next);
+            double vel_fact_next = a_next * a_next * f_next * H_next;
 
             /* Differentiate the velocity factor at time a */
-            double a_bit = a * 1.01;
+            double a_bit = a * 1.0001;
             double z_bit = 1./a_bit - 1.;
             double log_tau_bit = strooklat_interp(&spline_z, ptdat.log_tau, z_bit);
             double tau_bit = exp(log_tau_bit);
@@ -249,20 +283,20 @@ int main(int argc, char *argv[]) {
             d_vf = (vel_fact_bit * D_bit - vel_fact * D) / (tau_bit - exp(log_tau));
             d_vf_2 = (vel_fact_bit * D_bit * D_bit - vel_fact * D * D) / (tau_bit - exp(log_tau));
 
-            /* Differentiate the velocity factor at time a_half */
-            double a_hbit = a_half * 1.01;
-            double z_hbit = 1./a_hbit - 1.;
-            double log_tau_hbit = strooklat_interp(&spline_z, ptdat.log_tau, z_hbit);
-            double tau_hbit = exp(log_tau_hbit);
+            /* Differentiate the velocity factor at time a_next */
+            double a_nbit = a_next * 1.0001;
+            double z_nbit = 1./a_nbit - 1.;
+            double log_tau_nbit = strooklat_interp(&spline_z, ptdat.log_tau, z_nbit);
+            double tau_nbit = exp(log_tau_nbit);
 
-            double f_hbit = strooklat_interp(&spline_z, ptdat.f_growth, z_hbit);
-            double D_hbit = strooklat_interp(&spline_z, ptdat.D_growth, z_hbit);
-            double H_hbit = strooklat_interp(&spline_z, ptdat.Hubble_H, z_hbit);
-            double vel_fact_hbit = a_hbit * a_hbit * f_hbit * H_hbit;
+            double f_nbit = strooklat_interp(&spline_z, ptdat.f_growth, z_nbit);
+            double D_nbit = strooklat_interp(&spline_z, ptdat.D_growth, z_nbit);
+            double H_nbit = strooklat_interp(&spline_z, ptdat.Hubble_H, z_nbit);
+            double vel_fact_nbit = a_nbit * a_nbit * f_nbit * H_nbit;
 
             /* Derivative of the first- and second-order velocity factors */
-            d_vf_half = (vel_fact_hbit * D_hbit - vel_fact_half * D_half) / (tau_hbit - exp(log_tau_half));
-            d_vf_2_half = (vel_fact_hbit * D_hbit * D_hbit - vel_fact_half * D_half * D_half) / (tau_hbit - exp(log_tau_half));
+            d_vf_next = (vel_fact_nbit * D_nbit - vel_fact_next * D_next) / (tau_nbit - exp(log_tau_next));
+            d_vf_2_next = (vel_fact_nbit * D_nbit * D_nbit - vel_fact_next * D_next * D_next) / (tau_nbit - exp(log_tau_next));
         }
 
         /* Skip the particle integration during the first step */
@@ -282,8 +316,7 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-
-            if (ITER == 1) {
+            if (ITER == 0) {
                 accelCIC(&mass, N, boxlen, p->x, acc);
             } else {
                 acc[0] = p->a[0];
@@ -292,27 +325,27 @@ int main(int argc, char *argv[]) {
             }
 
             /* Execute first half-kick */
-            p->v[0] += acc[0] * dtau1;
-            p->v[1] += acc[1] * dtau1;
-            p->v[2] += acc[2] * dtau1;
+            p->v[0] += acc[0] * kick_dtau1;
+            p->v[1] += acc[1] * kick_dtau1;
+            p->v[2] += acc[2] * kick_dtau1;
 
             /* COLA half-kick */
             if (pars.WithCOLA) {
-                p->v[0] += d_vf * dtau1 * p->dx[0] / D_start - d_vf_2 * dtau1 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
-                p->v[1] += d_vf * dtau1 * p->dx[1] / D_start - d_vf_2 * dtau1 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
-                p->v[2] += d_vf * dtau1 * p->dx[2] / D_start - d_vf_2 * dtau1 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[0] += d_vf * kick_dtau1 * p->dx[0] / D_start + d_vf_2 * kick_dtau1 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[1] += d_vf * kick_dtau1 * p->dx[1] / D_start + d_vf_2 * kick_dtau1 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[2] += d_vf * kick_dtau1 * p->dx[2] / D_start + d_vf_2 * kick_dtau1 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
             }
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
-            p->x[0] += p->v[0] * dtau / a_half;
-            p->x[1] += p->v[1] * dtau / a_half;
-            p->x[2] += p->v[2] * dtau / a_half;
+            p->x[0] += p->v[0] * drift_dtau;
+            p->x[1] += p->v[1] * drift_dtau;
+            p->x[2] += p->v[2] * drift_dtau;
 
             /* COLA drift */
             if (pars.WithCOLA) {
-                p->x[0] -= p->dx[0] * (D_next - D) / D_start - factor_2lpt * p->dx2[0] * (D_next * D_next - D * D) / (D_start * D_start);
-                p->x[1] -= p->dx[1] * (D_next - D) / D_start - factor_2lpt * p->dx2[1] * (D_next * D_next - D * D) / (D_start * D_start);
-                p->x[2] -= p->dx[2] * (D_next - D) / D_start - factor_2lpt * p->dx2[2] * (D_next * D_next - D * D) / (D_start * D_start);
+                p->x[0] -= p->dx[0] * (D_next - D) / D_start + factor_2lpt * p->dx2[0] * (D_next * D_next - D * D) / (D_start * D_start);
+                p->x[1] -= p->dx[1] * (D_next - D) / D_start + factor_2lpt * p->dx2[1] * (D_next * D_next - D * D) / (D_start * D_start);
+                p->x[2] -= p->dx[2] * (D_next - D) / D_start + factor_2lpt * p->dx2[2] * (D_next * D_next - D * D) / (D_start * D_start);
             }
 
             /* Wrap particles in the periodic domain */
@@ -562,15 +595,15 @@ int main(int argc, char *argv[]) {
             p->a[2] = acc[2];
 
             /* Execute second half-kick */
-            p->v[0] += acc[0] * dtau2;
-            p->v[1] += acc[1] * dtau2;
-            p->v[2] += acc[2] * dtau2;
+            p->v[0] += acc[0] * kick_dtau2;
+            p->v[1] += acc[1] * kick_dtau2;
+            p->v[2] += acc[2] * kick_dtau2;
 
             /* COLA half-kick */
             if (pars.WithCOLA) {
-                p->v[0] += d_vf_half * dtau2 * p->dx[0] / D_start - d_vf_2_half * dtau2 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
-                p->v[1] += d_vf_half * dtau2 * p->dx[1] / D_start - d_vf_2_half * dtau2 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
-                p->v[2] += d_vf_half * dtau2 * p->dx[2] / D_start - d_vf_2_half * dtau2 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[0] += d_vf_next * kick_dtau2 * p->dx[0] / D_start + d_vf_2_next * kick_dtau2 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[1] += d_vf_next * kick_dtau2 * p->dx[1] / D_start + d_vf_2_next * kick_dtau2 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
+                p->v[2] += d_vf_next * kick_dtau2 * p->dx[2] / D_start + d_vf_2_next * kick_dtau2 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
             }
         }
 
@@ -592,9 +625,6 @@ int main(int argc, char *argv[]) {
     /* Free the particle lattice */
     free(particles);
 
-    /* Free the LPT potential grids */
-    free_local_grid(&lpt_potential);
-
     /* Free the mass grid */
     free_local_grid(&mass);
 
@@ -604,12 +634,17 @@ int main(int argc, char *argv[]) {
 
     /* Clean up */
     cleanParams(&pars);
+    cleanCosmology(&cosmo);
     cleanPerturb(&ptdat);
     cleanPerturbParams(&ptpars);
+
+    /* Clean up the cosmological tables */
+    free_cosmology_tables(&ctabs);
 
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
     free_strooklat_spline(&spline_k);
+    free_strooklat_spline(&spline_bg_a);
 
     /* Timer */
     gettimeofday(&time_stop, NULL);
