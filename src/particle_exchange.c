@@ -24,6 +24,31 @@
 #include <mpi.h>
 
 #include "../include/particle_exchange.h"
+#include "../include/message.h"
+
+/* Check that all particles are on the right rank */
+long long int count_foreign_particles(struct particle *parts, double boxlen,
+                                      long long int num_localpart) {
+
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* Count the number of local particles that belong on another MPI rank */
+    long long int foreign_particles = 0;
+    for (long long i = 0; i < num_localpart; i++) {
+        struct particle *p = &parts[i];
+        if (p->rank != rank) foreign_particles++;
+    }
+
+    /* Communicate amongst all ranks */
+    long long int total_foreign_parts;
+    MPI_Allreduce(&foreign_particles, &total_foreign_parts, 1, MPI_LONG_LONG,
+                  MPI_SUM, MPI_COMM_WORLD);
+
+    return total_foreign_parts;
+}
 
 /* Exchange particles between MPI ranks */
 int exchange_particles(struct particle *parts, double boxlen,
@@ -175,22 +200,15 @@ int exchange_particles(struct particle *parts, double boxlen,
     free(receive_parts_left);
     free(receive_parts_right);
 
-    /* Check that everything is now where it should be */
-    for (int i = 0; i < MPI_Rank_Count; i++) {
-        rank_num_parts[i] = 0;
-    }
-    for (long long i = 0; i < *num_localpart; i++) {
-        struct particle *p = &parts[i];
-        rank_num_parts[p->rank]++;
-
-        if (p->rank != rank) {
-            printf("A particle ended up on the wrong MPI rank! (%d != %d)\n", rank, p->rank);
-            exit(1);
-        }
-    }
-
     /* Free particle rank count array */
     free(rank_num_parts);
+
+    /* Check that everything is now where it should be */
+    long long int total_foreign_parts = count_foreign_particles(parts, boxlen, *num_localpart);
+    if (total_foreign_parts > 0) {
+        message(rank, "%lld foreign particles remain. Continuing particle exchange.\n", total_foreign_parts);
+        exchange_particles(parts, boxlen, num_localpart);
+    }
 
     return 0;
 }

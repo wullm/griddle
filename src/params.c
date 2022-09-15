@@ -32,6 +32,9 @@ int readParams(struct params *pars, const char *fname) {
      pars->FixedModes = ini_getl("Random", "FixedModes", 0, fname);
      pars->InvertedModes = ini_getl("Random", "InvertedModes", 0, fname);
 
+     /* Initial conditions parameters */
+     pars->GenerateICs = ini_getl("InitialConditions", "Generate", 1, fname);
+
      pars->PartGridSize = ini_getl("Simulation", "PartGridSize", 64, fname);
      pars->MeshGridSize = ini_getl("Simulation", "MeshGridSize", 64, fname);
      pars->BoxLength = ini_getd("Simulation", "BoxLength", 1000.0, fname);
@@ -43,7 +46,9 @@ int readParams(struct params *pars, const char *fname) {
 
      /* Read strings */
      int len = DEFAULT_STRING_LENGTH;
+     pars->InitialConditionsFile = malloc(len);
      pars->TransferFunctionsFile = malloc(len);
+     ini_gets("InitialConditions", "File", "", pars->InitialConditionsFile, len, fname);
      ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
 
      return 0;
@@ -51,6 +56,7 @@ int readParams(struct params *pars, const char *fname) {
 
 
 int cleanParams(struct params *pars) {
+    free(pars->InitialConditionsFile);
     free(pars->TransferFunctionsFile);
 
     return 0;

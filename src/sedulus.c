@@ -128,48 +128,109 @@ int main(int argc, char *argv[]) {
     const double factor_2lpt = 3. / 7.;
     const double factor_vel_2lpt = factor_2lpt * 2.0;
 
-    /* Allocate distributed memory arrays (one complex & one real) */
-    alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
-
-    /* Generate LPT potential grid */
-    generate_potential_grid(&lpt_potential, &seed, pars.FixedModes,
-                            pars.InvertedModes, &ptdat, &cosmo, z_start);
-
-    /* Allocate additional arrays */
-    struct distributed_grid temp2;
-    struct distributed_grid temp1;
-    struct distributed_grid lpt_potential_2;
-    alloc_local_grid(&temp1, N, boxlen, MPI_COMM_WORLD);
-    alloc_local_grid(&temp2, N, boxlen, MPI_COMM_WORLD);
-    alloc_local_grid(&lpt_potential_2, N, boxlen, MPI_COMM_WORLD);
-
-    /* Generate the 2LPT potential grid */
-    generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2, &ptdat,
-                       &cosmo, z_start);
-
-    /* Free working memory used in the 2LPT calculation */
-    free_local_grid(&temp1);
-    free_local_grid(&temp2);
-
-    /* Create buffers for the LPT potentials */
-    alloc_local_buffers(&lpt_potential, buffer_width);
-    alloc_local_buffers(&lpt_potential_2, buffer_width);
-    create_local_buffers(&lpt_potential);
-    create_local_buffers(&lpt_potential_2);
-
     /* Allocate memory for a particle lattice */
     long long foreign_buffer = 10; //extra memory for exchanging particles
     long long local_partnum = NX * N * N;
     long long max_partnum = (NX + foreign_buffer) * N * N;
     struct particle *particles = malloc(max_partnum * sizeof(struct particle));
 
-    /* Generate a particle lattice */
-    generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
-                              particles, &cosmo, &us, &pcs, X0, NX, z_start);
+    if (!pars.GenerateICs) {
+        message(rank, "Reading initial conditions from '%s'.\n", pars.InitialConditionsFile);
 
-    /* We are done with the LPT potentials */
-    free_local_grid(&lpt_potential);
-    free_local_grid(&lpt_potential_2);
+        if (pars.WithCOLA) {
+            printf("COLA is currently only supported with internally generated ICs.\n");
+            exit(1);
+        }
+
+        /* Timer */
+        struct timeval time_sort_0;
+        gettimeofday(&time_sort_0, NULL);
+
+        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, &local_partnum, max_partnum);
+
+        /* Timer */
+        struct timeval time_sort_1;
+        gettimeofday(&time_sort_1, NULL);
+        message(rank, "Reading initial conditions took %.5f s\n",
+                               ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
+                               + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
+
+        exchange_particles(particles, boxlen, &local_partnum);
+
+        /* Timer */
+        struct timeval time_sort_2;
+        gettimeofday(&time_sort_2, NULL);
+        message(rank, "Exchaning particles took %.5f s\n",
+                               ((time_sort_2.tv_sec - time_sort_1.tv_sec) * 1000000
+                               + time_sort_2.tv_usec - time_sort_1.tv_usec)/1e6);
+    } else {
+        message(rank, "Generating initial conditions with 2LPT.\n");
+
+        /* Timer */
+        struct timeval time_sort_0;
+        gettimeofday(&time_sort_0, NULL);
+
+        /* Allocate distributed memory arrays (one complex & one real) */
+        alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
+
+        /* Generate LPT potential grid */
+        generate_potential_grid(&lpt_potential, &seed, pars.FixedModes,
+                                pars.InvertedModes, &ptdat, &cosmo, z_start);
+
+        /* Timer */
+        struct timeval time_sort_1;
+        gettimeofday(&time_sort_1, NULL);
+        message(rank, "Generating the Zel'dovich potential took %.5f s\n",
+                               ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
+                               + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
+
+        /* Allocate additional arrays */
+        struct distributed_grid temp2;
+        struct distributed_grid temp1;
+        struct distributed_grid lpt_potential_2;
+        alloc_local_grid(&temp1, N, boxlen, MPI_COMM_WORLD);
+        alloc_local_grid(&temp2, N, boxlen, MPI_COMM_WORLD);
+        alloc_local_grid(&lpt_potential_2, N, boxlen, MPI_COMM_WORLD);
+
+        /* Generate the 2LPT potential grid */
+        generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2, &ptdat,
+                           &cosmo, z_start);
+
+        /* Free working memory used in the 2LPT calculation */
+        free_local_grid(&temp1);
+        free_local_grid(&temp2);
+
+        /* Timer */
+        struct timeval time_sort_2;
+        gettimeofday(&time_sort_2, NULL);
+        message(rank, "Generating the 2LPT potential took %.5f s\n",
+                               ((time_sort_2.tv_sec - time_sort_1.tv_sec) * 1000000
+                               + time_sort_2.tv_usec - time_sort_1.tv_usec)/1e6);
+
+        /* Create buffers for the LPT potentials */
+        alloc_local_buffers(&lpt_potential, buffer_width);
+        alloc_local_buffers(&lpt_potential_2, buffer_width);
+        create_local_buffers(&lpt_potential);
+        create_local_buffers(&lpt_potential_2);
+
+        /* Generate a particle lattice */
+        generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
+                                  particles, &cosmo, &us, &pcs, X0, NX, z_start);
+
+        /* We are done with the LPT potentials */
+        free_local_grid(&lpt_potential);
+        free_local_grid(&lpt_potential_2);
+
+        /* Timer */
+        struct timeval time_sort_3;
+        gettimeofday(&time_sort_3, NULL);
+        message(rank, "Generating the particle lattice took %.5f s\n",
+                               ((time_sort_3.tv_sec - time_sort_2.tv_sec) * 1000000
+                               + time_sort_3.tv_usec - time_sort_2.tv_usec)/1e6);
+
+    }
+
+    message(rank, "\n");
 
     /* Set velocities to zero when running with COLA */
     if (pars.WithCOLA) {

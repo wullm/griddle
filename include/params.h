@@ -31,6 +31,10 @@ struct params {
     char FixedModes;
     char InvertedModes;
 
+    /* Initial conditions parameters */
+    char GenerateICs;
+    char *InitialConditionsFile;
+
     /* Perturbation file parameters */
     char *TransferFunctionsFile;
 

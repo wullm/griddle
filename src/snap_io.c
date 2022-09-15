@@ -345,3 +345,170 @@ int writeHeaderAttributes(struct params *pars, struct units *us,
 
     return 0;
 }
+
+int readSnapshot(struct params *pars, struct units *us,
+                 struct particle *particles, const char *fname,
+                 long long int *local_partnum, long long int max_partnum) {
+
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* Property list for MPI file access */
+    hid_t prop_faxs = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_mpio(prop_faxs, MPI_COMM_WORLD, MPI_INFO_NULL);
+
+    /* Open the hdf5 file */
+    hid_t h_file = H5Fopen(fname, H5F_ACC_RDONLY, prop_faxs);
+    H5Pclose(prop_faxs);
+
+    /* The ExportName */
+    const char *ExportName = "PartType1"; // cdm
+
+    /* Open the particle group */
+    hid_t h_grp = H5Gopen(h_file, ExportName, H5P_DEFAULT);
+
+    /* Open the coordinates dataset */
+    hid_t h_dat = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
+
+    /* Find the dataspace (in the file) */
+    hid_t h_space = H5Dget_space (h_dat);
+
+    /* Get the dimensions of this dataspace */
+    hsize_t dims[2];
+    H5Sget_simple_extent_dims(h_space, dims, NULL);
+
+    /* The total number of particles present in the file */
+    hid_t N_tot = dims[0];
+
+    /* The number of particles that will be read per rank */
+    hid_t N_per_rank = (long int) (N_tot / MPI_Rank_Count);
+    hid_t N_this_rank = (rank < MPI_Rank_Count - 1) ? N_per_rank : N_tot - (MPI_Rank_Count - 1) * N_per_rank;
+    *local_partnum = N_this_rank;
+
+    /* The address of the first particle to be read on this rank */
+    hid_t localFirstNumber = rank * N_per_rank;
+
+    // printf("%d: we will read %ld particles, starting from %ld\n", rank, N_this_rank, localFirstNumber);
+
+    /* Close the data and memory spaces */
+    H5Sclose(h_space);
+
+    /* Close the dataset */
+    H5Dclose(h_dat);
+
+    /* Define the hyperslab */
+    hsize_t slab_dims[2], start[2]; //for 3-vectors
+    hsize_t slab_dims_one[1], start_one[1]; //for scalars
+
+    /* Slab dimensions for 3-vectors */
+    slab_dims[0] = N_this_rank;
+    slab_dims[1] = 3; //(x,y,z)
+    start[0] = localFirstNumber;
+    start[1] = 0; //start with x
+
+    /* Slab dimensions for scalars */
+    slab_dims_one[0] = N_this_rank;
+    start_one[0] = localFirstNumber;
+
+    /* Open the coordinates dataset and corresponding data space */
+    h_dat = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
+    h_space = H5Dget_space (h_dat);
+
+    /* Select the hyperslab */
+    hid_t status = H5Sselect_hyperslab(h_space, H5S_SELECT_SET, start,
+                                       NULL, slab_dims, NULL);
+
+    /* Create a memory space */
+    hid_t h_mems = H5Screate_simple(2, slab_dims, NULL);
+
+    /* Create the data array and read the data */
+    double *coord_data = malloc(N_this_rank * 3 * sizeof(double));
+    status = H5Dread(h_dat, H5T_NATIVE_DOUBLE, h_mems, h_space, H5P_DEFAULT,
+                     coord_data);
+
+     /* Close the memory space, data space, data set */
+     H5Sclose(h_mems);
+     H5Sclose(h_space);
+     H5Dclose(h_dat);
+
+    /* Transfer the coordinate array to the particles */
+    for (int i = 0; i < *local_partnum; i++) {
+        particles[i].x[0] = coord_data[i * 3 + 0];
+        particles[i].x[1] = coord_data[i * 3 + 1];
+        particles[i].x[2] = coord_data[i * 3 + 2];
+    }
+
+    free(coord_data);
+
+    /* Open the masses dataset and corresponding data space */
+    h_dat = H5Dopen(h_grp, "Masses", H5P_DEFAULT);
+    h_space = H5Dget_space (h_dat);
+
+    /* Select the hyperslab */
+    status = H5Sselect_hyperslab(h_space, H5S_SELECT_SET, start_one, NULL,
+                                        slab_dims_one, NULL);
+
+    /* Create a memory space */
+    h_mems = H5Screate_simple(1, slab_dims_one, NULL);
+
+    /* Create the data array and read the data */
+    double *mass_data = malloc(N_this_rank * sizeof(double));
+    status = H5Dread(h_dat, H5T_NATIVE_DOUBLE, h_mems, h_space, H5P_DEFAULT,
+                     mass_data);
+
+    /* Close the memory space, data space, data set */
+    H5Sclose(h_mems);
+    H5Sclose(h_space);
+    H5Dclose(h_dat);
+
+    /* Transfer the contiguous array to the particle data */
+    for (int i = 0; i < *local_partnum; i++) {
+        particles[i].m = mass_data[i];
+    }
+
+    /* Free the contiguous array */
+    free(mass_data);
+
+    /* Open the velocities dataset and corresponding dataspace */
+    h_dat = H5Dopen(h_grp, "Velocities", H5P_DEFAULT);
+    h_space = H5Dget_space(h_dat);
+
+    /* Select the hyperslab */
+    status = H5Sselect_hyperslab(h_space, H5S_SELECT_SET, start,
+                                 NULL, slab_dims, NULL);
+
+    /* Create a memory space */
+    h_mems = H5Screate_simple(2, slab_dims, NULL);
+
+    /* Create the data array and read the data */
+    double *veloc_data = malloc(N_this_rank * 3 * sizeof(double));
+    status = H5Dread(h_dat, H5T_NATIVE_DOUBLE, h_mems, h_space, H5P_DEFAULT, veloc_data);
+
+    /* Close the memory space, data space, data set */
+    H5Sclose(h_mems);
+    H5Sclose(h_space);
+    H5Dclose(h_dat);
+
+    /* Transfer the contiguous array to the particle data */
+    for (int i = 0; i < *local_partnum; i++) {
+        particles[i].v[0] = veloc_data[i * 3 + 0];
+        particles[i].v[1] = veloc_data[i * 3 + 1];
+        particles[i].v[2] = veloc_data[i * 3 + 2];
+    }
+
+    /* Free the contiguous array */
+    free(veloc_data);
+
+    /* Close the particle group */
+    H5Gclose(h_grp);
+
+    /* Close the file */
+    H5Fclose(h_file);
+
+    assert(status >= 0);
+
+    return 0;
+
+}
