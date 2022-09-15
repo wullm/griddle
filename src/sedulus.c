@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
     rng_state seed = rand_uint64_init(pars.Seed + rank);
 
     /* Create or read a Gaussian random field */
-    int N = pars.GridSize;
+    long int N = pars.PartGridSize;
     double boxlen = pars.BoxLength;
     struct distributed_grid lpt_potential;
 
@@ -121,13 +121,7 @@ int main(int argc, char *argv[]) {
     /* Each MPI rank stores a portion of the full 3D mesh, as well as copies
      * of the edges of its left & right neighbours, necessary for interpolation
      * and mass deposition. These are called buffers. */
-
-    /* Check that the buffer sizes are valid */
     const int buffer_width = DEFAULT_BUFFER_WIDTH;
-    if (buffer_width > N / MPI_Rank_Count) {
-        printf("There are too many MPI ranks - increase the grid size!\n");
-        exit(1);
-    }
 
     /* The 2LPT factor */
     const double D_start = strooklat_interp(&spline_z, ptdat.D_growth, z_start);
@@ -164,8 +158,6 @@ int main(int argc, char *argv[]) {
     create_local_buffers(&lpt_potential_2);
 
     /* Allocate memory for a particle lattice */
-    // long long X0 = lpt_potential.X0;
-    // long long NX = lpt_potential.NX;
     long long foreign_buffer = 10; //extra memory for exchanging particles
     long long local_partnum = NX * N * N;
     long long max_partnum = (NX + foreign_buffer) * N * N;
@@ -190,9 +182,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Allocate distributed memory arrays (one complex & one real) */
+    /* The gravity mesh can be a different size than the particle lattice */
+    long int M = pars.MeshGridSize;
+
+    /* Allocate distributed memory arrays for the gravity mesh */
     struct distributed_grid mass;
-    alloc_local_grid(&mass, N, boxlen, MPI_COMM_WORLD);
+    alloc_local_grid(&mass, M, boxlen, MPI_COMM_WORLD);
     mass.momentum_space = 0;
 
     /* Create buffers for the mass grid */
@@ -324,9 +319,9 @@ int main(int argc, char *argv[]) {
             double acc[3] = {0, 0, 0};
             if (ITER == 1) {
                 if (MPI_Rank_Count == 1) {
-                    accelCIC_single(&mass, N, boxlen, p->x, acc);
+                    accelCIC_single(&mass, p->x, acc);
                 } else {
-                    accelCIC(&mass, N, boxlen, p->x, acc);
+                    accelCIC(&mass, p->x, acc);
                 }
             } else {
                 acc[0] = p->a[0];
@@ -448,9 +443,9 @@ int main(int argc, char *argv[]) {
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             if (MPI_Rank_Count == 1) {
-                accelCIC_single(&mass, N, boxlen, p->x, acc);
+                accelCIC_single(&mass, p->x, acc);
             } else {
-                accelCIC(&mass, N, boxlen, p->x, acc);
+                accelCIC(&mass, p->x, acc);
             }
 
             p->a[0] = acc[0];

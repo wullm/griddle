@@ -109,7 +109,7 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         }
     }
     /* Empty the buffers */
-    for (int i = 0; i < dgrid->buffer_size; i++) {
+    for (int i = 0; i < dgrid->buffer_width; i++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
                 dgrid->buffer_left[row_major(i, j, k, N)] = 0;

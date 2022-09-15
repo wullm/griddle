@@ -73,10 +73,11 @@ static inline double fastCIC(const struct distributed_grid *dg, int N, int i,
 }
 
 /* Compute the acceleration from the potential grid using CIC interpolation */
-void accelCIC_single(const struct distributed_grid *dg, int N, double boxlen,
-                     double *x, double *a) {
+void accelCIC_single(const struct distributed_grid *dg, double *x, double *a) {
 
     /* Physical length to grid conversion factor */
+    int N = dg->N;
+    double boxlen = dg->boxlen;
     double fac = N / boxlen;
     double fac_over_12 = fac / 12;
 
@@ -123,10 +124,11 @@ void accelCIC_single(const struct distributed_grid *dg, int N, double boxlen,
 
 
 /* Compute the acceleration from the potential grid using CIC interpolation */
-void accelCIC(const struct distributed_grid *dg, int N, double boxlen,
-              double *x, double *a) {
+void accelCIC(const struct distributed_grid *dg, double *x, double *a) {
 
     /* Physical length to grid conversion factor */
+    int N = dg->N;
+    double boxlen = dg->boxlen;
     double fac = N / boxlen;
     double fac_over_12 = fac / 12;
 

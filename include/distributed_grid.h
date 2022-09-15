@@ -48,7 +48,7 @@ struct distributed_grid {
     /* Additional buffers on the left and right (real only) */
     double *buffer_left;
     double *buffer_right;
-    int buffer_size;
+    int buffer_width;
 
     /* GLOBAL SIZES:
      * fbox:    N * N * (N/2 + 1)               fftw_complex type
@@ -71,7 +71,7 @@ int free_local_grid(struct distributed_grid *dg);
 int free_local_real_grid(struct distributed_grid *dg);
 int free_local_complex_grid(struct distributed_grid *dg);
 
-int alloc_local_buffers(struct distributed_grid *dg, int buffer_size);
+int alloc_local_buffers(struct distributed_grid *dg, int buffer_width);
 int free_local_buffers(struct distributed_grid *dg);
 int create_local_buffers(struct distributed_grid *dg);
 int add_local_buffers(struct distributed_grid *dg);
@@ -105,7 +105,7 @@ static inline long long int row_major_dg_buffer_left(int i, int j, int k, const 
     k = wrap(k,dg->N);
 
     /* Map to local slice (no out of bounds handling) */
-    i = i - dg->X0 + dg->buffer_size;
+    i = i - dg->X0 + dg->buffer_width;
     return (long long int) i*dg->N*(dg->N) + j*(dg->N) + k;
 }
 

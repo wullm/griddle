@@ -40,7 +40,7 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
     dg->momentum_space = 0;
 
     /* By default, we do not allocate buffers */
-    dg->buffer_size = 0;
+    dg->buffer_width = 0;
 
     return 0;
 }
@@ -48,7 +48,7 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
 int free_local_grid(struct distributed_grid *dg) {
     free_local_real_grid(dg);
     free_local_complex_grid(dg);
-    if (dg->buffer_size > 0) {
+    if (dg->buffer_width > 0) {
         free_local_buffers(dg);
     }
     return 0;
@@ -64,10 +64,17 @@ int free_local_complex_grid(struct distributed_grid *dg) {
     return 0;
 }
 
-int alloc_local_buffers(struct distributed_grid *dg, int buffer_size) {
-    dg->buffer_size = buffer_size;
-    dg->buffer_left = fftw_alloc_real(buffer_size * dg->N * dg->N);
-    dg->buffer_right = fftw_alloc_real(buffer_size * dg->N * dg->N);
+int alloc_local_buffers(struct distributed_grid *dg, int buffer_width) {
+    /* Check that the buffer sizes are valid */
+    if (buffer_width > dg->NX) {
+        printf("There are too many MPI ranks - increase the grid size!\n");
+        printf("Additionally, make sure that they are integer multiples.\n");
+        exit(1);
+    }
+
+    dg->buffer_width = buffer_width;
+    dg->buffer_left = fftw_alloc_real(buffer_width * dg->N * dg->N);
+    dg->buffer_right = fftw_alloc_real(buffer_width * dg->N * dg->N);
     return 0;
 }
 
@@ -93,7 +100,7 @@ int create_local_buffers(struct distributed_grid *dg) {
     int rank_right = (rank + 1) % MPI_Rank_Count;
 
     /* Sizes of the buffers */
-    long long int size = dg->buffer_size * dg->N * dg->N;
+    long long int size = dg->buffer_width * dg->N * dg->N;
 
     /* Allocate temporary arrays for the buffers */
     double *send_buffer_left = fftw_alloc_real(size);
@@ -101,7 +108,7 @@ int create_local_buffers(struct distributed_grid *dg) {
 
     /* Create the right buffer of the left neighbour */
     int first_x = dg->X0;
-    for (int i = 0; i < dg->buffer_size; i++) {
+    for (int i = 0; i < dg->buffer_width; i++) {
         for (int j = 0; j < dg->N; j++) {
             for (int k = 0; k < dg->N; k++) {
                 send_buffer_left[row_major(i, j, k, dg->N)] = dg->box[row_major_dg2(i + first_x, j, k, dg)];
@@ -110,8 +117,8 @@ int create_local_buffers(struct distributed_grid *dg) {
     }
 
     /* Create the left buffer of the right neighbour */
-    first_x = dg->X0 + dg->NX - dg->buffer_size;
-    for (int i = 0; i < dg->buffer_size; i++) {
+    first_x = dg->X0 + dg->NX - dg->buffer_width;
+    for (int i = 0; i < dg->buffer_width; i++) {
         for (int j = 0; j < dg->N; j++) {
             for (int k = 0; k < dg->N; k++) {
                 send_buffer_right[row_major(i, j, k, dg->N)] = dg->box[row_major_dg2(i + first_x, j, k, dg)];
@@ -163,7 +170,7 @@ int add_local_buffers(struct distributed_grid *dg) {
     int rank_right = (rank + 1) % MPI_Rank_Count;
 
     /* Sizes of the buffers */
-    long long int size = dg->buffer_size * dg->N * dg->N;
+    long long int size = dg->buffer_width * dg->N * dg->N;
 
     /* Allocate temporary arrays for the buffers */
     double *recv_buffer_left = fftw_alloc_real(size);
@@ -195,7 +202,7 @@ int add_local_buffers(struct distributed_grid *dg) {
 
     /* Add the left buffer to the main grid */
     int first_x = dg->X0;
-    for (int i = 0; i < dg->buffer_size; i++) {
+    for (int i = 0; i < dg->buffer_width; i++) {
         for (int j = 0; j < dg->N; j++) {
             for (int k = 0; k < dg->N; k++) {
                 dg->box[row_major_dg2(i + first_x, j, k, dg)] += recv_buffer_left[row_major(i, j, k, dg->N)];
@@ -204,8 +211,8 @@ int add_local_buffers(struct distributed_grid *dg) {
     }
 
     /* Add the right buffer to the main grid */
-    first_x = dg->X0 + dg->NX - dg->buffer_size;
-    for (int i = 0; i < dg->buffer_size; i++) {
+    first_x = dg->X0 + dg->NX - dg->buffer_width;
+    for (int i = 0; i < dg->buffer_width; i++) {
         for (int j = 0; j < dg->N; j++) {
             for (int k = 0; k < dg->N; k++) {
                 dg->box[row_major_dg2(i + first_x, j, k, dg)] += recv_buffer_right[row_major(i, j, k, dg->N)];

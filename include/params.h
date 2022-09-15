@@ -34,8 +34,9 @@ struct params {
     /* Perturbation file parameters */
     char *TransferFunctionsFile;
 
-    /* Simulation box parameters */
-    long long GridSize;
+    /* Simulation parameters */
+    long long PartGridSize;
+    long long MeshGridSize;
     double BoxLength;
     double ScaleFactorBegin;
     double ScaleFactorEnd;

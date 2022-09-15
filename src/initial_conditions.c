@@ -235,17 +235,17 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 /* Zel'dovich displacement */
                 double dx[3] = {0,0,0};
                 if (MPI_Rank_Count == 1) {
-                    accelCIC_single(lpt_potential, N, boxlen, part->x, dx);
+                    accelCIC_single(lpt_potential, part->x, dx);
                 } else {
-                    accelCIC(lpt_potential, N, boxlen, part->x, dx);
+                    accelCIC(lpt_potential, part->x, dx);
                 }
 
                 /* The 2LPT displacement */
                 double dx2[3] = {0,0,0};
                 if (MPI_Rank_Count == 1) {
-                    accelCIC_single(lpt_potential_2, N, boxlen, part->x, dx2);
+                    accelCIC_single(lpt_potential_2, part->x, dx2);
                 } else {
-                    accelCIC(lpt_potential_2, N, boxlen, part->x, dx2);
+                    accelCIC(lpt_potential_2, part->x, dx2);
                 }
 
                 part->dx[0] = dx[0];

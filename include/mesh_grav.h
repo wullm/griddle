@@ -22,9 +22,7 @@
 
 #include "../include/distributed_grid.h"
 
-void accelCIC_single(const struct distributed_grid *dg, int N, double boxlen,
-              double *x, double *a);
-void accelCIC(const struct distributed_grid *dg, int N, double boxlen,
-              double *x, double *a);
+void accelCIC_single(const struct distributed_grid *dg, double *x, double *a);
+void accelCIC(const struct distributed_grid *dg, double *x, double *a);
 
 #endif
