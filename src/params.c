@@ -38,6 +38,7 @@ int readParams(struct params *pars, const char *fname) {
      pars->PartGridSize = ini_getl("Simulation", "PartGridSize", 64, fname);
      pars->MeshGridSize = ini_getl("Simulation", "MeshGridSize", 64, fname);
      pars->NeutrinosPerDim = ini_getl("Simulation", "NeutrinosPerDim", 32, fname);
+     pars->ForeignBufferSize = ini_getl("Simulation", "ForeignBufferSize", 3000000, fname);
      pars->BoxLength = ini_getd("Simulation", "BoxLength", 1000.0, fname);
 
      pars->ScaleFactorBegin = ini_getd("Simulation", "ScaleFactorBegin", 0.03125, fname);

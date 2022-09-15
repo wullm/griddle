@@ -42,6 +42,7 @@ struct params {
     long long PartGridSize;
     long long MeshGridSize;
     long long NeutrinosPerDim;
+    long long ForeignBufferSize;
     double BoxLength;
     double ScaleFactorBegin;
     double ScaleFactorEnd;

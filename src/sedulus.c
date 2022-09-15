@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
     const double factor_vel_2lpt = factor_2lpt * 2.0;
 
     /* Allocate memory for a particle lattice */
-    long long foreign_buffer = 1000000; //extra memory for exchanging particles
+    long long foreign_buffer = pars.ForeignBufferSize; //extra memory for exchanging particles
     long long local_partnum = NX * N * N;
     long long local_firstpart = X0 * N * N;
     long long max_partnum = local_partnum + local_neutrino_num + foreign_buffer;
