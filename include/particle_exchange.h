@@ -27,6 +27,6 @@
 long long int count_foreign_particles(struct particle *parts, double boxlen,
                                       long long int num_localpart);
 int exchange_particles(struct particle *parts, double boxlen,
-                       long long int *num_localpart);
+                       long long int *num_localpart, int iteration);
 
 #endif

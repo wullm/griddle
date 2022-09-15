@@ -52,7 +52,7 @@ long long int count_foreign_particles(struct particle *parts, double boxlen,
 
 /* Exchange particles between MPI ranks */
 int exchange_particles(struct particle *parts, double boxlen,
-                       long long int *num_localpart) {
+                       long long int *num_localpart, int iteration) {
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -206,8 +206,16 @@ int exchange_particles(struct particle *parts, double boxlen,
     /* Check that everything is now where it should be */
     long long int total_foreign_parts = count_foreign_particles(parts, boxlen, *num_localpart);
     if (total_foreign_parts > 0) {
-        message(rank, "%lld foreign particles remain. Continuing particle exchange.\n", total_foreign_parts);
-        exchange_particles(parts, boxlen, num_localpart);
+        iteration++;
+
+        message(rank, "Exchanging: %lld foreign particles remain after %d iterations.\n", total_foreign_parts, iteration);
+
+        if (iteration < MPI_Rank_Count + 1) {
+            exchange_particles(parts, boxlen, num_localpart, iteration);
+        } else {
+            printf("Maximum number of iterations exceeded.\n");
+            exit(1);
+        }
     }
 
     return 0;

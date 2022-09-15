@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
                                ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
                                + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
 
-        exchange_particles(particles, boxlen, &local_partnum);
+        exchange_particles(particles, boxlen, &local_partnum, /* iteration = */ 0);
 
         /* Timer */
         struct timeval time_sort_2;
@@ -265,7 +265,7 @@ int main(int argc, char *argv[]) {
     add_local_buffers(&mass);
 
     /* Export the GRF */
-    writeFieldFile_dg(&mass, "ini_mass.hdf5");
+    // writeFieldFile_dg(&mass, "ini_mass.hdf5");
 
     /* Compute the gravitational potential */
     compute_potential(&mass, &pcs);
@@ -468,7 +468,7 @@ int main(int argc, char *argv[]) {
             struct timeval time_sort_0;
             gettimeofday(&time_sort_0, NULL);
 
-            exchange_particles(particles, boxlen, &local_partnum);
+            exchange_particles(particles, boxlen, &local_partnum, /* iteration = */ 0);
 
             /* Timer */
             struct timeval time_sort_1;
@@ -559,11 +559,27 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        struct timeval time_sort_6;
+        gettimeofday(&time_sort_6, NULL);
+        message(rank, "Computing particle kicks took %.5f s\n",
+                               ((time_sort_6.tv_sec - time_sort_5.tv_sec) * 1000000
+                               + time_sort_6.tv_usec - time_sort_5.tv_usec)/1e6);
+
         /* Should there be a snapshot output? */
         while (output_list[last_output] > a && output_list[last_output] <= a_next) {
+
+            struct timeval time_sort_7;
+            gettimeofday(&time_sort_7, NULL);
+
             message(rank, "Exporting a snapshot at a = %g.\n", output_list[last_output]);
             exportSnapshot(&pars, &us, particles, last_output, output_list[last_output], N, local_partnum);
             last_output++;
+
+            struct timeval time_sort_8;
+            gettimeofday(&time_sort_8, NULL);
+            message(rank, "Exporting a snapshot took %.5f s\n",
+                                   ((time_sort_8.tv_sec - time_sort_7.tv_sec) * 1000000
+                                   + time_sort_8.tv_usec - time_sort_7.tv_usec)/1e6);
         }
 
         /* Step forward */
@@ -580,7 +596,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Export the GRF */
-    writeFieldFile_dg(&mass, "mass.hdf5");
+    // writeFieldFile_dg(&mass, "final_mass.hdf5");
 
     /* Free the list with snapshot output times */
     free(output_list);
