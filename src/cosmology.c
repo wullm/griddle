@@ -142,6 +142,8 @@ int print_cosmology_information(int rank, struct cosmology *cosmo) {
     message(rank, "w0: %17g\n", cosmo->w0);
     message(rank, "wa: %17g\n", cosmo->wa);
     message(rank, "\n");
+
+    return 0;
 }
 
 double primordialPower(const double k, const struct cosmology *cosmo) {

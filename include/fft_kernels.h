@@ -112,6 +112,21 @@ static inline void kernel_inv_poisson(struct kernel *the_kernel) {
     the_kernel->kern = (k > 0) ? -1.0/k/k : 1.0;
 }
 
+/* Alternative inverse Poisson kernel (Hockney & Eastwood, 1988) */
+static inline void kernel_inv_poisson_alt(struct kernel *the_kernel) {
+    double kx = the_kernel->kx;
+    double ky = the_kernel->ky;
+    double kz = the_kernel->kz;;
+    double k = the_kernel->k;
+    double spacing = the_kernel->spacing;
+    double spacing2 = spacing * spacing;
+    double cx = cos(kx * spacing);
+    double cy = cos(ky * spacing);
+    double cz = cos(kz * spacing);
+
+    the_kernel->kern = (k > 0) ? 0.5 * spacing2 / (cx + cy + cz - 3.0) : 1.0;
+}
+
 static inline void kernel_dx(struct kernel *the_kernel) {
     double kx = the_kernel->kx;
     the_kernel->kern = I*kx;

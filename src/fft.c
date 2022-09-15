@@ -125,6 +125,7 @@ int fft_apply_kernel(fftw_complex *write, const fftw_complex *read, int N,
                      double boxlen, void (*compute)(struct kernel* the_kernel),
                      const void *params) {
     const double dk = 2 * M_PI / boxlen;
+    const double fac = boxlen / N;
 
     #pragma omp parallel for
     for (int x=0; x<N; x++) {
@@ -135,7 +136,7 @@ int fft_apply_kernel(fftw_complex *write, const fftw_complex *read, int N,
                 fft_wavevector(x, y, z, N, dk, &kx, &ky, &kz, &k);
 
                 /* Compute the kernel */
-                struct kernel the_kernel = {kx, ky, kz, k, 0.f, params};
+                struct kernel the_kernel = {kx, ky, kz, k, fac, 0.f, params};
                 compute(&the_kernel);
 
                 /* Apply the kernel */
@@ -153,6 +154,7 @@ int fft_apply_kernel_float(fftwf_complex *write, const fftwf_complex *read, int 
                            double boxlen, void (*compute)(struct kernel* the_kernel),
                            const void *params) {
     const double dk = 2 * M_PI / boxlen;
+    const double fac = boxlen / N;
 
     #pragma omp parallel for
     for (int x=0; x<N; x++) {
@@ -163,7 +165,7 @@ int fft_apply_kernel_float(fftwf_complex *write, const fftwf_complex *read, int 
                 fft_wavevector(x, y, z, N, dk, &kx, &ky, &kz, &k);
 
                 /* Compute the kernel */
-                struct kernel the_kernel = {kx, ky, kz, k, 0.f, params};
+                struct kernel the_kernel = {kx, ky, kz, k, fac, 0.f, params};
                 compute(&the_kernel);
 
                 /* Apply the kernel */
@@ -226,6 +228,7 @@ int fft_apply_kernel_dg(struct distributed_grid *dg_write,
     const int X0 = dg_read->X0; //the local portion starts at X = X0
     const double boxlen = dg_read->boxlen;
     const double dk = 2 * M_PI / boxlen;
+    const double fac = boxlen / N;
 
     if (dg_read->NX != dg_write->NX || dg_read->N != dg_write->N) {
         printf("Error: non-matching grid dimensions between read/write.\n");
@@ -246,7 +249,7 @@ int fft_apply_kernel_dg(struct distributed_grid *dg_write,
                 fft_wavevector(x, y, z, N, dk, &kx, &ky, &kz, &k);
 
                 /* Compute the kernel */
-                struct kernel the_kernel = {kx, ky, kz, k, 0.f, params};
+                struct kernel the_kernel = {kx, ky, kz, k, fac, 0.f, params};
                 compute(&the_kernel);
 
                 /* Apply the kernel */

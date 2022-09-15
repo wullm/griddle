@@ -63,7 +63,7 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     fft_apply_kernel_dg(dgrid, dgrid, kernel_transfer_function, &sp);
 
     /* Compute the potential by applying the inverse Poisosn kernel */
-    fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson, NULL);
+    fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson_alt, NULL);
 
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
@@ -164,7 +164,7 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
     fft_r2c_dg(dgrid_2lpt);
 
     /* Compute the potential by applying the inverse Poisosn kernel */
-    fft_apply_kernel_dg(dgrid_2lpt, dgrid_2lpt, kernel_inv_poisson, NULL);
+    fft_apply_kernel_dg(dgrid_2lpt, dgrid_2lpt, kernel_inv_poisson_alt, NULL);
 
     /* Divide the potential by two */
     double factor = 0.5;

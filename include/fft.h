@@ -32,6 +32,8 @@ struct kernel {
     /* Wavevector in internal inverse length units */
     double kx,ky,kz;
     double k;
+    /* The physical grid spacing dx = L/N */
+    double spacing;
     /* Value of the kernel at this k */
     double complex kern;
     /* Optional extra parameters */

@@ -114,7 +114,7 @@ int compute_potential(struct distributed_grid *dgrid,
     fft_r2c_dg(dgrid);
 
     /* Apply the inverse Poisson kernel */
-    fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson, NULL);
+    fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson_alt, NULL);
 
     /* Multiply by Newton's constant */
     double factor = -4.0 * M_PI * pcs->GravityG;
