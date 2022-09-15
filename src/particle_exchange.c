@@ -65,17 +65,22 @@ int exchange_particles(struct particle *parts, double boxlen,
 
     /* Count the number of local particles that belong on each MPI rank */
     long long int *rank_num_parts = calloc(MPI_Rank_Count, sizeof(long long int));
+    long long int foreign_particles = 0;
     for (long long i = 0; i < *num_localpart; i++) {
         struct particle *p = &parts[i];
 
         int on_rank = (int) ((p->x[0] / boxlen) * MPI_Rank_Count);
         rank_num_parts[on_rank]++;
 
+        if (on_rank != rank) foreign_particles++;
+
         p->rank = on_rank;
     }
 
     /* Sort particles by their desired MPI rank */
-    qsort(parts, *num_localpart, sizeof(struct particle), particleSort);
+    if (foreign_particles > 0) {
+        qsort(parts, *num_localpart, sizeof(struct particle), particleSort);
+    }
 
     /* The MPI ranks are placed along a periodic ring */
     int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
