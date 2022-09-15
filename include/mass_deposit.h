@@ -24,6 +24,9 @@
 #include "../include/particle.h"
 #include "../include/units.h"
 
+int mass_deposition_single(struct distributed_grid *dgrid,
+                           struct particle *parts,
+                           long long int local_partnum);
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum);
 int compute_potential(struct distributed_grid *dgrid,

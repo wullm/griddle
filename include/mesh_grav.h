@@ -22,16 +22,9 @@
 
 #include "../include/distributed_grid.h"
 
-double gridNGP(const struct distributed_grid *dg, int N, double boxlen,
-               double x, double y, double z);
-double gridCIC(const struct distributed_grid *dg, int N, double boxlen,
-               double x, double y, double z);
-double gridInterp(const struct distributed_grid *dg, int N, double boxlen,
-                  double x, double y, double z, int order);
-void accelNGP(const struct distributed_grid *dg, int N, double boxlen,
+void accelCIC_single(const struct distributed_grid *dg, int N, double boxlen,
               double *x, double *a);
 void accelCIC(const struct distributed_grid *dg, int N, double boxlen,
               double *x, double *a);
-void accelInterp(const struct distributed_grid *dg, int N, double boxlen,
-                 double *x, double *a, int order);
+
 #endif

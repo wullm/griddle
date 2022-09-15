@@ -23,6 +23,8 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 
+#define DEFAULT_BUFFER_WIDTH 4
+
 #define wrap(i,N) ((i)%(N)+(N))%(N)
 #define fwrap(x,L) fmod(fmod((x),(L))+(L),(L))
 

@@ -130,7 +130,7 @@ int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed) {
     for (int x=X0; x<X0 + NX; x++) {
         for (int y=0; y<N; y++) {
             /* Update the RNG with the seed for this 2D slice */
-            gsl_rng_set (random_generator, seedtable[(x + X0) * N + y]);
+            gsl_rng_set (random_generator, seedtable[x * N + y]);
 
             for (int z=0; z<=N/2; z++) {
                 /* Calculate the wavevector */
