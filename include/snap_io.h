@@ -36,7 +36,7 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
                           hid_t h_file);
 
 int readSnapshot(struct params *pars, struct units *us,
-                 struct particle *particles, const char *fname,
+                 struct particle *particles, const char *fname, double a,
                  long long int *local_partnum, long long int max_partnum);
 
 #endif

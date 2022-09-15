@@ -158,12 +158,15 @@ int exportSnapshot(struct params *pars, struct units *us,
     long long *ids = malloc(1 * local_partnum * sizeof(long long));
     double *masses = malloc(1 * local_partnum * sizeof(double));
     for (long long i = 0; i < local_partnum; i++) {
+        /* Unpack the coordinates */
         coords[i * 3 + 0] = particles[i].x[0];
         coords[i * 3 + 1] = particles[i].x[1];
         coords[i * 3 + 2] = particles[i].x[2];
-        vels[i * 3 + 0] = particles[i].v[0];
-        vels[i * 3 + 1] = particles[i].v[1];
-        vels[i * 3 + 2] = particles[i].v[2];
+        /* Convert internal velocities to peculiar velocities */
+        vels[i * 3 + 0] = particles[i].v[0] / a;
+        vels[i * 3 + 1] = particles[i].v[1] / a;
+        vels[i * 3 + 2] = particles[i].v[2] / a;
+        /* Unpack the IDs and masses */
         ids[i] = particles[i].id;
         masses[i] = particles[i].m;
     }
@@ -350,7 +353,7 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
 }
 
 int readSnapshot(struct params *pars, struct units *us,
-                 struct particle *particles, const char *fname,
+                 struct particle *particles, const char *fname, double a,
                  long long int *local_partnum, long long int max_partnum) {
 
     /* Get the dimensions of the cluster */
@@ -496,13 +499,42 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Transfer the contiguous array to the particle data */
     for (int i = 0; i < *local_partnum; i++) {
-        particles[i].v[0] = veloc_data[i * 3 + 0];
-        particles[i].v[1] = veloc_data[i * 3 + 1];
-        particles[i].v[2] = veloc_data[i * 3 + 2];
+        /* Convert peculiar velocities to internal velocities */
+        particles[i].v[0] = veloc_data[i * 3 + 0] * a;
+        particles[i].v[1] = veloc_data[i * 3 + 1] * a;
+        particles[i].v[2] = veloc_data[i * 3 + 2] * a;
     }
 
     /* Free the contiguous array */
     free(veloc_data);
+
+    /* Open the particleIDs dataset and corresponding dataspace */
+    h_dat = H5Dopen(h_grp, "ParticleIDs", H5P_DEFAULT);
+    h_space = H5Dget_space(h_dat);
+
+    /* Select the hyperslab */
+    status = H5Sselect_hyperslab(h_space, H5S_SELECT_SET, start,
+                                 NULL, slab_dims, NULL);
+
+    /* Create a memory space */
+    h_mems = H5Screate_simple(1, slab_dims_one, NULL);
+
+    /* Create the data array and read the data */
+    long long int *ids_data = malloc(N_this_rank * sizeof(long long int));
+    status = H5Dread(h_dat, H5T_NATIVE_LLONG, h_mems, h_space, H5P_DEFAULT, ids_data);
+
+    /* Close the memory space, data space, data set */
+    H5Sclose(h_mems);
+    H5Sclose(h_space);
+    H5Dclose(h_dat);
+
+    /* Transfer the contiguous array to the particle data */
+    for (int i = 0; i < *local_partnum; i++) {
+        particles[i].id = ids_data[i];
+    }
+
+    /* Free the contiguous array */
+    free(ids_data);
 
     /* Close the particle group */
     H5Gclose(h_grp);

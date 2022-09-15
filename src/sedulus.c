@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
         struct timeval time_sort_0;
         gettimeofday(&time_sort_0, NULL);
 
-        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, &local_partnum, max_partnum);
+        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, &local_partnum, max_partnum);
 
         /* Timer */
         struct timeval time_sort_1;
@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
         /* Timer */
         struct timeval time_sort_2;
         gettimeofday(&time_sort_2, NULL);
-        message(rank, "Exchaning particles took %.5f s\n",
+        message(rank, "Exchanging particles took %.5f s\n",
                                ((time_sort_2.tv_sec - time_sort_1.tv_sec) * 1000000
                                + time_sort_2.tv_usec - time_sort_1.tv_usec)/1e6);
     } else {
