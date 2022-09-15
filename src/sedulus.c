@@ -247,8 +247,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    message(rank, "\n");
-
     /* Timer */
     struct timeval time_sort_e1;
     gettimeofday(&time_sort_e1, NULL);
@@ -261,6 +259,8 @@ int main(int argc, char *argv[]) {
     message(rank, "Exchanging particles took %.5f s\n",
                            ((time_sort_e2.tv_sec - time_sort_e1.tv_sec) * 1000000
                            + time_sort_e2.tv_usec - time_sort_e1.tv_usec)/1e6);
+
+    message(rank, "\n");
 
     /* Set velocities to zero when running with COLA */
     if (pars.WithCOLA) {
