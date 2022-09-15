@@ -52,6 +52,7 @@ int main(int argc, char *argv[]) {
             return 0;
         } else {
             message(rank, "The parameter file is '%s'.\n", fname);
+            message(rank, "Running with %d MPI ranks.\n", MPI_Rank_Count);
             message(rank, "\n");
         }
     }
@@ -129,8 +130,9 @@ int main(int argc, char *argv[]) {
     const double factor_vel_2lpt = factor_2lpt * 2.0;
 
     /* Allocate memory for a particle lattice */
-    long long foreign_buffer = 10; //extra memory for exchanging particles
+    long long foreign_buffer = 20; //extra memory for exchanging particles
     long long local_partnum = NX * N * N;
+    long long local_firstpart = X0 * N * N;
     long long max_partnum = (NX + foreign_buffer) * N * N;
     struct particle *particles = malloc(max_partnum * sizeof(struct particle));
 
@@ -146,7 +148,7 @@ int main(int argc, char *argv[]) {
         struct timeval time_sort_0;
         gettimeofday(&time_sort_0, NULL);
 
-        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, &local_partnum, max_partnum);
+        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, local_partnum, local_firstpart, max_partnum);
 
         /* Timer */
         struct timeval time_sort_1;
@@ -155,7 +157,7 @@ int main(int argc, char *argv[]) {
                                ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
                                + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
 
-        exchange_particles(particles, boxlen, &local_partnum, /* iteration = */ 0);
+        exchange_particles(particles, boxlen, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
 
         /* Timer */
         struct timeval time_sort_2;
@@ -468,7 +470,7 @@ int main(int argc, char *argv[]) {
             struct timeval time_sort_0;
             gettimeofday(&time_sort_0, NULL);
 
-            exchange_particles(particles, boxlen, &local_partnum, /* iteration = */ 0);
+            exchange_particles(particles, boxlen, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
 
             /* Timer */
             struct timeval time_sort_1;

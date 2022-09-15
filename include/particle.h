@@ -36,12 +36,13 @@ struct particle {
     double a[3];
 
     int rank;
+    int exchange_dir;
 };
 
 static inline int particleSort(const void *a, const void *b) {
     struct particle *pa = (struct particle*) a;
     struct particle *pb = (struct particle*) b;
-    return pa->rank >= pb->rank;
+    return pa->exchange_dir >= pb->exchange_dir;
 }
 
 #endif

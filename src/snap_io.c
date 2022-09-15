@@ -354,7 +354,8 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
 
 int readSnapshot(struct params *pars, struct units *us,
                  struct particle *particles, const char *fname, double a,
-                 long long int *local_partnum, long long int max_partnum) {
+                 long long int local_partnum, long long int local_firstpart,
+                 long long int max_partnum) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -388,14 +389,27 @@ int readSnapshot(struct params *pars, struct units *us,
     /* The total number of particles present in the file */
     hid_t N_tot = dims[0];
 
-    /* The number of particles that will be read per rank */
-    hid_t N_per_rank = (long int) (N_tot / MPI_Rank_Count);
-    hid_t N_this_rank = (rank < MPI_Rank_Count - 1) ? N_per_rank : N_tot - (MPI_Rank_Count - 1) * N_per_rank;
-    *local_partnum = N_this_rank;
+    /* The number of particles that will be read on this rank */
+    hid_t N_this_rank = local_partnum;
+
+    if (N_this_rank > max_partnum) {
+        printf("Not enough memory for reading particle data on rank %d (%lld < %ld)\n", rank, max_partnum, N_this_rank);
+        exit(1);
+    }
+
+    /* Check that all particles will be read */
+    long long int total_to_be_read;
+    MPI_Allreduce(&local_partnum, &total_to_be_read, 1, MPI_LONG_LONG,
+                  MPI_SUM, MPI_COMM_WORLD);
+   if (total_to_be_read < N_tot) {
+       printf("Not all particles will be read. Make sure that PartGridSize^3 = TotalPartNum.\n");
+       exit(1);
+   }
 
     /* The address of the first particle to be read on this rank */
-    hid_t localFirstNumber = rank * N_per_rank;
+    hid_t localFirstNumber = local_firstpart;
 
+    // printf("Read %ld on rank %d, startinf from %ld\n", N_this_rank, rank, localFirstNumber);
     // printf("%d: we will read %ld particles, starting from %ld\n", rank, N_this_rank, localFirstNumber);
 
     /* Close the data and memory spaces */
@@ -440,7 +454,7 @@ int readSnapshot(struct params *pars, struct units *us,
      H5Dclose(h_dat);
 
     /* Transfer the coordinate array to the particles */
-    for (int i = 0; i < *local_partnum; i++) {
+    for (int i = 0; i < local_partnum; i++) {
         particles[i].x[0] = coord_data[i * 3 + 0];
         particles[i].x[1] = coord_data[i * 3 + 1];
         particles[i].x[2] = coord_data[i * 3 + 2];
@@ -470,7 +484,7 @@ int readSnapshot(struct params *pars, struct units *us,
     H5Dclose(h_dat);
 
     /* Transfer the contiguous array to the particle data */
-    for (int i = 0; i < *local_partnum; i++) {
+    for (int i = 0; i < local_partnum; i++) {
         particles[i].m = mass_data[i];
     }
 
@@ -498,7 +512,7 @@ int readSnapshot(struct params *pars, struct units *us,
     H5Dclose(h_dat);
 
     /* Transfer the contiguous array to the particle data */
-    for (int i = 0; i < *local_partnum; i++) {
+    for (int i = 0; i < local_partnum; i++) {
         /* Convert peculiar velocities to internal velocities */
         particles[i].v[0] = veloc_data[i * 3 + 0] * a;
         particles[i].v[1] = veloc_data[i * 3 + 1] * a;
@@ -529,7 +543,7 @@ int readSnapshot(struct params *pars, struct units *us,
     H5Dclose(h_dat);
 
     /* Transfer the contiguous array to the particle data */
-    for (int i = 0; i < *local_partnum; i++) {
+    for (int i = 0; i < local_partnum; i++) {
         particles[i].id = ids_data[i];
     }
 
