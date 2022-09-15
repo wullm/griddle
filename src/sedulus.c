@@ -114,6 +114,21 @@ int main(int argc, char *argv[]) {
     double boxlen = pars.BoxLength;
     struct distributed_grid lpt_potential;
 
+    /* Check what portions of 3D grids get stored locally */
+    long int X0, NX;
+    fftw_mpi_local_size_3d(N, N, N/2+1, MPI_COMM_WORLD, &NX, &X0);
+
+    /* Each MPI rank stores a portion of the full 3D mesh, as well as copies
+     * of the edges of its left & right neighbours, necessary for interpolation
+     * and mass deposition. These are called buffers. */
+
+    /* Check that the buffer sizes are valid */
+    const int buffer_width = DEFAULT_BUFFER_WIDTH;
+    if (buffer_width > N / MPI_Rank_Count) {
+        printf("There are too many MPI ranks - increase the grid size!\n");
+        exit(1);
+    }
+
     /* The 2LPT factor */
     const double D_start = strooklat_interp(&spline_z, ptdat.D_growth, z_start);
     const double factor_2lpt = 3. / 7.;
@@ -143,14 +158,14 @@ int main(int argc, char *argv[]) {
     free_local_grid(&temp2);
 
     /* Create buffers for the LPT potentials */
-    alloc_local_buffers(&lpt_potential, 10);
-    alloc_local_buffers(&lpt_potential_2, 10);
+    alloc_local_buffers(&lpt_potential, buffer_width);
+    alloc_local_buffers(&lpt_potential_2, buffer_width);
     create_local_buffers(&lpt_potential);
     create_local_buffers(&lpt_potential_2);
 
     /* Allocate memory for a particle lattice */
-    long long X0 = lpt_potential.X0;
-    long long NX = lpt_potential.NX;
+    // long long X0 = lpt_potential.X0;
+    // long long NX = lpt_potential.NX;
     long long foreign_buffer = 10; //extra memory for exchanging particles
     long long local_partnum = NX * N * N;
     long long max_partnum = (NX + foreign_buffer) * N * N;
@@ -181,10 +196,14 @@ int main(int argc, char *argv[]) {
     mass.momentum_space = 0;
 
     /* Create buffers for the mass grid */
-    alloc_local_buffers(&mass, 10);
+    alloc_local_buffers(&mass, buffer_width);
 
     /* First mass deposition */
-    mass_deposition(&mass, particles, local_partnum);
+    if (MPI_Rank_Count == 1) {
+        mass_deposition_single(&mass, particles, local_partnum);
+    } else {
+        mass_deposition(&mass, particles, local_partnum);
+    }
 
     /* Merge the buffers with the main grid */
     add_local_buffers(&mass);
@@ -304,7 +323,11 @@ int main(int argc, char *argv[]) {
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             if (ITER == 1) {
-                accelCIC(&mass, N, boxlen, p->x, acc);
+                if (MPI_Rank_Count == 1) {
+                    accelCIC_single(&mass, N, boxlen, p->x, acc);
+                } else {
+                    accelCIC(&mass, N, boxlen, p->x, acc);
+                }
             } else {
                 acc[0] = p->a[0];
                 acc[1] = p->a[1];
@@ -373,7 +396,11 @@ int main(int argc, char *argv[]) {
         gettimeofday(&time_sort_1, NULL);
 
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
+        if (MPI_Rank_Count == 1) {
+            mass_deposition_single(&mass, particles, local_partnum);
+        } else {
+            mass_deposition(&mass, particles, local_partnum);
+        }
 
         /* Timer */
         struct timeval time_sort_2;
@@ -420,7 +447,11 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            accelCIC(&mass, N, boxlen, p->x, acc);
+            if (MPI_Rank_Count == 1) {
+                accelCIC_single(&mass, N, boxlen, p->x, acc);
+            } else {
+                accelCIC(&mass, N, boxlen, p->x, acc);
+            }
 
             p->a[0] = acc[0];
             p->a[1] = acc[1];
@@ -446,7 +477,11 @@ int main(int argc, char *argv[]) {
     }
 
     /* Initiate mass deposition */
-    mass_deposition(&mass, particles, local_partnum);
+    if (MPI_Rank_Count == 1) {
+        mass_deposition_single(&mass, particles, local_partnum);
+    } else {
+        mass_deposition(&mass, particles, local_partnum);
+    }
 
     /* Export the GRF */
     writeFieldFile_dg(&mass, "mass.hdf5");

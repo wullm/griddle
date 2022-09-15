@@ -73,7 +73,7 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     fft_c2r_dg(dgrid);
 
     /* Export the GRF */
-    // writeFieldFile_dg(dgrid, "grid.hdf5");
+    writeFieldFile_dg(dgrid, "grid.hdf5");
 
     return 0;
 }
@@ -188,6 +188,11 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct units *us, struct physical_consts *pcs,
                               long long X0, long long NX, double z_start) {
 
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
     init_strooklat_spline(&spline_z, 100);
@@ -229,11 +234,19 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 
                 /* Zel'dovich displacement */
                 double dx[3] = {0,0,0};
-                accelCIC(lpt_potential, N, boxlen, part->x, dx);
+                if (MPI_Rank_Count == 1) {
+                    accelCIC_single(lpt_potential, N, boxlen, part->x, dx);
+                } else {
+                    accelCIC(lpt_potential, N, boxlen, part->x, dx);
+                }
 
                 /* The 2LPT displacement */
                 double dx2[3] = {0,0,0};
-                accelCIC(lpt_potential_2, N, boxlen, part->x, dx2);
+                if (MPI_Rank_Count == 1) {
+                    accelCIC_single(lpt_potential_2, N, boxlen, part->x, dx2);
+                } else {
+                    accelCIC(lpt_potential_2, N, boxlen, part->x, dx2);
+                }
 
                 part->dx[0] = dx[0];
                 part->dx[1] = dx[1];
