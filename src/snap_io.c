@@ -40,32 +40,41 @@ int exportSnapshot(struct params *pars, struct units *us,
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
-    /* Particle counts */
-    long long int total_partnum = N * N * N;
-    long long int parts_in_file = total_partnum;
+    /* Deal with the possiblity of multiple particle types */
+    int num_types;
+    if (pars->NeutrinosPerDim == 0) {
+        num_types = 1;
+    } else {
+        num_types = 2;
+    }
 
-    /* The ExportName */
-    const char *ExportName = "PartType1"; // cdm
+    /* We need to sort the local particles by type */
+    if (num_types > 1)
+        qsort(particles, local_partnum, sizeof(struct particle), particleTypeSort);
 
-    /* Vector dataspace (e.g. positions, velocities) */
-    const hsize_t vrank = 2;
-    const hsize_t vdims[2] = {parts_in_file, 3};
-    hid_t h_vspace = H5Screate_simple(vrank, vdims, NULL);
+    /* Find the numbers of particles per type */
+    long long int local_parts_per_type[2] = {0, 0};
+    long long int local_first_of_type[2] = {0, 0};
 
-    /* Scalar dataspace (e.g. masses, particle ids) */
-    const hsize_t srank = 1;
-    const hsize_t sdims[1] = {parts_in_file};
-    hid_t h_sspace = H5Screate_simple(srank, sdims, NULL);
+    for (long long int i = 0; i < local_partnum; i++) {
+        if (particles[i].type == 1) {
+            local_parts_per_type[0]++;
+        } else {
+            local_parts_per_type[1]++;
+        }
+    }
 
-    /* Set chunking for vectors */
-    hid_t h_prop_vec = H5Pcreate(H5P_DATASET_CREATE);
-    const hsize_t vchunk[2] = {HDF5_CHUNK_SIZE, 3};
-    H5Pset_chunk(h_prop_vec, vrank, vchunk);
+    /* Find the first index of each type */
+    local_first_of_type[0] = 0;
+    local_first_of_type[1] = local_parts_per_type[0];
 
-    /* Set chunking for scalars */
-    hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
-    const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
-    H5Pset_chunk(h_prop_sca, srank, schunk);
+    /* Find the total number of particles per type accross all ranks */
+    long long int total_parts_per_type[2];
+    MPI_Allreduce(local_parts_per_type, total_parts_per_type, 2, MPI_LONG_LONG,
+                  MPI_SUM, MPI_COMM_WORLD);
+
+    /* The HDF5 group name of each particle type */
+    const char ExportNames[2][100] = {"PartType1", "PartType6"}; // cdm & neutrinos
 
     /* Form the filename */
     char fname[DEFAULT_STRING_LENGTH];
@@ -75,8 +84,12 @@ int exportSnapshot(struct params *pars, struct units *us,
         /* Create the output file */
         hid_t h_out_file = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
+        /* Convert to SWIFT/GADGET style particle number tables */
+        long long int numparts_local[7] = {0, local_parts_per_type[0], 0, 0, 0, 0, local_parts_per_type[1]};
+        long long int numparts_total[7] = {0, total_parts_per_type[0], 0, 0, 0, 0, total_parts_per_type[1]};
+
         /* Writing attributes into the Header & Cosmology groups */
-        int err = writeHeaderAttributes(pars, us, a, parts_in_file, total_partnum, h_out_file);
+        int err = writeHeaderAttributes(pars, us, a, numparts_local, numparts_total, h_out_file);
         if (err > 0) exit(1);
 
         /* The particle group in the output file */
@@ -85,27 +98,58 @@ int exportSnapshot(struct params *pars, struct units *us,
         /* Datsets */
         hid_t h_data;
 
-        /* Create the particle group in the output file */
-        h_grp = H5Gcreate(h_out_file, ExportName, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        /* For each particle type, prepare the group and data sets */
+        for (int t = 0; t < num_types; t++) {
 
-        /* Coordinates (use vector space) */
-        h_data = H5Dcreate(h_grp, "Coordinates", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
-        H5Dclose(h_data);
+            /* Vector dataspace (e.g. positions, velocities) */
+            const hsize_t vrank = 2;
+            const hsize_t vdims[2] = {total_parts_per_type[t], 3};
+            hid_t h_vspace = H5Screate_simple(vrank, vdims, NULL);
 
-        /* Velocities (use vector space) */
-        h_data = H5Dcreate(h_grp, "Velocities", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
-        H5Dclose(h_data);
+            /* Scalar dataspace (e.g. masses, particle ids) */
+            const hsize_t srank = 1;
+            const hsize_t sdims[1] = {total_parts_per_type[t]};
+            hid_t h_sspace = H5Screate_simple(srank, sdims, NULL);
 
-        /* Particle IDs (use scalar space) */
-        h_data = H5Dcreate(h_grp, "ParticleIDs", H5T_NATIVE_LLONG, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-        H5Dclose(h_data);
+            /* Set chunking for vectors */
+            hid_t h_prop_vec = H5Pcreate(H5P_DATASET_CREATE);
+            const hsize_t vchunk[2] = {HDF5_CHUNK_SIZE, 3};
+            H5Pset_chunk(h_prop_vec, vrank, vchunk);
 
-        /* Masses (use scalar space) */
-        h_data = H5Dcreate(h_grp, "Masses", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-        H5Dclose(h_data);
+            /* Set chunking for scalars */
+            hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
+            const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
+            H5Pset_chunk(h_prop_sca, srank, schunk);
 
-        /* Close the group */
-        H5Gclose(h_grp);
+            /* Create the particle group in the output file */
+            h_grp = H5Gcreate(h_out_file, ExportNames[t], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+            /* Coordinates (use vector space) */
+            h_data = H5Dcreate(h_grp, "Coordinates", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Velocities (use vector space) */
+            h_data = H5Dcreate(h_grp, "Velocities", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Particle IDs (use scalar space) */
+            h_data = H5Dcreate(h_grp, "ParticleIDs", H5T_NATIVE_LLONG, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Masses (use scalar space) */
+            h_data = H5Dcreate(h_grp, "Masses", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Weights (use scalar space) for neutrinos only */
+            if (t == 1) {
+                h_data = H5Dcreate(h_grp, "Weights", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+                H5Dclose(h_data);
+            }
+
+            /* Close the group */
+            H5Gclose(h_grp);
+
+        }
 
         /* Close the file */
         H5Fclose(h_out_file);
@@ -122,81 +166,119 @@ int exportSnapshot(struct params *pars, struct units *us,
     hid_t h_out_file = H5Fopen(fname, H5F_ACC_RDWR, prop_faxs);
     H5Pclose(prop_faxs);
 
-    /* The particle group in the output file */
-    hid_t h_grp = H5Gopen(h_out_file, ExportName, H5P_DEFAULT);
+    for (int t = 0; t < num_types; t++) {
+        /* Create vector & scalar dataspace for all data of this type */
+        const hsize_t vrank = 2;
+        const hsize_t srank = 1;
+        const hsize_t vdims[2] = {total_parts_per_type[t], 3};
+        const hsize_t sdims[1] = {total_parts_per_type[t]};
+        hid_t h_vspace = H5Screate_simple(vrank, vdims, NULL);
+        hid_t h_sspace = H5Screate_simple(srank, sdims, NULL);
 
-    /* Create vector & scalar datapsace for smaller chunks of data */
-    const hsize_t ch_vdims[2] = {local_partnum, 3};
-    const hsize_t ch_sdims[1] = {local_partnum};
-    hid_t h_ch_vspace = H5Screate_simple(vrank, ch_vdims, NULL);
-    hid_t h_ch_sspace = H5Screate_simple(srank, ch_sdims, NULL);
+        /* Set chunking for vectors */
+        hid_t h_prop_vec = H5Pcreate(H5P_DATASET_CREATE);
+        const hsize_t vchunk[2] = {HDF5_CHUNK_SIZE, 3};
+        H5Pset_chunk(h_prop_vec, vrank, vchunk);
 
-    /* Determine the number of particles on each rank */
-    long long int *partnum_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
-    long long int *first_id_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
-    partnum_by_rank[rank] = local_partnum;
-    MPI_Allreduce(MPI_IN_PLACE, partnum_by_rank, MPI_Rank_Count, MPI_LONG_LONG,
-                  MPI_SUM, MPI_COMM_WORLD);
+        /* Set chunking for scalars */
+        hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
+        const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
+        H5Pset_chunk(h_prop_sca, srank, schunk);
 
-    /* Determine the start of the hyperslab corresponding to each rank */
-    for (int i = 1; i < MPI_Rank_Count; i++) {
-        first_id_by_rank[i] = first_id_by_rank[i - 1] + partnum_by_rank[i - 1];
+        /* Create vector & scalar datapsace for smaller chunks of data */
+        const hsize_t ch_vdims[2] = {local_parts_per_type[t], 3};
+        const hsize_t ch_sdims[1] = {local_parts_per_type[t]};
+        hid_t h_ch_vspace = H5Screate_simple(vrank, ch_vdims, NULL);
+        hid_t h_ch_sspace = H5Screate_simple(srank, ch_sdims, NULL);
+
+        /* Determine the number of particles on each rank */
+        long long int *partnum_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
+        long long int *first_id_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
+        partnum_by_rank[rank] = local_parts_per_type[t];
+        MPI_Allreduce(MPI_IN_PLACE, partnum_by_rank, MPI_Rank_Count, MPI_LONG_LONG,
+                      MPI_SUM, MPI_COMM_WORLD);
+
+        /* Determine the start of the hyperslab corresponding to each rank */
+        for (int i = 1; i < MPI_Rank_Count; i++) {
+            first_id_by_rank[i] = first_id_by_rank[i - 1] + partnum_by_rank[i - 1];
+        }
+
+        /* The start of this chunk, in the overall vector & scalar spaces */
+        const hsize_t start_in_group = first_id_by_rank[rank];
+        const hsize_t vstart[2] = {start_in_group, 0}; //always with the "x" coordinate
+        const hsize_t sstart[1] = {start_in_group};
+
+        /* Choose the corresponding hyperslabs inside the overall spaces */
+        H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
+        H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
+
+        /* Unpack the remaining particle data into contiguous arrays */
+        double *coords = malloc(3 * local_parts_per_type[t] * sizeof(double));
+        double *vels = malloc(3 * local_parts_per_type[t] * sizeof(double));
+        long long *ids = malloc(1 * local_parts_per_type[t] * sizeof(long long));
+        double *masses = malloc(1 * local_parts_per_type[t] * sizeof(double));
+        double *weights;
+        for (long long i = 0; i < local_parts_per_type[t]; i++) {
+            /* Unpack the coordinates */
+            coords[i * 3 + 0] = particles[i + local_first_of_type[t]].x[0];
+            coords[i * 3 + 1] = particles[i + local_first_of_type[t]].x[1];
+            coords[i * 3 + 2] = particles[i + local_first_of_type[t]].x[2];
+            /* Convert internal velocities to peculiar velocities */
+            vels[i * 3 + 0] = particles[i + local_first_of_type[t]].v[0] / a;
+            vels[i * 3 + 1] = particles[i + local_first_of_type[t]].v[1] / a;
+            vels[i * 3 + 2] = particles[i + local_first_of_type[t]].v[2] / a;
+            /* Unpack the IDs and masses */
+            ids[i] = particles[i + local_first_of_type[t]].id;
+            masses[i] = particles[i + local_first_of_type[t]].m;
+        }
+
+        /* Unpack neutrino weights only for type 1 */
+        if (t == 1) {
+            weights = malloc(1 * local_parts_per_type[t] * sizeof(double));
+            for (long long i = 0; i < local_parts_per_type[t]; i++) {
+                weights[i] = particles[i + local_first_of_type[t]].w;
+            }
+        }
+
+        /* Open the particle group in the output file */
+        hid_t h_grp = H5Gopen(h_out_file, ExportNames[t], H5P_DEFAULT);
+
+        /* Write coordinate data (vector) */
+        hid_t h_data = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
+        H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, coords);
+        H5Dclose(h_data);
+        free(coords);
+
+        /* Write velocity data (vector) */
+        h_data = H5Dopen(h_grp, "Velocities", H5P_DEFAULT);
+        H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
+        H5Dclose(h_data);
+        free(vels);
+
+        /* Write particle id data (scalar) */
+        h_data = H5Dopen(h_grp, "ParticleIDs", H5P_DEFAULT);
+        H5Dwrite(h_data, H5T_NATIVE_LLONG, h_ch_sspace, h_sspace, H5P_DEFAULT, ids);
+        H5Dclose(h_data);
+        free(ids);
+
+        /* Write mass data (scalar) */
+        h_data = H5Dopen(h_grp, "Masses", H5P_DEFAULT);
+        H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
+        H5Dclose(h_data);
+        free(masses);
+
+        if (t == 1) {
+            /* Write weights data (scalar) */
+            h_data = H5Dopen(h_grp, "Weights", H5P_DEFAULT);
+            H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, weights);
+            H5Dclose(h_data);
+            free(weights);
+        }
+
+        /* Close the group */
+        H5Gclose(h_grp);
+
     }
-
-    /* The start of this chunk, in the overall vector & scalar spaces */
-    const hsize_t start_in_group = first_id_by_rank[rank];
-    const hsize_t vstart[2] = {start_in_group, 0}; //always with the "x" coordinate
-    const hsize_t sstart[1] = {start_in_group};
-
-    /* Choose the corresponding hyperslabs inside the overall spaces */
-    H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
-    H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
-
-    /* Unpack the remaining particle data into contiguous arrays */
-    double *coords = malloc(3 * local_partnum * sizeof(double));
-    double *vels = malloc(3 * local_partnum * sizeof(double));
-    long long *ids = malloc(1 * local_partnum * sizeof(long long));
-    double *masses = malloc(1 * local_partnum * sizeof(double));
-    for (long long i = 0; i < local_partnum; i++) {
-        /* Unpack the coordinates */
-        coords[i * 3 + 0] = particles[i].x[0];
-        coords[i * 3 + 1] = particles[i].x[1];
-        coords[i * 3 + 2] = particles[i].x[2];
-        /* Convert internal velocities to peculiar velocities */
-        vels[i * 3 + 0] = particles[i].v[0] / a;
-        vels[i * 3 + 1] = particles[i].v[1] / a;
-        vels[i * 3 + 2] = particles[i].v[2] / a;
-        /* Unpack the IDs and masses */
-        ids[i] = particles[i].id;
-        masses[i] = particles[i].m;
-    }
-
-    /* Write coordinate data (vector) */
-    hid_t h_data = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, coords);
-    H5Dclose(h_data);
-    free(coords);
-
-    /* Write velocity data (vector) */
-    h_data = H5Dopen(h_grp, "Velocities", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
-    H5Dclose(h_data);
-    free(vels);
-
-    /* Write particle id data (scalar) */
-    h_data = H5Dopen(h_grp, "ParticleIDs", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_LLONG, h_ch_sspace, h_sspace, H5P_DEFAULT, ids);
-    H5Dclose(h_data);
-    free(ids);
-
-    /* Write mass data (scalar) */
-    h_data = H5Dopen(h_grp, "Masses", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
-    H5Dclose(h_data);
-    free(masses);
-
-    /* Close the group */
-    H5Gclose(h_grp);
 
     /* Close the file */
     H5Fclose(h_out_file);
@@ -205,7 +287,7 @@ int exportSnapshot(struct params *pars, struct units *us,
 }
 
 int writeHeaderAttributes(struct params *pars, struct units *us, double a,
-                          long long int Npart_local, long long int Npart_total,
+                          long long int *numparts_local, long long int *numparts_total,
                           hid_t h_file) {
 
     /* Create the Header group */
@@ -259,11 +341,13 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
     const hsize_t adims_pt[1] = {7}; //particle type 0-6
     H5Sset_extent_simple(h_aspace, arank, adims_pt, NULL);
 
-    /* Collect particle type attributes using the ExportNames */
-    long long int numparts_local[7] = {0, 0, 0, 0, 0, 0, Npart_local};
-    long long int numparts_total[7] = {0, 0, 0, 0, 0, 0, Npart_total};
-    long long int numparts_high_word[7] = {0, 0, 0, 0, 0, 0, Npart_total >> 32};
-    double mass_table[7] = {0., 0., 0., 0., 0., 0., 0.};
+    /* Unused attributes for backwards compatibility */
+    long long int numparts_high_word[7];
+    double mass_table[7];
+    for (int i = 0; i < 7; i++) {
+        numparts_high_word[i] = numparts_total[i] >> 32;
+        mass_table[i] = 0.;
+    }
 
     /* Create the NumPart_ThisFile attribute and write the data */
     h_attr = H5Acreate1(h_grp, "NumPart_ThisFile", H5T_NATIVE_LONG, h_aspace, H5P_DEFAULT);

@@ -28,6 +28,9 @@ struct particle {
     double v[3];
     double m;
 
+    /* Neutrino delta-f weight */
+    double w;
+
     /* LPT displacements (first- and second-order) */
     double dx[3];
     double dx2[3];
@@ -43,6 +46,13 @@ static inline int particleSort(const void *a, const void *b) {
     struct particle *pa = (struct particle*) a;
     struct particle *pb = (struct particle*) b;
     return pa->exchange_dir >= pb->exchange_dir;
+}
+
+
+static inline int particleTypeSort(const void *a, const void *b) {
+    struct particle *pa = (struct particle*) a;
+    struct particle *pb = (struct particle*) b;
+    return pa->type >= pb->type;
 }
 
 #endif

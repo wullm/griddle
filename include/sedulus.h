@@ -27,6 +27,7 @@
 #include "strooklat.h"
 #include "grid_io.h"
 #include "random.h"
+#include "fermi_dirac.h"
 #include "distributed_grid.h"
 #include "fft.h"
 #include "fft_kernels.h"

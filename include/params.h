@@ -41,6 +41,7 @@ struct params {
     /* Simulation parameters */
     long long PartGridSize;
     long long MeshGridSize;
+    long long NeutrinosPerDim;
     double BoxLength;
     double ScaleFactorBegin;
     double ScaleFactorEnd;

@@ -28,6 +28,7 @@
 #include "../include/grid_io.h"
 #include "../include/particle.h"
 #include "../include/mesh_grav.h"
+#include "../include/fermi_dirac.h"
 
 int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
                             char fix_modes, char invert_modes,
@@ -248,6 +249,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                     accelCIC(lpt_potential_2, part->x, dx2);
                 }
 
+                /* CDM */
+                part->type = 1;
+
                 part->dx[0] = dx[0];
                 part->dx[1] = dx[1];
                 part->dx[2] = dx[2];
@@ -269,6 +273,70 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
+
+    return 0;
+}
+
+int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
+                       struct cosmology_tables *ctabs, struct units *us,
+                       struct physical_consts *pcs, long long int N_nupart,
+                       long long local_partnum, long long local_neutrino_num,
+                       double boxlen, double z_start, rng_state *state) {
+
+    /* Create interpolation splines for scale factors */
+    struct strooklat spline_a = {ctabs->avec, ctabs->size};
+    init_strooklat_spline(&spline_a, 100);
+
+    /* Cosmological constants */
+    const double h = cosmo->h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double base_part_mass = rho_crit * pow(boxlen / N_nupart, 3);
+
+    /* Pull down the present day neutrino density per species */
+    double *Omega_nu_0 = malloc(cosmo->N_nu * sizeof(double));
+    for (int i = 0; i < cosmo->N_nu; i++) {
+        Omega_nu_0[i] = strooklat_interp(&spline_a, ctabs->Omega_nu + i * ctabs->size, 1.0);
+    }
+
+    /* Fermi-Dirac conversion factor kb*T to km/s */
+    const double fac = (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann) / pcs->ElectronVolt;
+
+    /* Generate neutrinos */
+    for (long long i = 0; i < local_neutrino_num; i++) {
+        struct particle *part = &parts[local_partnum + i];
+        part->id = local_partnum + i;
+
+        /* Neutrino */
+        part->type = 6;
+
+        /* Sample a position uniformly in the box */
+        part->x[0] = sampleUniform(state) * boxlen;
+        part->x[1] = sampleUniform(state) * boxlen;
+        part->x[2] = sampleUniform(state) * boxlen;
+
+        /* Sample a neutrino species */
+        int species = (int)(part->id % cosmo->N_nu);
+        double m_eV = cosmo->M_nu[species];
+        part->m = Omega_nu_0[species] * base_part_mass;
+
+        /* Sample a deterministic Fermi-Dirac momentum */
+        double n[3];
+        double p = neutrino_seed_to_fermi_dirac(part->id) * fac / m_eV;
+        neutrino_seed_to_direction(part->id, n);
+
+        part->v[0] = p * n[0];
+        part->v[1] = p * n[1];
+        part->v[2] = p * n[2];
+
+        /* Initially the weight is zero */
+        part->w = 0.;
+    }
+
+    /* Clean up strooklat interpolation splines */
+    free_strooklat_spline(&spline_a);
+    /* Free the neutrino density array */
+    free(Omega_nu_0);
 
     return 0;
 }

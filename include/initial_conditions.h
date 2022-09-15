@@ -43,4 +43,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
                               long long X0, long long NX, double z_start);
+int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
+                       struct cosmology_tables *ctabs, struct units *us,
+                       struct physical_consts *pcs, long long int N_nupart,
+                       long long local_partnum, long long local_neutrino_num,
+                       double boxlen, double z_start, rng_state *state);
 #endif

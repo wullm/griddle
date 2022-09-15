@@ -52,6 +52,7 @@ struct cosmology_tables {
     double *Avec;
     double *Bvec;
     double *Hvec;
+    double *Omega_nu;
     double *f_nu_nr;
     double *f_nu_nr_tot;
     double *kick_factors;

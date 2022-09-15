@@ -119,6 +119,15 @@ int main(int argc, char *argv[]) {
     long int X0, NX;
     fftw_mpi_local_size_3d(N, N, N/2+1, MPI_COMM_WORLD, &NX, &X0);
 
+    /* Do the same for the neutrino particles */
+    long int N_nu = pars.NeutrinosPerDim;
+    long int X0_nu, NX_nu;
+    long int local_neutrino_num = 0;
+    if (N_nu > 0) {
+        fftw_mpi_local_size_3d(N_nu, N_nu, N_nu/2+1, MPI_COMM_WORLD, &NX_nu, &X0_nu);
+        local_neutrino_num = NX_nu * N_nu * N_nu;
+    }
+
     /* Each MPI rank stores a portion of the full 3D mesh, as well as copies
      * of the edges of its left & right neighbours, necessary for interpolation
      * and mass deposition. These are called buffers. */
@@ -130,10 +139,10 @@ int main(int argc, char *argv[]) {
     const double factor_vel_2lpt = factor_2lpt * 2.0;
 
     /* Allocate memory for a particle lattice */
-    long long foreign_buffer = 20; //extra memory for exchanging particles
+    long long foreign_buffer = 1000000; //extra memory for exchanging particles
     long long local_partnum = NX * N * N;
     long long local_firstpart = X0 * N * N;
-    long long max_partnum = (NX + foreign_buffer) * N * N;
+    long long max_partnum = local_partnum + local_neutrino_num + foreign_buffer;
     struct particle *particles = malloc(max_partnum * sizeof(struct particle));
 
     if (!pars.GenerateICs) {
@@ -230,6 +239,21 @@ int main(int argc, char *argv[]) {
                                ((time_sort_3.tv_sec - time_sort_2.tv_sec) * 1000000
                                + time_sort_3.tv_usec - time_sort_2.tv_usec)/1e6);
 
+        /* Generate neutrino particles */
+        if (N_nu > 0) {
+            generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
+                               local_partnum, local_neutrino_num, boxlen,
+                               z_start, &seed);
+
+            local_partnum += local_neutrino_num;
+
+            /* Timer */
+            struct timeval time_sort_4;
+            gettimeofday(&time_sort_4, NULL);
+            message(rank, "Generating neutrinos took %.5f s\n",
+                                   ((time_sort_4.tv_sec - time_sort_3.tv_sec) * 1000000
+                                   + time_sort_4.tv_usec - time_sort_3.tv_usec)/1e6);
+        }
     }
 
     message(rank, "\n");
@@ -396,6 +420,9 @@ int main(int argc, char *argv[]) {
             d_vf_2_next = (vel_fact_nbit * D_nbit * D_nbit - vel_fact_next * D_next * D_next) / (tau_nbit - exp(log_tau_next));
         }
 
+        /* Conversion factor for neutrino momenta */
+        const double fac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
+
         /* Skip the particle integration during the first step */
         if (ITER == 0)
             continue;
@@ -435,6 +462,17 @@ int main(int argc, char *argv[]) {
                 p->v[0] += d_vf * kick_dtau1 * p->dx[0] / D_start + d_vf_2 * kick_dtau1 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[1] += d_vf * kick_dtau1 * p->dx[1] / D_start + d_vf_2 * kick_dtau1 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[2] += d_vf * kick_dtau1 * p->dx[2] / D_start + d_vf_2 * kick_dtau1 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
+            }
+
+            /* Delta-f weighting of neutrinos */
+            if (p->type == 6) {
+                double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
+                double q = hypot(p->v[0], hypot(p->v[1], p->v[2])) * fac * m_eV;
+                double qi = neutrino_seed_to_fermi_dirac(p->id);
+                double f = fermi_dirac_density(q);
+                double fi = fermi_dirac_density(qi);
+
+                p->w = 1.0 - f / fi;
             }
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */

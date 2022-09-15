@@ -327,7 +327,7 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     const double kT_nu_eV_0 = c->T_nu_0 * pcs->kBoltzmann / pcs->ElectronVolt;
     const double T_on_pi = c->T_nu_0 / c->T_CMB_0 / M_PI;
     const double pre_factor = Omega_CMB * 15.0 * T_on_pi * T_on_pi * T_on_pi * T_on_pi;
-    double *Omega_nu = malloc(N_nu * size * sizeof(double));
+    tab->Omega_nu = malloc(N_nu * size * sizeof(double));
     double *w_nu = malloc(N_nu * size * sizeof(double));
 
     /* For each neutrino species */
@@ -341,7 +341,7 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
             const double arg = tab->avec[i] * M_nu / kT_nu_eV_0;
             const double Farg = strooklat_interp(&spline_y, Fy, arg);
             const double Onu_ij = deg_nu * pre_factor * Farg;
-            Omega_nu[j * size + i] = Onu_ij;
+            tab->Omega_nu[j * size + i] = Onu_ij;
 
             /* Also compute the equation of state */
             const double Garg = strooklat_interp(&spline_y, Gy, arg);
@@ -368,7 +368,7 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
 
         /* Add the massive neutrino species */
         for (int j=0; j<N_nu; j++) {
-            const double O_nu = Omega_nu[j * size + i];
+            const double O_nu = tab->Omega_nu[j * size + i];
             const double w = w_nu[j * size + i];
             Omega_nu_tot[i] += O_nu;
             Omega_nu_nr[i] += (1.0 - 3.0 * w) * O_nu;
@@ -383,7 +383,7 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
 
         /* Fraction per species */
         for (int j=0; j<N_nu; j++) {
-            const double O_nu = Omega_nu[j * size + i];
+            const double O_nu = tab->Omega_nu[j * size + i];
             const double w = w_nu[j * size + i];
             const double O_nu_nr = (1.0 - 3.0 * w) * O_nu;
             tab->f_nu_nr[j * size + i] = O_nu_nr / Omega_m[i] / tab->avec[i];
@@ -396,7 +396,7 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     /* The neutrino density per species at z = 0 */
     double *Omega_nu_0 = malloc(N_nu * sizeof(double));
     for (int i = 0; i < N_nu; i++) {
-        Omega_nu_0[i] = strooklat_interp(&spline, Omega_nu + i * size, 1.0);
+        Omega_nu_0[i] = strooklat_interp(&spline, tab->Omega_nu + i * size, 1.0);
     }
 
     /* Close the universe */
@@ -480,7 +480,6 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     free(Omega_nu_nr);
     free(Omega_r);
     free(Omega_m);
-    free(Omega_nu);
     free(Omega_nu_tot);
     free(Omega_nu_0);
     free(w_nu);
@@ -531,6 +530,7 @@ void free_cosmology_tables(struct cosmology_tables *tab) {
     free(tab->Avec);
     free(tab->Bvec);
     free(tab->Hvec);
+    free(tab->Omega_nu);
     free(tab->f_nu_nr);
     free(tab->f_nu_nr_tot);
     free(tab->kick_factors);

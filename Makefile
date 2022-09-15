@@ -28,6 +28,7 @@ all:
 	$(GCC) src/units.c -c -o lib/units.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/grid_io.c -c -o lib/grid_io.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/random.c -c -o lib/random.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/fermi_dirac.c -c -o lib/fermi_dirac.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/distributed_grid.c -c -o lib/distributed_grid.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/particle_exchange.c -c -o lib/particle_exchange.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/fft.c -c -o lib/fft.o $(INCLUDES) $(CFLAGS)

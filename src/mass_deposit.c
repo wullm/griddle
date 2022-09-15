@@ -51,7 +51,13 @@ int mass_deposition_single(struct distributed_grid *dgrid,
         double Y = part->x[1] / (boxlen/N);
         double Z = part->x[2] / (boxlen/N);
 
-        double M = part->m;
+        double M = part->m ;
+
+        /* Neutrino delta-f weighting */
+        if (part->type == 6) {
+            M *= part->w;
+        }
+
         total_mass += M;
 
         int iX = (int) floor(X);
@@ -126,6 +132,12 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         double Z = part->x[2] / (boxlen/N);
 
         double M = part->m;
+
+        /* Neutrino delta-f weighting */
+        if (part->type == 6) {
+            M *= part->w;
+        }
+
         total_mass += M;
 
         int iX = (int) floor(X);
