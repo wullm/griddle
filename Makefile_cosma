@@ -31,6 +31,7 @@ all:
 	$(GCC) src/grid_io.c -c -o lib/grid_io.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/random.c -c -o lib/random.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/distributed_grid.c -c -o lib/distributed_grid.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/particle_exchange.c -c -o lib/particle_exchange.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/fft.c -c -o lib/fft.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/gaussian_field.c -c -o lib/gaussian_field.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/perturb_data.c -c -o lib/perturb_data.o $(INCLUDES) $(CFLAGS)
@@ -40,7 +41,7 @@ all:
 	$(GCC) src/mass_deposit.c -c -o lib/mass_deposit.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/snap_io.c -c -o lib/snap_io.o $(INCLUDES) $(CFLAGS)
 
-	$(GCC) src/nyver.c -o nyver $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
+	$(GCC) src/sedulus.c -o sedulus $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 
 minIni:
 	cd parser && make

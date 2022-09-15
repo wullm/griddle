@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of Nyver.
+ * This file is part of Sedulus.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@
 #include "../include/cosmology.h"
 #include "../include/units.h"
 #include "../include/strooklat.h"
+#include "../include/message.h"
 
 /* The .ini parser library is minIni */
 #include "../parser/minIni.h"
@@ -111,6 +112,36 @@ int cleanCosmology(struct cosmology *cosmo) {
         free(cosmo->deg_nu);
     }
     return 0;
+}
+
+int print_cosmology_information(int rank, struct cosmology *cosmo) {
+    /* Print the cosmological model */
+    message(rank, "h: %18g\n", cosmo->h);
+    message(rank, "Omega_cdm: %10g\n", cosmo->Omega_cdm);
+    message(rank, "Omega_b: %12g\n", cosmo->Omega_b);
+    message(rank, "Omega_k: %12g\n", cosmo->Omega_k);
+    message(rank, "N_ur: %15g\n", cosmo->N_ur);
+    message(rank, "N_nu: %15d\n", cosmo->N_nu);
+
+    /* Print a string about the neutrino species */
+    if (rank == 0 && cosmo->N_nu > 0) {
+        char mstring[50] = "";
+        for (int i = 0; i < cosmo->N_nu; i++) {
+            sprintf(mstring + strlen(mstring), "%g", cosmo->M_nu[i]);
+            if (i < cosmo->N_nu - 1) sprintf(mstring + strlen(mstring), ", ");
+        }
+        message(rank, "m_nu: %15s\n", mstring);
+
+        char dstring[50] = "";
+        for (int i = 0; i < cosmo->N_nu; i++) {
+            sprintf(dstring + strlen(dstring), "%g", cosmo->deg_nu[i]);
+            if (i < cosmo->N_nu - 1) sprintf(dstring + strlen(dstring), ", ");
+        }
+        message(rank, "deg_nu: %13s\n", dstring);
+    }
+    message(rank, "w0: %17g\n", cosmo->w0);
+    message(rank, "wa: %17g\n", cosmo->wa);
+    message(rank, "\n");
 }
 
 double primordialPower(const double k, const struct cosmology *cosmo) {
@@ -407,8 +438,8 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
    gsl_function func_kick = {kick_integrand};
    gsl_function func_drift = {drift_integrand};
 
-   double kd_abs_tol = 1e-8;
-   double kd_rel_tol = 1e-8;
+   double kd_abs_tol = 1e-6;
+   double kd_rel_tol = 1e-6;
 
    /* Compute the kick and drift factors */
     for (int i=0; i<size; i++) {

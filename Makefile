@@ -39,7 +39,7 @@ all:
 	$(GCC) src/mass_deposit.c -c -o lib/mass_deposit.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/snap_io.c -c -o lib/snap_io.o $(INCLUDES) $(CFLAGS)
 
-	$(GCC) src/nyver.c -o nyver $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
+	$(GCC) src/sedulus.c -o sedulus $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 
 minIni:
 	cd parser && make

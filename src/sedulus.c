@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of Nyver.
+ * This file is part of Sedulus.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 
-#include "../include/nyver.h"
+#include "../include/sedulus.h"
 
 int main(int argc, char *argv[]) {
     /* Initialize MPI for distributed memory parallelization */
@@ -41,12 +41,11 @@ int main(int argc, char *argv[]) {
     /* Read options */
     const char *fname = argv[1];
     if (rank == 0) {
-        message(rank, "\n");
-        message(rank, "    | \\ | | `  ` __   __ ___  _ __ \n");
-        message(rank, "    |  \\| || || |\\ \\ / // _ \\| '__|    \n");
-        message(rank, "    | |\\  ||_|| | \\ V /|  __/| |   \n");
-        message(rank, "    |_| \\_|   / |  \\_/  \\___||_|   \n");
-        message(rank, "            |__/                   \n");
+        message(rank, "     ____           _       _               \n");
+        message(rank, "    / ___|  ___  __| |_   _| |_   _ ___     \n");
+        message(rank, "    \\___ \\ / _ \\/ _` | | | | | | | / __| \n");
+        message(rank, "     ___) |  __/ (_| | |_| | | |_| \\__ \\  \n");
+        message(rank, "    |____/ \\___|\\__,_|\\__,_|_|\\__,_|___/\n");
         message(rank, "\n");
         if (argc == 1) {
             printf("No parameter file specified.\n");
@@ -61,7 +60,7 @@ int main(int argc, char *argv[]) {
     struct timeval time_stop, time_start;
     gettimeofday(&time_start, NULL);
 
-    /* Main nyver structuress */
+    /* Main Sedulus structuress */
     struct params pars;
     struct units us;
     struct physical_consts pcs;
@@ -78,20 +77,8 @@ int main(int argc, char *argv[]) {
     set_physical_constants(&us, &pcs);
     readCosmology(&cosmo, fname);
 
-    /* Print a string about the neutrino species */
-    if (cosmo.N_nu > 0) {
-        message(rank, "We have %d neutrino species (", cosmo.N_nu);
-        for (int i = 0; i < cosmo.N_nu; i++) {
-            message(rank, "%g", cosmo.M_nu[i]);
-            if (i < cosmo.N_nu - 1) message(rank, ", ");
-        }
-        message(rank, ") x (");
-        for (int i = 0; i < cosmo.N_nu; i++) {
-            message(rank, "%g", cosmo.deg_nu[i]);
-            if (i < cosmo.N_nu - 1) message(rank, ", ");
-        }
-        message(rank, ").\n");
-    }
+    /* Print information about the cosmological model */
+    print_cosmology_information(rank, &cosmo);
 
     /* Integration limits */
     const double a_begin = pars.ScaleFactorBegin;

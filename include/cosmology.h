@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of Nyver.
+ * This file is part of Sedulus.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -44,6 +44,7 @@ struct cosmology {
 
 int readCosmology(struct cosmology *cosmo, const char *fname);
 int cleanCosmology(struct cosmology *cosmo);
+int print_cosmology_information(int rank, struct cosmology *cosmo);
 double primordialPower(const double k, const struct cosmology *cosmo);
 
 struct cosmology_tables {

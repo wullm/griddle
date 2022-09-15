@@ -1,5 +1,5 @@
 /*******************************************************************************
- * This file is part of Nyver.
+ * This file is part of Sedulus.
  * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,8 +17,8 @@
  *
  ******************************************************************************/
 
-#ifndef NYVER_H
-#define NYVER_H
+#ifndef SEDULUS_H
+#define SEDULUS_H
 
 #include "message.h"
 #include "params.h"
