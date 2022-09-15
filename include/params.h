@@ -47,9 +47,14 @@ struct params {
     double ScaleFactorStep;
     char WithCOLA;
 
+    /* Snapshot parameters */
+    char *SnapshotTimesString;
+    char *SnapshotBaseName;
+
 };
 
 int readParams(struct params *parser, const char *fname);
 int cleanParams(struct params *parser);
+int parseArrayString(char *string, double **array, int *length);
 
 #endif

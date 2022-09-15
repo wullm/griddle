@@ -29,9 +29,9 @@
 #include "units.h"
 
 int exportSnapshot(struct params *pars, struct units *us,
-                   struct particle *particles, const char *fname, int N,
-                   long long int local_partnum);
-int writeHeaderAttributes(struct params *pars, struct units *us,
+                   struct particle *particles, int output_num, double a,
+                   int N, long long int local_partnum);
+int writeHeaderAttributes(struct params *pars, struct units *us, double a,
                           long long int Npart_local, long long int Npart_total,
                           hid_t h_file);
 

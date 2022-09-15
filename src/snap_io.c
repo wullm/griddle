@@ -32,8 +32,8 @@
 #define HDF5_CHUNK_SIZE 65536LL
 
 int exportSnapshot(struct params *pars, struct units *us,
-                   struct particle *particles, const char *fname, int N,
-                   long long int local_partnum) {
+                   struct particle *particles, int output_num, double a,
+                   int N, long long int local_partnum) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -67,13 +67,16 @@ int exportSnapshot(struct params *pars, struct units *us,
     const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
     H5Pset_chunk(h_prop_sca, srank, schunk);
 
+    /* Form the filename */
+    char fname[DEFAULT_STRING_LENGTH];
+    sprintf(fname, "%s_%04d.hdf5", pars->SnapshotBaseName, output_num);
 
     if (rank == 0) {
         /* Create the output file */
         hid_t h_out_file = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
         /* Writing attributes into the Header & Cosmology groups */
-        int err = writeHeaderAttributes(pars, us, parts_in_file, total_partnum, h_out_file);
+        int err = writeHeaderAttributes(pars, us, a, parts_in_file, total_partnum, h_out_file);
         if (err > 0) exit(1);
 
         /* The particle group in the output file */
@@ -198,7 +201,7 @@ int exportSnapshot(struct params *pars, struct units *us,
     return 0;
 }
 
-int writeHeaderAttributes(struct params *pars, struct units *us,
+int writeHeaderAttributes(struct params *pars, struct units *us, double a,
                           long long int Npart_local, long long int Npart_total,
                           hid_t h_file) {
 
@@ -232,9 +235,9 @@ int writeHeaderAttributes(struct params *pars, struct units *us,
     H5Aclose(h_attr);
 
     /* Create the Redshift attribute and write the data */
-    double z_final = 1./pars->ScaleFactorEnd - 1;
+    double z_output = 1./a - 1;
     h_attr = H5Acreate1(h_grp, "Redshift", H5T_NATIVE_DOUBLE, h_aspace, H5P_DEFAULT);
-    H5Awrite(h_attr, H5T_NATIVE_DOUBLE, &z_final);
+    H5Awrite(h_attr, H5T_NATIVE_DOUBLE, &z_output);
     H5Aclose(h_attr);
 
     /* Create the Flag_Entropy_ICs attribute and write the data */
@@ -293,7 +296,7 @@ int writeHeaderAttributes(struct params *pars, struct units *us,
 
     /* Create the Redshift attribute and write the data */
     h_attr = H5Acreate1(h_grp, "Redshift", H5T_NATIVE_DOUBLE, h_aspace, H5P_DEFAULT);
-    H5Awrite(h_attr, H5T_NATIVE_DOUBLE, &z_final);
+    H5Awrite(h_attr, H5T_NATIVE_DOUBLE, &z_output);
     H5Aclose(h_attr);
 
     /* Close the attribute dataspace */

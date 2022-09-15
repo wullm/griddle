@@ -273,6 +273,39 @@ int main(int argc, char *argv[]) {
     /* Copy buffers and communicate them to the neighbour ranks */
     create_local_buffers(&mass);
 
+    /* Determine the snapshot output times */
+    double *output_list;
+    int num_outputs;
+    int last_output = 0;
+    parseArrayString(pars.SnapshotTimesString, &output_list, &num_outputs);
+
+    if (num_outputs < 1) {
+        printf("No output times specified!\n");
+        exit(1);
+    } else if (num_outputs > 1) {
+        /* Check that the output times are in ascending order */
+        for (int i = 1; i < num_outputs; i++) {
+            if (output_list[i] <= output_list[i - 1]) {
+                printf("Output times should be in strictly ascending order.\n");
+                exit(1);
+            }
+        }
+    }
+
+    /* Check that the first output is after the beginning and before the end */
+    if (output_list[0] < a_begin) {
+        printf("The first output should be after the start of the simulation.\n");
+        exit(1);
+    } else if (output_list[num_outputs - 1] > a_end) {
+        printf("The last output should be before the end of the simulation.\n");
+        exit(1);
+    }
+
+    /* Check if there should be an output at the start */
+    if (output_list[0] == a_begin) {
+        exportSnapshot(&pars, &us, particles, 0, a_begin, N, local_partnum);
+    }
+
     /* Start at the beginning */
     double a = a_begin;
 
@@ -526,6 +559,13 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        /* Should there be a snapshot output? */
+        while (output_list[last_output] > a && output_list[last_output] <= a_next) {
+            message(rank, "Exporting a snapshot at a = %g.\n", output_list[last_output]);
+            exportSnapshot(&pars, &us, particles, last_output, output_list[last_output], N, local_partnum);
+            last_output++;
+        }
+
         /* Step forward */
         a = a_next;
 
@@ -542,8 +582,8 @@ int main(int argc, char *argv[]) {
     /* Export the GRF */
     writeFieldFile_dg(&mass, "mass.hdf5");
 
-    /* Export a snapshot */
-    exportSnapshot(&pars, &us, particles, "snap.hdf5", N, local_partnum);
+    /* Free the list with snapshot output times */
+    free(output_list);
 
     /* Free the particle lattice */
     free(particles);

@@ -51,6 +51,12 @@ int readParams(struct params *pars, const char *fname) {
      ini_gets("InitialConditions", "File", "", pars->InitialConditionsFile, len, fname);
      ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
 
+     /* Snapshot parameters */
+     pars->SnapshotTimesString = malloc(len);
+     pars->SnapshotBaseName = malloc(len);
+     ini_gets("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname);
+     ini_gets("Snapshots", "BaseName", "", pars->SnapshotBaseName, len, fname);
+
      return 0;
 }
 
@@ -58,6 +64,47 @@ int readParams(struct params *pars, const char *fname) {
 int cleanParams(struct params *pars) {
     free(pars->InitialConditionsFile);
     free(pars->TransferFunctionsFile);
+    free(pars->SnapshotTimesString);
+    free(pars->SnapshotBaseName);
+
+    return 0;
+}
+
+
+int parseArrayString(char *string, double **array, int *length) {
+    /* Check that there is anything there */
+    if (strlen(string) <= 0)
+        return 0;
+
+    /* Permissible delimiters */
+    char delimiters[] = " ,\t\n";
+
+    /* Make a copy of the string before it gets modified */
+    char copy[DEFAULT_STRING_LENGTH];
+    sprintf(copy, "%s", string);
+
+    /* Count the number of values*/
+    char *token = strtok(string, delimiters);
+    int count = 0;
+    while (token != NULL) {
+        count++;
+        token = strtok(NULL, delimiters);
+    }
+
+    *length = count;
+
+    if (count == 0)
+        return 0;
+
+    /* Allocate memory and return the length */
+    *array = calloc(count, sizeof(double));
+
+    /* Parse the original string again */
+    token = strtok(copy, delimiters);
+    for (int i = 0; i < count; i++) {
+        sscanf(token, "%lf", &(*array)[i]);
+        token = strtok(NULL, delimiters);
+    }
 
     return 0;
 }

@@ -85,7 +85,7 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
         int m_species = 0;
         while (m_token != NULL) {
             sscanf(m_token, "%lf", &cosmo->M_nu[m_species++]);
-            m_token = strtok (NULL, delimiters);
+            m_token = strtok(NULL, delimiters);
         }
 
         /* Parse degeneracies */
@@ -93,7 +93,7 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
         int d_species = 0;
         while (d_token != NULL) {
             sscanf(d_token, "%lf", &cosmo->deg_nu[d_species++]);
-            d_token = strtok (NULL, delimiters);
+            d_token = strtok(NULL, delimiters);
         }
 
         /* Check that all degeneracies are there */
