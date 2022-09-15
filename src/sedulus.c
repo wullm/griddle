@@ -243,7 +243,7 @@ int main(int argc, char *argv[]) {
         if (N_nu > 0) {
             generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
                                local_partnum, local_neutrino_num, boxlen,
-                               z_start, &seed);
+                               X0, NX, N, z_start, &seed);
 
             local_partnum += local_neutrino_num;
 
@@ -263,9 +263,11 @@ int main(int argc, char *argv[]) {
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
-            p->v[0] = 0.;
-            p->v[1] = 0.;
-            p->v[2] = 0.;
+            if (p->type == 1) {
+                p->v[0] = 0.;
+                p->v[1] = 0.;
+                p->v[2] = 0.;
+            }
         }
     }
 
@@ -458,30 +460,41 @@ int main(int argc, char *argv[]) {
             p->v[2] += acc[2] * kick_dtau1;
 
             /* COLA half-kick */
-            if (pars.WithCOLA) {
+            if (pars.WithCOLA && p->type == 1) {
                 p->v[0] += d_vf * kick_dtau1 * p->dx[0] / D_start + d_vf_2 * kick_dtau1 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[1] += d_vf * kick_dtau1 * p->dx[1] / D_start + d_vf_2 * kick_dtau1 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[2] += d_vf * kick_dtau1 * p->dx[2] / D_start + d_vf_2 * kick_dtau1 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
             }
 
-            /* Delta-f weighting of neutrinos */
+            /* Relativistic drift correction */
+            double rel_drift = 1.0;
+
+            /* Neutrino particle operations */
             if (p->type == 6) {
+                /* Delta-f weighting for variance reduction (2010.07321) */
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
-                double q = hypot(p->v[0], hypot(p->v[1], p->v[2])) * fac * m_eV;
+                double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
+                double q = sqrt(v2) * fac * m_eV;
                 double qi = neutrino_seed_to_fermi_dirac(p->id);
                 double f = fermi_dirac_density(q);
                 double fi = fermi_dirac_density(qi);
 
                 p->w = 1.0 - f / fi;
+
+                /* Relativistic equations of motion (2207.14256) */
+                double ac = a * pcs.SpeedOfLight;
+                double ac2 = ac * ac;
+
+                rel_drift = ac / sqrt(ac2 + v2);
             }
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
-            p->x[0] += p->v[0] * drift_dtau;
-            p->x[1] += p->v[1] * drift_dtau;
-            p->x[2] += p->v[2] * drift_dtau;
+            p->x[0] += p->v[0] * drift_dtau * rel_drift;
+            p->x[1] += p->v[1] * drift_dtau * rel_drift;
+            p->x[2] += p->v[2] * drift_dtau * rel_drift;
 
             /* COLA drift */
-            if (pars.WithCOLA) {
+            if (pars.WithCOLA && p->type == 1) {
                 p->x[0] -= p->dx[0] * (D_next - D) / D_start + factor_2lpt * p->dx2[0] * (D_next * D_next - D * D) / (D_start * D_start);
                 p->x[1] -= p->dx[1] * (D_next - D) / D_start + factor_2lpt * p->dx2[1] * (D_next * D_next - D * D) / (D_start * D_start);
                 p->x[2] -= p->dx[2] * (D_next - D) / D_start + factor_2lpt * p->dx2[2] * (D_next * D_next - D * D) / (D_start * D_start);
@@ -592,7 +605,7 @@ int main(int argc, char *argv[]) {
             p->v[2] += acc[2] * kick_dtau2;
 
             /* COLA half-kick */
-            if (pars.WithCOLA) {
+            if (pars.WithCOLA && p->type == 1) {
                 p->v[0] += d_vf_next * kick_dtau2 * p->dx[0] / D_start + d_vf_2_next * kick_dtau2 * p->dx2[0] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[1] += d_vf_next * kick_dtau2 * p->dx[1] / D_start + d_vf_2_next * kick_dtau2 * p->dx2[1] / (D_start * D_start) * factor_vel_2lpt;
                 p->v[2] += d_vf_next * kick_dtau2 * p->dx[2] / D_start + d_vf_2_next * kick_dtau2 * p->dx2[2] / (D_start * D_start) * factor_vel_2lpt;
@@ -628,12 +641,12 @@ int main(int argc, char *argv[]) {
         message(rank, "\n");
     }
 
-    /* Initiate mass deposition */
-    if (MPI_Rank_Count == 1) {
-        mass_deposition_single(&mass, particles, local_partnum);
-    } else {
-        mass_deposition(&mass, particles, local_partnum);
-    }
+    // /* Initiate mass deposition */
+    // if (MPI_Rank_Count == 1) {
+    //     mass_deposition_single(&mass, particles, local_partnum);
+    // } else {
+    //     mass_deposition(&mass, particles, local_partnum);
+    // }
 
     /* Export the GRF */
     // writeFieldFile_dg(&mass, "final_mass.hdf5");

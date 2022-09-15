@@ -281,7 +281,8 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct cosmology_tables *ctabs, struct units *us,
                        struct physical_consts *pcs, long long int N_nupart,
                        long long local_partnum, long long local_neutrino_num,
-                       double boxlen, double z_start, rng_state *state) {
+                       double boxlen, long long X0, long long NX, long long N,
+                       double z_start, rng_state *state) {
 
     /* Create interpolation splines for scale factors */
     struct strooklat spline_a = {ctabs->avec, ctabs->size};
@@ -310,8 +311,8 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
         /* Neutrino */
         part->type = 6;
 
-        /* Sample a position uniformly in the box */
-        part->x[0] = sampleUniform(state) * boxlen;
+        /* Sample a position uniformly in the box (on this rank) */
+        part->x[0] = (sampleUniform(state) * NX + X0) * boxlen / N;
         part->x[1] = sampleUniform(state) * boxlen;
         part->x[2] = sampleUniform(state) * boxlen;
 
