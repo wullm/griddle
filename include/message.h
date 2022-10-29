@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <stdarg.h>
+#include <sys/time.h>
 
 #define TXT_RED "\033[31;1m"
 #define TXT_GREEN "\033[32;1m"
@@ -51,6 +52,24 @@ static inline void catch_error(int err, const char *format, ...) {
         va_end(args);
         exit(err);
     }
+}
+
+struct timepair {
+    struct timeval start, stop;
+};
+
+static inline void timer_start(int rank, struct timepair *tp) {
+    gettimeofday(&tp->start, NULL);
+}
+
+static inline void timer_stop(int rank, struct timepair *tp, const char *msg) {
+    gettimeofday(&tp->stop, NULL);
+    if (rank == 0) {
+        printf("%s%.5f s\n", msg,
+                ((tp->stop.tv_sec - tp->start.tv_sec) * 1000000
+                + tp->stop.tv_usec - tp->start.tv_usec)/1e6);
+    }
+    gettimeofday(&tp->start, NULL); // ready for next use
 }
 
 

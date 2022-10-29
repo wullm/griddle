@@ -58,8 +58,8 @@ int main(int argc, char *argv[]) {
     }
 
     /* Timer */
-    struct timeval time_stop, time_start;
-    gettimeofday(&time_start, NULL);
+    struct timepair overall_timer;
+    timer_start(rank, &overall_timer);
 
     /* Main Sedulus structuress */
     struct params pars;
@@ -154,23 +154,19 @@ int main(int argc, char *argv[]) {
         }
 
         /* Timer */
-        struct timeval time_sort_0;
-        gettimeofday(&time_sort_0, NULL);
+        struct timepair ics_timer;
+        timer_start(rank, &ics_timer);
 
         readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, local_partnum, local_firstpart, max_partnum);
 
         /* Timer */
-        struct timeval time_sort_1;
-        gettimeofday(&time_sort_1, NULL);
-        message(rank, "Reading initial conditions took %.5f s\n",
-                               ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
-                               + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
+        timer_stop(rank, &ics_timer, "Reading initial conditions took ");
     } else {
         message(rank, "Generating initial conditions with 2LPT.\n");
 
         /* Timer */
-        struct timeval time_sort_0;
-        gettimeofday(&time_sort_0, NULL);
+        struct timepair ics_timer;
+        timer_start(rank, &ics_timer);
 
         /* Allocate distributed memory arrays (one complex & one real) */
         alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
@@ -180,11 +176,7 @@ int main(int argc, char *argv[]) {
                                 pars.InvertedModes, &ptdat, &cosmo, z_start);
 
         /* Timer */
-        struct timeval time_sort_1;
-        gettimeofday(&time_sort_1, NULL);
-        message(rank, "Generating the Zel'dovich potential took %.5f s\n",
-                               ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
-                               + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
+        timer_stop(rank, &ics_timer, "Generating the Zel'dovich potential took ");
 
         /* Allocate additional arrays */
         struct distributed_grid temp2;
@@ -203,11 +195,7 @@ int main(int argc, char *argv[]) {
         free_local_grid(&temp2);
 
         /* Timer */
-        struct timeval time_sort_2;
-        gettimeofday(&time_sort_2, NULL);
-        message(rank, "Generating the 2LPT potential took %.5f s\n",
-                               ((time_sort_2.tv_sec - time_sort_1.tv_sec) * 1000000
-                               + time_sort_2.tv_usec - time_sort_1.tv_usec)/1e6);
+        timer_stop(rank, &ics_timer, "Generating the 2LPT potential took ");
 
         /* Create buffers for the LPT potentials */
         alloc_local_buffers(&lpt_potential, buffer_width);
@@ -224,11 +212,7 @@ int main(int argc, char *argv[]) {
         free_local_grid(&lpt_potential_2);
 
         /* Timer */
-        struct timeval time_sort_3;
-        gettimeofday(&time_sort_3, NULL);
-        message(rank, "Generating the particle lattice took %.5f s\n",
-                               ((time_sort_3.tv_sec - time_sort_2.tv_sec) * 1000000
-                               + time_sort_3.tv_usec - time_sort_2.tv_usec)/1e6);
+        timer_stop(rank, &ics_timer, "Generating the particle lattice took ");
 
         /* Generate neutrino particles */
         if (N_nu > 0) {
@@ -239,11 +223,7 @@ int main(int argc, char *argv[]) {
             local_partnum += local_neutrino_num;
 
             /* Timer */
-            struct timeval time_sort_4;
-            gettimeofday(&time_sort_4, NULL);
-            message(rank, "Generating neutrinos took %.5f s\n",
-                                   ((time_sort_4.tv_sec - time_sort_3.tv_sec) * 1000000
-                                   + time_sort_4.tv_usec - time_sort_3.tv_usec)/1e6);
+            timer_stop(rank, &ics_timer, "Generating neutrinos took ");
         }
     }
 
@@ -277,18 +257,13 @@ int main(int argc, char *argv[]) {
     mass.momentum_space = 0;
 
     /* Timer */
-    struct timeval time_sort_e1;
-    gettimeofday(&time_sort_e1, NULL);
+    struct timepair exchange_timer;
+    timer_start(rank, &exchange_timer);
 
     exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
 
     /* Timer */
-    struct timeval time_sort_e2;
-    gettimeofday(&time_sort_e2, NULL);
-    message(rank, "Exchanging particles took %.5f s\n",
-                           ((time_sort_e2.tv_sec - time_sort_e1.tv_sec) * 1000000
-                           + time_sort_e2.tv_usec - time_sort_e1.tv_usec)/1e6);
-
+    timer_stop(rank, &exchange_timer, "Exchanging particles took ");
     message(rank, "\n");
 
 
@@ -447,8 +422,8 @@ int main(int argc, char *argv[]) {
         message(rank, "Computing particle kicks and drifts.\n");
 
         /* Timer */
-        struct timeval time_sort_a;
-        gettimeofday(&time_sort_a, NULL);
+        struct timepair run_timer;
+        timer_start(rank, &run_timer);
 
         /* Integrate the particles */
         for (long long i = 0; i < local_partnum; i++) {
@@ -521,35 +496,18 @@ int main(int argc, char *argv[]) {
         }
 
         /* Timer */
-        struct timeval time_sort_b;
-        gettimeofday(&time_sort_b, NULL);
-        message(rank, "Evolving particles took %.5f s\n",
-                               ((time_sort_b.tv_sec - time_sort_a.tv_sec) * 1000000
-                               + time_sort_b.tv_usec - time_sort_a.tv_usec)/1e6);
+        timer_stop(rank, &run_timer, "Evolving particles took ");
 
         if (MPI_Rank_Count > 1) {
 
             message(rank, "Starting particle exchange.\n");
 
-            /* Timer */
-            struct timeval time_sort_0;
-            gettimeofday(&time_sort_0, NULL);
-
             exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
 
-            /* Timer */
-            struct timeval time_sort_1;
-            gettimeofday(&time_sort_1, NULL);
-            message(rank, "Exchanging particles took %.5f s\n",
-                                   ((time_sort_1.tv_sec - time_sort_0.tv_sec) * 1000000
-                                   + time_sort_1.tv_usec - time_sort_0.tv_usec)/1e6);
+            timer_stop(rank, &run_timer, "Exchanging particles took ");
         }
 
         message(rank, "Computing the gravitational potential.\n");
-
-        /* Timer */
-        struct timeval time_sort_1;
-        gettimeofday(&time_sort_1, NULL);
 
         /* Initiate mass deposition */
         if (MPI_Rank_Count == 1) {
@@ -559,41 +517,25 @@ int main(int argc, char *argv[]) {
         }
 
         /* Timer */
-        struct timeval time_sort_2;
-        gettimeofday(&time_sort_2, NULL);
-        message(rank, "Computing mass density took %.5f s\n",
-                               ((time_sort_2.tv_sec - time_sort_1.tv_sec) * 1000000
-                               + time_sort_2.tv_usec - time_sort_1.tv_usec)/1e6);
+        timer_stop(rank, &run_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
         add_local_buffers(&mass);
 
         /* Timer */
-        struct timeval time_sort_3;
-        gettimeofday(&time_sort_3, NULL);
-        message(rank, "Communicating buffers took %.5f s\n",
-                               ((time_sort_3.tv_sec - time_sort_2.tv_sec) * 1000000
-                               + time_sort_3.tv_usec - time_sort_2.tv_usec)/1e6);
+        timer_stop(rank, &run_timer, "Communicating buffers took ");
 
         /* Re-compute the gravitational potential */
         compute_potential(&mass, &pcs);
 
         /* Timer */
-        struct timeval time_sort_4;
-        gettimeofday(&time_sort_4, NULL);
-        message(rank, "Computing the potential took %.5f s\n",
-                               ((time_sort_4.tv_sec - time_sort_3.tv_sec) * 1000000
-                               + time_sort_4.tv_usec - time_sort_3.tv_usec)/1e6);
+        timer_stop(rank, &run_timer, "Computing the potential took ");
 
         /* Copy buffers and communicate them to the neighbour ranks */
         create_local_buffers(&mass);
 
         /* Timer */
-        struct timeval time_sort_5;
-        gettimeofday(&time_sort_5, NULL);
-        message(rank, "Communicating buffers took %.5f s\n",
-                               ((time_sort_5.tv_sec - time_sort_4.tv_sec) * 1000000
-                               + time_sort_5.tv_usec - time_sort_4.tv_usec)/1e6);
+        timer_stop(rank, &run_timer, "Communicating buffers took ");
 
         message(rank, "Computing particle kicks.\n");
 
@@ -626,27 +568,17 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        struct timeval time_sort_6;
-        gettimeofday(&time_sort_6, NULL);
-        message(rank, "Computing particle kicks took %.5f s\n",
-                               ((time_sort_6.tv_sec - time_sort_5.tv_sec) * 1000000
-                               + time_sort_6.tv_usec - time_sort_5.tv_usec)/1e6);
+
+        timer_stop(rank, &run_timer, "Computing particle kicks took ");
 
         /* Should there be a snapshot output? */
         while (output_list[last_output] > a && output_list[last_output] <= a_next) {
-
-            struct timeval time_sort_7;
-            gettimeofday(&time_sort_7, NULL);
 
             message(rank, "Exporting a snapshot at a = %g.\n", output_list[last_output]);
             exportSnapshot(&pars, &us, particles, last_output, output_list[last_output], N, local_partnum);
             last_output++;
 
-            struct timeval time_sort_8;
-            gettimeofday(&time_sort_8, NULL);
-            message(rank, "Exporting a snapshot took %.5f s\n",
-                                   ((time_sort_8.tv_sec - time_sort_7.tv_sec) * 1000000
-                                   + time_sort_8.tv_usec - time_sort_7.tv_usec)/1e6);
+            timer_stop(rank, &run_timer, "Exporting a snapshot took took ");
         }
 
         /* Step forward */
@@ -693,9 +625,6 @@ int main(int argc, char *argv[]) {
     free_strooklat_spline(&spline_bg_a);
 
     /* Timer */
-    gettimeofday(&time_stop, NULL);
-    long unsigned microsec = (time_stop.tv_sec - time_start.tv_sec) * 1000000
-                           + time_stop.tv_usec - time_start.tv_usec;
-    message(rank, "\nTime elapsed: %.5f s\n", microsec/1e6);
-
+    message(rank, "\n");
+    timer_stop(rank, &overall_timer, "Time elapsed: ");
 }
