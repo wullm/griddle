@@ -188,8 +188,8 @@ int enforce_hermiticity(struct distributed_grid *dg) {
     /* The first (k=0) and last (k=N/2+1) planes need hermiticity enforced */
 
     /* Collect the plane on all nodes */
-    fftw_complex *our_slice = fftw_alloc_complex(NX * N);
-    fftw_complex *full_plane = fftw_alloc_complex(N * N);
+    GridComplexType *our_slice = fft_alloc_complex(NX * N);
+    GridComplexType *full_plane = fft_alloc_complex(N * N);
 
     /* For both planes */
     for (int z=0; z<=N/2; z+=N/2) { //runs over z=0 and z=N/2
@@ -203,8 +203,8 @@ int enforce_hermiticity(struct distributed_grid *dg) {
         }
 
         /* Gather all the slices on all the nodes */
-        MPI_Allgatherv(our_slice, NX * N, MPI_DOUBLE_COMPLEX, full_plane,
-                       slice_sizes, slice_offsets, MPI_DOUBLE_COMPLEX, dg->comm);
+        MPI_Allgatherv(our_slice, NX * N, MPI_COMPLEX_GRID_TYPE, full_plane,
+                       slice_sizes, slice_offsets, MPI_COMPLEX_GRID_TYPE, dg->comm);
 
         /* Enforce hermiticity: f(k) = f*(-k) */
         for (int x=X0; x<X0 + NX; x++) {
@@ -234,8 +234,8 @@ int enforce_hermiticity(struct distributed_grid *dg) {
     }
 
     /* Free the memory */
-    fftw_free(our_slice);
-    fftw_free(full_plane);
+    fft_free(our_slice);
+    fft_free(full_plane);
     free(slice_sizes);
     free(slice_offsets);
 

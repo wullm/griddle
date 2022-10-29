@@ -4,7 +4,7 @@ GCC = mpicc
 #Libraries
 INI_PARSER = parser/minIni.o
 STD_LIBRARIES = -lm
-FFTW_LIBRARIES = -lfftw3 -lfftw3f -lfftw3_omp -lfftw3_mpi
+FFTW_LIBRARIES = -lfftw3 -lfftw3f -lfftw3_omp -lfftw3_mpi -lfftw3f_mpi
 HDF5_LIBRARIES = -lhdf5
 GSL_LIBRARIES = -lgsl -lgslcblas
 

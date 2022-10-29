@@ -31,7 +31,11 @@
 int main(int argc, char *argv[]) {
     /* Initialize MPI for distributed memory parallelization */
     MPI_Init(&argc, &argv);
+#ifdef SINGLE_PRECISION_FFTW
+    fftwf_mpi_init();
+#else
     fftw_mpi_init();
+#endif
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -117,14 +121,14 @@ int main(int argc, char *argv[]) {
 
     /* Check what portions of 3D grids get stored locally */
     long int X0, NX;
-    fftw_mpi_local_size_3d(N, N, N/2+1, MPI_COMM_WORLD, &NX, &X0);
+    fft_mpi_local_size_3d(N, N, N/2+1, MPI_COMM_WORLD, &NX, &X0);
 
     /* Do the same for the neutrino particles */
     long int N_nu = pars.NeutrinosPerDim;
     long int X0_nu, NX_nu;
     long int local_neutrino_num = 0;
     if (N_nu > 0) {
-        fftw_mpi_local_size_3d(N_nu, N_nu, N_nu/2+1, MPI_COMM_WORLD, &NX_nu, &X0_nu);
+        fft_mpi_local_size_3d(N_nu, N_nu, N_nu/2+1, MPI_COMM_WORLD, &NX_nu, &X0_nu);
         local_neutrino_num = NX_nu * N_nu * N_nu;
     }
 

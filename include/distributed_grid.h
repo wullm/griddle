@@ -23,6 +23,8 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 
+#include "fft_types.h"
+
 #define DEFAULT_BUFFER_WIDTH 3
 
 #define wrap(i,N) ((i)%(N)+(N))%(N)
@@ -47,25 +49,25 @@ struct distributed_grid {
     long int local_real_size;
 
     /* Local portions of the complex and real arrays */
-    fftw_complex *fbox;
-    double *box;
-    double *buffered_box;
+    GridComplexType *fbox;
+    GridFloatType *box;
+    GridFloatType *buffered_box;
 
     /* Additional buffers on the left and right (real only) */
-    double *buffer_left;
-    double *buffer_right;
+    GridFloatType *buffer_left;
+    GridFloatType *buffer_right;
     int buffer_width;
 
     /* GLOBAL SIZES:
-     * fbox:    N * N * (N/2 + 1)               fftw_complex type
-     * box:     N * N * (N + 2)                 double type
+     * fbox:    N * N * (N/2 + 1)               GridComplexType type
+     * box:     N * N * (N + 2)                 GridFloatType type
      *
      * The real array is padded on the right in the Z-dimension.
      */
 
     /* LOCAL SIZES:
-     * fbox:    NX * N * (N/2 + 1)              fftw_complex type
-     * box:     NX * N * (N + 2)                double type
+     * fbox:    NX * N * (N/2 + 1)              GridComplexType type
+     * box:     NX * N * (N + 2)                GridFloatType type
      *
      * The global arrays are sliced along the X-dimension. The local slice
      * corresponds to X0 <= X < X0 + NX.

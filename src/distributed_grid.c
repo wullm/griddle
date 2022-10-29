@@ -23,7 +23,7 @@
 
 int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm comm) {
     /* Determine the size of the local portion */
-    dg->local_size = fftw_mpi_local_size_3d(N, N, N/2+1, comm, &dg->NX, &dg->X0);
+    dg->local_size = fft_mpi_local_size_3d(N, N, N/2+1, comm, &dg->NX, &dg->X0);
 
     /* Store a reference to the communicator */
     dg->comm = comm;
@@ -37,8 +37,8 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
     dg->Nz = 2*(N/2+1);
 
     /* Allocate memory for the complex and real arrays */
-    dg->fbox = fftw_alloc_complex(dg->local_size);
-    dg->box = fftw_alloc_real(2*dg->local_size);
+    dg->fbox = fft_alloc_complex(dg->local_size);
+    dg->box = fft_alloc_real(2*dg->local_size);
 
     /* This flag will be flipped each time we do a Fourier transform */
     dg->momentum_space = 0;
@@ -51,7 +51,7 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
 
 int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double boxlen, int buffer_width, MPI_Comm comm) {
     /* Determine the size of the local portion */
-    dg->local_size = fftw_mpi_local_size_3d(N, N, N/2+1, comm, &dg->NX, &dg->X0);
+    dg->local_size = fft_mpi_local_size_3d(N, N, N/2+1, comm, &dg->NX, &dg->X0);
 
     /* Also account for the buffers */
     dg->local_real_size = 2 * dg->local_size + 2 * buffer_width * N * (2 * (N/2+1));
@@ -68,8 +68,8 @@ int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double box
     dg->Nz = 2*(N/2+1);
 
     /* Allocate memory for the complex and real arrays */
-    dg->fbox = fftw_alloc_complex(dg->local_size);
-    dg->buffered_box = fftw_alloc_real(dg->local_real_size);
+    dg->fbox = fft_alloc_complex(dg->local_size);
+    dg->buffered_box = fft_alloc_real(dg->local_real_size);
     dg->box = dg->buffered_box + buffer_width * N * (2 * (N/2+1));
 
     /* Pointers to the start of the left and right buffers */
@@ -93,15 +93,15 @@ int free_local_grid(struct distributed_grid *dg) {
 
 int free_local_real_grid(struct distributed_grid *dg) {
     if (dg->buffer_width > 0) {
-        fftw_free(dg->buffered_box);
+        fft_free(dg->buffered_box);
     } else {
-        fftw_free(dg->box);
+        fft_free(dg->box);
     }
     return 0;
 }
 
 int free_local_complex_grid(struct distributed_grid *dg) {
-    fftw_free(dg->fbox);
+    fft_free(dg->fbox);
     return 0;
 }
 
@@ -114,14 +114,14 @@ int alloc_local_buffers(struct distributed_grid *dg, int buffer_width) {
     }
 
     dg->buffer_width = buffer_width;
-    dg->buffer_left = fftw_alloc_real(buffer_width * dg->N * dg->N);
-    dg->buffer_right = fftw_alloc_real(buffer_width * dg->N * dg->N);
+    dg->buffer_left = fft_alloc_real(buffer_width * dg->N * dg->N);
+    dg->buffer_right = fft_alloc_real(buffer_width * dg->N * dg->N);
     return 0;
 }
 
 int free_local_buffers(struct distributed_grid *dg) {
-    fftw_free(dg->buffer_left);
-    fftw_free(dg->buffer_right);
+    fft_free(dg->buffer_left);
+    fft_free(dg->buffer_right);
     return 0;
 }
 
@@ -144,8 +144,8 @@ int create_local_buffers(struct distributed_grid *dg) {
     long long int size = dg->buffer_width * dg->N * dg->N;
 
     /* Allocate temporary arrays for the buffers */
-    double *send_buffer_left = fftw_alloc_real(size);
-    double *send_buffer_right = fftw_alloc_real(size);
+    GridFloatType *send_buffer_left = fft_alloc_real(size);
+    GridFloatType *send_buffer_right = fft_alloc_real(size);
 
     /* Create the right buffer of the left neighbour */
     int first_x = dg->X0;
@@ -169,29 +169,29 @@ int create_local_buffers(struct distributed_grid *dg) {
 
     /* Send the buffer to the right */
     if (rank > 0) {
-        MPI_Recv(dg->buffer_left, size, MPI_DOUBLE, rank_left, 0,
+        MPI_Recv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Send(send_buffer_right, size, MPI_DOUBLE, rank_right, 0, MPI_COMM_WORLD);
+    MPI_Send(send_buffer_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        MPI_Recv(dg->buffer_left, size, MPI_DOUBLE, rank_left, 0,
+        MPI_Recv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     /* Send the buffer to the left */
     if (rank > 0) {
-        MPI_Recv(dg->buffer_right, size, MPI_DOUBLE, rank_right, 0,
+        MPI_Recv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Send(send_buffer_left, size, MPI_DOUBLE, rank_left, 0, MPI_COMM_WORLD);
+    MPI_Send(send_buffer_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        MPI_Recv(dg->buffer_right, size, MPI_DOUBLE, rank_right, 0,
+        MPI_Recv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     /* Free the temporary arrays */
-    fftw_free(send_buffer_left);
-    fftw_free(send_buffer_right);
+    fft_free(send_buffer_left);
+    fft_free(send_buffer_right);
 
     return 0;
 }
@@ -214,29 +214,29 @@ int add_local_buffers(struct distributed_grid *dg) {
     long long int size = dg->buffer_width * dg->N * dg->N;
 
     /* Allocate temporary arrays for the buffers */
-    double *recv_buffer_left = fftw_alloc_real(size);
-    double *recv_buffer_right = fftw_alloc_real(size);
+    GridFloatType *recv_buffer_left = fft_alloc_real(size);
+    GridFloatType *recv_buffer_right = fft_alloc_real(size);
 
 
     /* Send the buffer to the right */
     if (rank > 0) {
-        MPI_Recv(recv_buffer_left, size, MPI_DOUBLE, rank_left, 0,
+        MPI_Recv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Send(dg->buffer_right, size, MPI_DOUBLE, rank_right, 0, MPI_COMM_WORLD);
+    MPI_Send(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        MPI_Recv(recv_buffer_left, size, MPI_DOUBLE, rank_left, 0,
+        MPI_Recv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     /* Send the buffer to the left */
     if (rank > 0) {
-        MPI_Recv(recv_buffer_right, size, MPI_DOUBLE, rank_right, 0,
+        MPI_Recv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Send(dg->buffer_left, size, MPI_DOUBLE, rank_left, 0, MPI_COMM_WORLD);
+    MPI_Send(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        MPI_Recv(recv_buffer_right, size, MPI_DOUBLE, rank_right, 0,
+        MPI_Recv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
@@ -262,8 +262,8 @@ int add_local_buffers(struct distributed_grid *dg) {
     }
 
     /* Free the temporary arrays */
-    fftw_free(recv_buffer_left);
-    fftw_free(recv_buffer_right);
+    fft_free(recv_buffer_left);
+    fft_free(recv_buffer_right);
 
     return 0;
 }

@@ -25,6 +25,7 @@
 #include <fftw3-mpi.h>
 #include <math.h>
 
+#include "fft_types.h"
 #include "distributed_grid.h"
 
 /* A structure for calculating kernel functions */
@@ -88,21 +89,23 @@ static inline double hypot3(double x, double y, double z) {
     return hypot(x, hypot(y, z));
 }
 
-/* General functions */
+/* General and FFTW wrapper functions */
 void fft_wavevector(int x, int y, int z, int N, double delta_k, double *kx,
                     double *ky, double *kz, double *k);
-void fft_execute(fftw_plan plan);
+void fft_execute(FourierPlanType plan);
+GridFloatType* fft_alloc_real(size_t n);
+GridComplexType* fft_alloc_complex(size_t n);
+void fft_free(void *ptr);
+ptrdiff_t fft_mpi_local_size_3d(ptrdiff_t n0, ptrdiff_t n1, ptrdiff_t n2,
+                                MPI_Comm comm, ptrdiff_t *local_n0,
+                                ptrdiff_t *local_0_start);
 
 /* Functions for ordinary contiguous arrays */
-int fft_normalize_r2c(fftw_complex *arr, int N, double boxlen);
-int fft_normalize_r2c_float(fftwf_complex *arr, int N, double boxlen);
+int fft_normalize_r2c(GridComplexType *arr, int N, double boxlen);
 int fft_normalize_c2r(double *arr, int N, double boxlen);
-int fft_apply_kernel(fftw_complex *write, const fftw_complex *read, int N,
+int fft_apply_kernel(GridComplexType *write, const GridComplexType *read, int N,
                      double boxlen, void (*compute)(struct kernel* the_kernel),
                      const void *params);
-int fft_apply_kernel_float(fftwf_complex *write, const fftwf_complex *read, int N,
-                           double boxlen, void (*compute)(struct kernel* the_kernel),
-                           const void *params);
 
 /* Functions for distributed grids */
 int fft_r2c_dg(struct distributed_grid *dg);

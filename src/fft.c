@@ -34,7 +34,7 @@ void fft_wavevector(int x, int y, int z, int N, double delta_k, double *kx,
 }
 
 /* Normalize the complex array after transforming to momentum space */
-int fft_normalize_r2c(fftw_complex *arr, int N, double boxlen) {
+int fft_normalize_r2c(GridComplexType *arr, int N, double boxlen) {
     const double boxvol = boxlen*boxlen*boxlen;
     for (int x=0; x<N; x++) {
         for (int y=0; y<N; y++) {
@@ -60,21 +60,6 @@ int fft_normalize_c2r(double *arr, int N, double boxlen) {
 
     return 0;
 }
-
-/* Normalize the complex array after transforming to momentum space */
-int fft_normalize_r2c_float(fftwf_complex *arr, int N, double boxlen) {
-    const double boxvol = boxlen*boxlen*boxlen;
-    for (int x=0; x<N; x++) {
-        for (int y=0; y<N; y++) {
-            for (int z=0; z<=N/2; z++) {
-                arr[row_major_half(x, y, z, N)] *= boxvol/((long long)N*N*N);
-            }
-        }
-    }
-
-    return 0;
-}
-
 
 /* (Distributed grid version) Normalize the complex array after transforming
  * to momentum space */
@@ -116,43 +101,56 @@ int fft_normalize_c2r_dg(struct distributed_grid *dg) {
 
 
 /* Execute an FFTW plan */
-void fft_execute(fftw_plan plan) {
+void fft_execute(FourierPlanType plan) {
+#ifdef SINGLE_PRECISION_FFTW
+    fftwf_execute(plan);
+#else
     fftw_execute(plan);
+#endif
 }
 
+/* Allocate a real domain grid using FFTW routines */
+GridFloatType* fft_alloc_real(size_t n) {
+#ifdef SINGLE_PRECISION_FFTW
+    return fftwf_alloc_real(n);
+#else
+    return fftw_alloc_real(n);
+#endif
+}
+
+/* Allocate a complex domain grid using FFTW routines */
+GridComplexType* fft_alloc_complex(size_t n) {
+#ifdef SINGLE_PRECISION_FFTW
+    return fftwf_alloc_complex(n);
+#else
+    return fftw_alloc_complex(n);
+#endif
+}
+
+/* Free memory using FFTW routines */
+void fft_free(void *ptr) {
+#ifdef SINGLE_PRECISION_FFTW
+    fftwf_free(ptr);
+#else
+    fftw_free(ptr);
+#endif
+}
+
+ptrdiff_t fft_mpi_local_size_3d(ptrdiff_t n0, ptrdiff_t n1, ptrdiff_t n2,
+                                MPI_Comm comm, ptrdiff_t *local_n0,
+                                ptrdiff_t *local_0_start) {
+#ifdef SINGLE_PRECISION_FFTW
+    return fftwf_mpi_local_size_3d(n0, n1, n2, comm, local_n0, local_0_start);
+#else
+    return fftw_mpi_local_size_3d(n0, n1, n2, comm, local_n0, local_0_start);
+#endif
+}
+
+
 /* Apply a kernel to a 3D array after transforming to momentum space */
-int fft_apply_kernel(fftw_complex *write, const fftw_complex *read, int N,
+int fft_apply_kernel(GridComplexType *write, const GridComplexType *read, int N,
                      double boxlen, void (*compute)(struct kernel* the_kernel),
                      const void *params) {
-    const double dk = 2 * M_PI / boxlen;
-    const double fac = boxlen / N;
-
-    #pragma omp parallel for
-    for (int x=0; x<N; x++) {
-        for (int y=0; y<N; y++) {
-            for (int z=0; z<=N/2; z++) {
-                /* Calculate the wavevector */
-                double kx,ky,kz,k;
-                fft_wavevector(x, y, z, N, dk, &kx, &ky, &kz, &k);
-
-                /* Compute the kernel */
-                struct kernel the_kernel = {kx, ky, kz, k, fac, 0.f, params};
-                compute(&the_kernel);
-
-                /* Apply the kernel */
-                const long long int id = row_major_half(x,y,z,N);
-                write[id] = read[id] * the_kernel.kern;
-            }
-        }
-    }
-
-    return 0;
-}
-
-/* Apply a kernel to a 3D array after transforming to momentum space */
-int fft_apply_kernel_float(fftwf_complex *write, const fftwf_complex *read, int N,
-                           double boxlen, void (*compute)(struct kernel* the_kernel),
-                           const void *params) {
     const double dk = 2 * M_PI / boxlen;
     const double fac = boxlen / N;
 
@@ -181,15 +179,25 @@ int fft_apply_kernel_float(fftwf_complex *write, const fftwf_complex *read, int 
 /* (Distributed grid version) Perform an r2c Fourier transform and normalize */
 int fft_r2c_dg(struct distributed_grid *dg) {
     /* Create MPI FFTW plan */
-    fftw_plan r2c_mpi = fftw_mpi_plan_dft_r2c_3d(dg->N, dg->N, dg->N, dg->box,
-                                                 dg->fbox, dg->comm, FFTW_ESTIMATE);
+    FourierPlanType r2c_mpi;
+#ifdef SINGLE_PRECISION_FFTW
+    r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(dg->N, dg->N, dg->N, dg->box,
+                                        dg->fbox, dg->comm, FFTW_ESTIMATE);
+#else
+    r2c_mpi = fftw_mpi_plan_dft_r2c_3d(dg->N, dg->N, dg->N, dg->box,
+                                        dg->fbox, dg->comm, FFTW_ESTIMATE);
+#endif
 
     /* Execute the Fourier transform and normalize */
     fft_execute(r2c_mpi);
     fft_normalize_r2c_dg(dg);
 
     /* Destroy the plan */
+#ifdef SINGLE_PRECISION_FFTW
+    fftwf_destroy_plan(r2c_mpi);
+#else
     fftw_destroy_plan(r2c_mpi);
+#endif
 
     /* Flip the flag for bookkeeping */
     dg->momentum_space = 1;
@@ -200,15 +208,25 @@ int fft_r2c_dg(struct distributed_grid *dg) {
 /* (Distributed grid version) Perform a c2r Fourier transform and normalize */
 int fft_c2r_dg(struct distributed_grid *dg) {
     /* Create MPI FFTW plan */
-    fftw_plan c2r_mpi = fftw_mpi_plan_dft_c2r_3d(dg->N, dg->N, dg->N, dg->fbox,
-                                                 dg->box, dg->comm, FFTW_ESTIMATE);
+    FourierPlanType c2r_mpi;
+#ifdef SINGLE_PRECISION_FFTW
+    c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(dg->N, dg->N, dg->N, dg->fbox,
+                                        dg->box, dg->comm, FFTW_ESTIMATE);
+#else
+    c2r_mpi = fftw_mpi_plan_dft_c2r_3d(dg->N, dg->N, dg->N, dg->fbox,
+                                   dg->box, dg->comm, FFTW_ESTIMATE);
+#endif
 
     /* Execute the Fourier transform and normalize */
     fft_execute(c2r_mpi);
     fft_normalize_c2r_dg(dg);
 
     /* Destroy the plan */
+#ifdef SINGLE_PRECISION_FFTW
+    fftwf_destroy_plan(c2r_mpi);
+#else
     fftw_destroy_plan(c2r_mpi);
+#endif
 
     /* Flip the trigger for bookkeeping */
     dg->momentum_space = 0;
