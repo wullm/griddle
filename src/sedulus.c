@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &ics_timer);
 
         /* Allocate distributed memory arrays (one complex & one real) */
-        alloc_local_grid(&lpt_potential, N, boxlen, MPI_COMM_WORLD);
+        alloc_local_grid_with_buffers(&lpt_potential, N, boxlen, buffer_width, MPI_COMM_WORLD);
 
         /* Generate LPT potential grid */
         generate_potential_grid(&lpt_potential, &seed, pars.FixedModes,
@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
         struct distributed_grid lpt_potential_2;
         alloc_local_grid(&temp1, N, boxlen, MPI_COMM_WORLD);
         alloc_local_grid(&temp2, N, boxlen, MPI_COMM_WORLD);
-        alloc_local_grid(&lpt_potential_2, N, boxlen, MPI_COMM_WORLD);
+        alloc_local_grid_with_buffers(&lpt_potential_2, N, boxlen, buffer_width, MPI_COMM_WORLD);
 
         /* Generate the 2LPT potential grid */
         generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2, &ptdat,
@@ -198,8 +198,6 @@ int main(int argc, char *argv[]) {
         timer_stop(rank, &ics_timer, "Generating the 2LPT potential took ");
 
         /* Create buffers for the LPT potentials */
-        alloc_local_buffers(&lpt_potential, buffer_width);
-        alloc_local_buffers(&lpt_potential_2, buffer_width);
         create_local_buffers(&lpt_potential);
         create_local_buffers(&lpt_potential_2);
 

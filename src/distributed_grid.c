@@ -88,14 +88,15 @@ int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double box
 int free_local_grid(struct distributed_grid *dg) {
     free_local_real_grid(dg);
     free_local_complex_grid(dg);
-    if (dg->buffer_width > 0) {
-        free_local_buffers(dg);
-    }
     return 0;
 }
 
 int free_local_real_grid(struct distributed_grid *dg) {
-    fftw_free(dg->box);
+    if (dg->buffer_width > 0) {
+        fftw_free(dg->buffered_box);
+    } else {
+        fftw_free(dg->box);
+    }
     return 0;
 }
 
