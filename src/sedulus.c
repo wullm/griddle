@@ -258,19 +258,17 @@ int main(int argc, char *argv[]) {
     alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
     mass.momentum_space = 0;
 
-    /* Timer */
-    struct timepair exchange_timer;
-    timer_start(rank, &exchange_timer);
+    if (MPI_Rank_Count > 1) {
+        /* Timer */
+        struct timepair exchange_timer;
+        timer_start(rank, &exchange_timer);
 
-    exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
+        exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
 
-    /* Timer */
-    timer_stop(rank, &exchange_timer, "Exchanging particles took ");
+        /* Timer */
+        timer_stop(rank, &exchange_timer, "Exchanging particles took ");
+    }
     message(rank, "\n");
-
-
-    /* Create buffers for the mass grid */
-    // alloc_local_buffers(&mass, buffer_width);
 
     /* First mass deposition */
     if (MPI_Rank_Count == 1) {
@@ -509,8 +507,6 @@ int main(int argc, char *argv[]) {
             timer_stop(rank, &run_timer, "Exchanging particles took ");
         }
 
-        message(rank, "Computing the gravitational potential.\n");
-
         /* Initiate mass deposition */
         if (MPI_Rank_Count == 1) {
             mass_deposition_single(&mass, particles, local_partnum);
@@ -521,11 +517,13 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &run_timer, "Computing mass density took ");
 
-        /* Merge the buffers with the main grid */
-        add_local_buffers(&mass);
+        if (MPI_Rank_Count > 1) {
+            /* Merge the buffers with the main grid */
+            add_local_buffers(&mass);
 
-        /* Timer */
-        timer_stop(rank, &run_timer, "Communicating buffers took ");
+            /* Timer */
+            timer_stop(rank, &run_timer, "Communicating buffers took ");
+        }
 
         /* Re-compute the gravitational potential */
         compute_potential(&mass, &pcs);
@@ -533,13 +531,13 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &run_timer, "Computing the potential took ");
 
-        /* Copy buffers and communicate them to the neighbour ranks */
-        create_local_buffers(&mass);
+        if (MPI_Rank_Count > 1) {
+            /* Copy buffers and communicate them to the neighbour ranks */
+            create_local_buffers(&mass);
 
-        /* Timer */
-        timer_stop(rank, &run_timer, "Communicating buffers took ");
-
-        message(rank, "Computing particle kicks.\n");
+            /* Timer */
+            timer_stop(rank, &run_timer, "Communicating buffers took ");
+        }
 
         /* Integrate the particles */
         for (long long i = 0; i < local_partnum; i++) {
