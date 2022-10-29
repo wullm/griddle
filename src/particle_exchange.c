@@ -29,8 +29,10 @@
 #include "../include/particle_exchange.h"
 #include "../include/message.h"
 
-/* Exchange particles between MPI ranks */
-int exchange_particles(struct particle *parts, double boxlen,
+#define DIV_CEIL(a, b) (((a) / (b)) + (((a) % (b)) > 0 ? 1 : 0))
+
+/* Exchange particles between MPI ranks (Ng = N_grid != N_particle) */
+int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
                        long long int *num_localpart, long long int max_partnum,
                        int iteration,
                        long long int received_left,
@@ -45,6 +47,10 @@ int exchange_particles(struct particle *parts, double boxlen,
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
     MPI_Rank_Half = MPI_Rank_Count / 2;
+
+    /* Determine how the grid (of size Ng^3) is distributed over the ranks */
+    long long int block_size = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
+    double grid_factor = Ng / boxlen;
 
     /* Is there anything to do? */
     if (MPI_Rank_Count <= 1) {
@@ -64,7 +70,7 @@ int exchange_particles(struct particle *parts, double boxlen,
         for (long long i = 0; i < *num_localpart; i++) {
             struct particle *p = &parts[i];
 
-            int home_rank = (int) ((p->x[0] / boxlen) * MPI_Rank_Count);
+            int home_rank = ((long long int) (p->x[0] * grid_factor)) / block_size;
             p->rank = home_rank;
 
             /* Decide whether the particle should be sent left or right */
@@ -258,7 +264,7 @@ int exchange_particles(struct particle *parts, double boxlen,
         /* This should always happen within MPI_Rank_Count / 2 iterations */
         assert(iteration < MPI_Rank_Count + 1);
 
-        exchange_particles(parts, boxlen, num_localpart, max_partnum, iteration, receive_from_left, receive_from_right);
+        exchange_particles(parts, boxlen, Ng, num_localpart, max_partnum, iteration, receive_from_left, receive_from_right);
     }
 
     return 0;

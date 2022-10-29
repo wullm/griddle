@@ -104,22 +104,12 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     const double boxlen = dgrid->boxlen;
     const double cell_factor = N / boxlen;
     const double cell_factor_3 = cell_factor * cell_factor * cell_factor;
-    double total_mass = 0;
 
     /* Empty the grid */
-    for (int i = dgrid->X0; i < dgrid->X0 + dgrid->NX; i++) {
+    for (int i = 0; i < dgrid->NX + 2 * dgrid->buffer_width; i++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
-                dgrid->box[row_major_dg(i, j, k, dgrid)] = 0;
-            }
-        }
-    }
-    /* Empty the buffers */
-    for (int i = 0; i < dgrid->buffer_width; i++) {
-        for (int j = 0; j < N; j++) {
-            for (int k = 0; k < N; k++) {
-                dgrid->buffer_left[row_major(i, j, k, N)] = 0;
-                dgrid->buffer_right[row_major(i, j, k, N)] = 0;
+                dgrid->buffered_box[i*dgrid->Ny*dgrid->Nz + j*dgrid->Nz + k] = 0;
             }
         }
     }
@@ -127,57 +117,43 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *part = &parts[i];
 
-        double X = part->x[0] / (boxlen/N);
-        double Y = part->x[1] / (boxlen/N);
-        double Z = part->x[2] / (boxlen/N);
+        double X = part->x[0] * cell_factor;
+        double Y = part->x[1] * cell_factor;
+        double Z = part->x[2] * cell_factor;
 
-        double M = part->m;
+        double M = part->m * cell_factor_3;
 
         /* Neutrino delta-f weighting */
         if (part->type == 6) {
             M *= part->w;
         }
 
-        total_mass += M;
+        /* The particles coordinates must be wrapped here! */
+        int iX = (int) X;
+        int iY = (int) Y;
+        int iZ = (int) Z;
 
-        int iX = (int) floor(X);
-        int iY = (int) floor(Y);
-        int iZ = (int) floor(Z);
+        if (iX < dgrid->X0 || iX > dgrid->X0 + dgrid->NX) {
+            printf("particle on the wrong rank %d %ld %ld\n", iX, dgrid->X0, dgrid->X0 + dgrid->NX);
+        }
 
-        /* The search window with respect to the top-left-upper corner */
-        int lookLftX = (int) floor((X-iX) - 1);
-        int lookRgtX = (int) floor((X-iX) + 1);
-        int lookLftY = (int) floor((Y-iY) - 1);
-        int lookRgtY = (int) floor((Y-iY) + 1);
-        int lookLftZ = (int) floor((Z-iZ) - 1);
-        int lookRgtZ = (int) floor((Z-iZ) + 1);
+        /* Displacements from grid corner */
+        double dx = X - iX;
+        double dy = Y - iY;
+        double dz = Z - iZ;
+        double tx = 1.0 - dx;
+        double ty = 1.0 - dy;
+        double tz = 1.0 - dz;
 
-        /* Do the mass assignment */
-        for (int x=lookLftX; x<=lookRgtX; x++) {
-            for (int y=lookLftY; y<=lookRgtY; y++) {
-                for (int z=lookLftZ; z<=lookRgtZ; z++) {
-                    int ii = iX + x;
-                    int jj = iY + y;
-                    int kk = iZ + z;
-
-                    double xx = fabs(X - ii);
-                    double yy = fabs(Y - jj);
-                    double zz = fabs(Z - kk);
-
-                    double part_x = xx < 1.0 ? (1.0 - xx) : 0.;
-                    double part_y = yy < 1.0 ? (1.0 - yy) : 0.;
-                    double part_z = zz < 1.0 ? (1.0 - zz) : 0.;
-
-                    if (ii < dgrid->X0) {
-                        dgrid->buffer_left[row_major_dg_buffer_left(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
-                    } else if (ii >= dgrid->X0 + dgrid->NX) {
-                        dgrid->buffer_right[row_major_dg_buffer_right(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
-                    } else {
-                        dgrid->box[row_major_dg2(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
-                    }
-				}
-			}
-		}
+        /* Deposit the mass over the nearest 8 cells */
+        dgrid->buffered_box[row_major_dg3(iX, iY, iZ, dgrid)] += M * tx * ty * tz;
+        dgrid->buffered_box[row_major_dg3(iX+1, iY, iZ, dgrid)] += M * dx * ty * tz;
+        dgrid->buffered_box[row_major_dg3(iX, iY+1, iZ, dgrid)] += M * tx * dy * tz;
+        dgrid->buffered_box[row_major_dg3(iX, iY, iZ+1, dgrid)] += M * tx * ty * dz;
+        dgrid->buffered_box[row_major_dg3(iX+1, iY+1, iZ, dgrid)] += M * dx * dy * tz;
+        dgrid->buffered_box[row_major_dg3(iX+1, iY, iZ+1, dgrid)] += M * dx * ty * dz;
+        dgrid->buffered_box[row_major_dg3(iX, iY+1, iZ+1, dgrid)] += M * tx * dy * dz;
+        dgrid->buffered_box[row_major_dg3(iX+1, iY+1, iZ+1, dgrid)] += M * dx * dy * dz;
     }
 
     return 0;

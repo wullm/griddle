@@ -247,21 +247,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Timer */
-    struct timeval time_sort_e1;
-    gettimeofday(&time_sort_e1, NULL);
-
-    exchange_particles(particles, boxlen, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
-
-    /* Timer */
-    struct timeval time_sort_e2;
-    gettimeofday(&time_sort_e2, NULL);
-    message(rank, "Exchanging particles took %.5f s\n",
-                           ((time_sort_e2.tv_sec - time_sort_e1.tv_sec) * 1000000
-                           + time_sort_e2.tv_usec - time_sort_e1.tv_usec)/1e6);
-
-    message(rank, "\n");
-
     /* Set velocities to zero when running with COLA */
     if (pars.WithCOLA) {
         for (long long i = 0; i < local_partnum; i++) {
@@ -275,16 +260,40 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    /* Make sure that particle coordinates are wrapped */
+    for (long long i = 0; i < local_partnum; i++) {
+        struct particle *p = &particles[i];
+        p->x[0] = fwrap(p->x[0], boxlen);
+        p->x[1] = fwrap(p->x[1], boxlen);
+        p->x[2] = fwrap(p->x[2], boxlen);
+    }
+
     /* The gravity mesh can be a different size than the particle lattice */
     long int M = pars.MeshGridSize;
 
     /* Allocate distributed memory arrays for the gravity mesh */
     struct distributed_grid mass;
-    alloc_local_grid(&mass, M, boxlen, MPI_COMM_WORLD);
+    alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
     mass.momentum_space = 0;
 
+    /* Timer */
+    struct timeval time_sort_e1;
+    gettimeofday(&time_sort_e1, NULL);
+
+    exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
+
+    /* Timer */
+    struct timeval time_sort_e2;
+    gettimeofday(&time_sort_e2, NULL);
+    message(rank, "Exchanging particles took %.5f s\n",
+                           ((time_sort_e2.tv_sec - time_sort_e1.tv_sec) * 1000000
+                           + time_sort_e2.tv_usec - time_sort_e1.tv_usec)/1e6);
+
+    message(rank, "\n");
+
+
     /* Create buffers for the mass grid */
-    alloc_local_buffers(&mass, buffer_width);
+    // alloc_local_buffers(&mass, buffer_width);
 
     /* First mass deposition */
     if (MPI_Rank_Count == 1) {
@@ -336,6 +345,7 @@ int main(int argc, char *argv[]) {
     /* Check if there should be an output at the start */
     if (output_list[0] == a_begin) {
         exportSnapshot(&pars, &us, particles, 0, a_begin, N, local_partnum);
+        last_output++;
     }
 
     /* Start at the beginning */
@@ -525,7 +535,7 @@ int main(int argc, char *argv[]) {
             struct timeval time_sort_0;
             gettimeofday(&time_sort_0, NULL);
 
-            exchange_particles(particles, boxlen, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
+            exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
 
             /* Timer */
             struct timeval time_sort_1;

@@ -32,6 +32,10 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
     dg->N = N;
     dg->boxlen = boxlen;
 
+    dg->Nx = N;
+    dg->Ny = N;
+    dg->Nz = 2*(N/2+1);
+
     /* Allocate memory for the complex and real arrays */
     dg->fbox = fftw_alloc_complex(dg->local_size);
     dg->box = fftw_alloc_real(2*dg->local_size);
@@ -41,6 +45,42 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
 
     /* By default, we do not allocate buffers */
     dg->buffer_width = 0;
+
+    return 0;
+}
+
+int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double boxlen, int buffer_width, MPI_Comm comm) {
+    /* Determine the size of the local portion */
+    dg->local_size = fftw_mpi_local_size_3d(N, N, N/2+1, comm, &dg->NX, &dg->X0);
+
+    /* Also account for the buffers */
+    dg->local_real_size = 2 * dg->local_size + 2 * buffer_width * N * (2 * (N/2+1));
+
+    /* Store a reference to the communicator */
+    dg->comm = comm;
+
+    /* Store basic attributes */
+    dg->N = N;
+    dg->boxlen = boxlen;
+
+    dg->Nx = N;
+    dg->Ny = N;
+    dg->Nz = 2*(N/2+1);
+
+    /* Allocate memory for the complex and real arrays */
+    dg->fbox = fftw_alloc_complex(dg->local_size);
+    dg->buffered_box = fftw_alloc_real(dg->local_real_size);
+    dg->box = dg->buffered_box + buffer_width * N * (2 * (N/2+1));
+
+    /* Pointers to the start of the left and right buffers */
+    dg->buffer_left = dg->buffered_box;
+    dg->buffer_right = dg->buffered_box + (dg->NX + buffer_width) * dg->Ny * dg->Nz;
+
+    /* This flag will be flipped each time we do a Fourier transform */
+    dg->momentum_space = 0;
+
+    /* By default, we do not allocate buffers */
+    dg->buffer_width = buffer_width;
 
     return 0;
 }

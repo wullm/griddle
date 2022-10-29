@@ -26,20 +26,22 @@
 static inline double safeNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
 
-    if (i < dg->X0) {
-        return dg->buffer_left[row_major_dg_buffer_left(i, j, k, dg)];
-    } else if (i >= dg->X0 + dg->NX) {
-        return dg->buffer_right[row_major_dg_buffer_right(i, j, k, dg)];
-    } else {
-        return dg->box[row_major_dg2(i, j, k, dg)];
-    }
+    // if (i < dg->X0) {
+    //     return dg->buffer_left[row_major_dg_buffer_left(i, j, k, dg)];
+    // } else if (i >= dg->X0 + dg->NX) {
+    //     return dg->buffer_right[row_major_dg_buffer_right(i, j, k, dg)];
+    // } else {
+    //     return dg->box[row_major_dg2(i, j, k, dg)];
+    // }
+
+    return dg->buffered_box[row_major_dg3(i, j, k, dg)];
 
 }
 
 /* Direct nearest grid point interpolation */
 static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
-    return dg->box[row_major_dg2(i, j, k, dg)];
+    return dg->buffered_box[row_major_dg3(i, j, k, dg)];
 }
 
 /* Direct cloud in cell interpolation */
@@ -150,48 +152,25 @@ void accelCIC(const struct distributed_grid *dg, double *x, double *a) {
     double ty = 1.0 - dy;
     double tz = 1.0 - dz;
 
-    if (iX < dg->X0 + 4 || iX > dg->X0 + dg->NX - 4) {
-        a[0] = 0.0;
-        a[0] -= safeCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-        a[0] += safeCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[0] -= safeCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[0] += safeCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-        a[0] *= fac_over_12;
+    a[0] = 0.0;
+    a[0] -= fastCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+    a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    a[0] += fastCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+    a[0] *= fac_over_12;
 
-        a[1] = 0.0;
-        a[1] -= safeCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
-        a[1] += safeCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[1] -= safeCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[1] += safeCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
-        a[1] *= fac_over_12;
+    a[1] = 0.0;
+    a[1] -= fastCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
+    a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    a[1] += fastCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
+    a[1] *= fac_over_12;
 
-        a[2] = 0.0;
-        a[2] -= safeCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
-        a[2] += safeCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
-        a[2] -= safeCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
-        a[2] += safeCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
-        a[2] *= fac_over_12;
-    } else {
-        a[0] = 0.0;
-        a[0] -= fastCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-        a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[0] += fastCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-        a[0] *= fac_over_12;
-
-        a[1] = 0.0;
-        a[1] -= fastCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
-        a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-        a[1] += fastCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
-        a[1] *= fac_over_12;
-
-        a[2] = 0.0;
-        a[2] -= fastCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
-        a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
-        a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
-        a[2] += fastCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
-        a[2] *= fac_over_12;
-    }
+    a[2] = 0.0;
+    a[2] -= fastCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
+    a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
+    a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
+    a[2] += fastCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
+    a[2] *= fac_over_12;
 
 }

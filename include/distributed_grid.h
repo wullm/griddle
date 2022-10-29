@@ -23,7 +23,7 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 
-#define DEFAULT_BUFFER_WIDTH 4
+#define DEFAULT_BUFFER_WIDTH 3
 
 #define wrap(i,N) ((i)%(N)+(N))%(N)
 #define fwrap(x,L) fmod(fmod((x),(L))+(L),(L))
@@ -36,14 +36,20 @@ struct distributed_grid {
     MPI_Comm comm;
     char momentum_space; //track whether we are in momentum space
 
+    int Nx; // for the full real-space grid
+    int Ny; // for the full real-space grid
+    int Nz; // for the full real-space grid
+
     /* Local attributes */
     long int NX;
     long int X0;
     long int local_size; //number of complex elements = NX * N * (N/2 + 1)
+    long int local_real_size;
 
     /* Local portions of the complex and real arrays */
     fftw_complex *fbox;
     double *box;
+    double *buffered_box;
 
     /* Additional buffers on the left and right (real only) */
     double *buffer_left;
@@ -67,6 +73,7 @@ struct distributed_grid {
 };
 
 int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm comm);
+int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double boxlen, int buffer_width, MPI_Comm comm);
 int free_local_grid(struct distributed_grid *dg);
 int free_local_real_grid(struct distributed_grid *dg);
 int free_local_complex_grid(struct distributed_grid *dg);
@@ -78,13 +85,13 @@ int add_local_buffers(struct distributed_grid *dg);
 
 static inline long long int row_major_dg(int i, int j, int k, const struct distributed_grid *dg) {
     /* Wrap global coordinates */
-    i = wrap(i,dg->N);
-    j = wrap(j,dg->N);
-    k = wrap(k,dg->N + 2); //padding
+    i = wrap(i,dg->Nx);
+    j = wrap(j,dg->Ny);
+    k = wrap(k,dg->Nz); //padding
 
     /* Map to local slice (no out of bounds handling) */
     i = i - dg->X0;
-    return (long long int) i*dg->N*(dg->N+2) + j*(dg->N+2) + k;
+    return (long long int) i*dg->Ny*dg->Nz + j*dg->Nz + k;
 }
 
 static inline long long int row_major_dg2(int i, int j, int k, const struct distributed_grid *dg) {
@@ -95,29 +102,40 @@ static inline long long int row_major_dg2(int i, int j, int k, const struct dist
 
     /* Map to local slice (no out of bounds handling) */
     i = i - dg->X0;
-    return (long long int) i*dg->N*(dg->N+2) + j*(dg->N+2) + k;
+    return (long long int) i*dg->Ny*dg->Nz + j*dg->Ny + k;
 }
 
-static inline long long int row_major_dg_buffer_left(int i, int j, int k, const struct distributed_grid *dg) {
-    /* Wrap global coordinates */
-    //i = wrap(i,dg->N);
-    j = wrap(j,dg->N);
-    k = wrap(k,dg->N);
-
-    /* Map to local slice (no out of bounds handling) */
-    i = i - dg->X0 + dg->buffer_width;
-    return (long long int) i*dg->N*(dg->N) + j*(dg->N) + k;
-}
-
-static inline long long int row_major_dg_buffer_right(int i, int j, int k, const struct distributed_grid *dg) {
+static inline long long int row_major_dg3(int i, int j, int k, const struct distributed_grid *dg) {
     /* Wrap global coordinates */
     // i = wrap(i,dg->N);
     j = wrap(j,dg->N);
     k = wrap(k,dg->N);
 
     /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0 + dg->buffer_width;
+    return (long long int) i*dg->Ny*dg->Nz + j*dg->Ny + k;
+}
+
+static inline long long int row_major_dg_buffer_left(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Wrap global coordinates */
+    //i = wrap(i,dg->N);
+    j = wrap(j,dg->Ny);
+    k = wrap(k,dg->N);
+
+    /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0 + dg->buffer_width;
+    return (long long int) i*dg->Ny*dg->N + j*dg->N + k;
+}
+
+static inline long long int row_major_dg_buffer_right(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Wrap global coordinates */
+    // i = wrap(i,dg->N);
+    j = wrap(j,dg->Ny);
+    k = wrap(k,dg->N);
+
+    /* Map to local slice (no out of bounds handling) */
     i = i - dg->X0 - dg->NX;
-    return (long long int) i*dg->N*(dg->N) + j*(dg->N) + k;
+    return (long long int) i*dg->Ny*dg->N + j*dg->N + k;
 }
 
 static inline long long int row_major_half_dg(int i, int j, int k, const struct distributed_grid *dg) {
