@@ -51,6 +51,14 @@ int main(int argc, char *argv[]) {
         message(rank, "     ___) |  __/ (_| | |_| | | |_| \\__ \\  \n");
         message(rank, "    |____/ \\___|\\__,_|\\__,_|_|\\__,_|___/\n");
         message(rank, "\n");
+        message(rank, "# GIT branch: %s\n", GIT_BRANCH);
+        message(rank, "# GIT commit: %s\n", GIT_COMMIT);
+        message(rank, "# GIT message: %s\n", GIT_MESSAGE);
+        message(rank, "# GIT date: %s\n", GIT_DATE);
+        message(rank, "# GIT status:\n");
+        message(rank, "\n");
+        message(rank, "%s\n", GIT_STATUS);
+        message(rank, "\n");
         if (argc == 1) {
             printf("No parameter file specified.\n");
             return 0;

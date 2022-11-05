@@ -17,28 +17,13 @@
  *
  ******************************************************************************/
 
-#ifndef SEDULUS_H
-#define SEDULUS_H
+#ifndef GITVERSION_H
+#define GITVERSION_H
 
-#include "message.h"
-#include "params.h"
-#include "units.h"
-#include "cosmology.h"
-#include "strooklat.h"
-#include "grid_io.h"
-#include "random.h"
-#include "fermi_dirac.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "fft_kernels.h"
-#include "gaussian_field.h"
-#include "perturb_data.h"
-#include "initial_conditions.h"
-#include "particle.h"
-#include "particle_exchange.h"
-#include "mesh_grav.h"
-#include "mass_deposit.h"
-#include "snap_io.h"
-#include "git_version.h"
+#define GIT_COMMIT "GIT_COMMIT"
+#define GIT_BRANCH "GIT_BRANCH"
+#define GIT_DATE "GIT_DATE"
+#define GIT_MESSAGE "GIT_MESSAGE"
+#define GIT_STATUS "GIT_STATUS"
 
 #endif

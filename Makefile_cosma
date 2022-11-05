@@ -26,6 +26,7 @@ OBJECTS = lib/*.o
 all:
 	make minIni
 	mkdir -p lib
+	./git_version.sh
 	$(GCC) src/params.c -c -o lib/params.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/units.c -c -o lib/units.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/grid_io.c -c -o lib/grid_io.o $(INCLUDES) $(CFLAGS)
