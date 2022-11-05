@@ -227,13 +227,13 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Make sure that particle coordinates are wrapped */
-    for (long long i = 0; i < local_partnum; i++) {
-        struct particle *p = &particles[i];
-        p->x[0] = fwrap(p->x[0], boxlen);
-        p->x[1] = fwrap(p->x[1], boxlen);
-        p->x[2] = fwrap(p->x[2], boxlen);
-    }
+    // /* Make sure that particle coordinates are wrapped */
+    // for (long long i = 0; i < local_partnum; i++) {
+    //     struct particle *p = &particles[i];
+    //     p->x[0] = fwrap(p->x[0], boxlen);
+    //     p->x[1] = fwrap(p->x[1], boxlen);
+    //     p->x[2] = fwrap(p->x[2], boxlen);
+    // }
 
     /* The gravity mesh can be a different size than the particle lattice */
     long int M = pars.MeshGridSize;
@@ -308,6 +308,10 @@ int main(int argc, char *argv[]) {
         last_output++;
     }
 
+    /* Position factors */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+    const double int_to_pos_fac = 1.0 / pos_to_int_fac;
+
     /* Start at the beginning */
     double a = a_begin;
 
@@ -359,13 +363,18 @@ int main(int argc, char *argv[]) {
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
+            /* Convert integer positions to floating points */
+            double x[3] = {p->x[0] * int_to_pos_fac,
+                           p->x[1] * int_to_pos_fac,
+                           p->x[2] * int_to_pos_fac};
+
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             if (ITER == 1) {
                 if (MPI_Rank_Count == 1) {
-                    accelCIC_single(&mass, p->x, acc);
+                    accelCIC_single(&mass, x, acc);
                 } else {
-                    accelCIC(&mass, p->x, acc);
+                    accelCIC(&mass, x, acc);
                 }
             } else {
                 acc[0] = p->a[0];
@@ -401,14 +410,19 @@ int main(int argc, char *argv[]) {
             }
 
             /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
-            p->x[0] += p->v[0] * drift_dtau * rel_drift;
-            p->x[1] += p->v[1] * drift_dtau * rel_drift;
-            p->x[2] += p->v[2] * drift_dtau * rel_drift;
+            x[0] += p->v[0] * drift_dtau * rel_drift;
+            x[1] += p->v[1] * drift_dtau * rel_drift;
+            x[2] += p->v[2] * drift_dtau * rel_drift;
+
+            /* Convert positions to integers (wrapping automatic by overflow) */
+            p->x[0] = x[0] * pos_to_int_fac;
+            p->x[1] = x[1] * pos_to_int_fac;
+            p->x[2] = x[2] * pos_to_int_fac;
 
             /* Wrap particles in the periodic domain */
-            p->x[0] = fwrap(p->x[0], boxlen);
-            p->x[1] = fwrap(p->x[1], boxlen);
-            p->x[2] = fwrap(p->x[2], boxlen);
+            // p->x[0] = fwrap(p->x[0], boxlen);
+            // p->x[1] = fwrap(p->x[1], boxlen);
+            // p->x[2] = fwrap(p->x[2], boxlen);
         }
 
         /* Timer */
@@ -459,12 +473,17 @@ int main(int argc, char *argv[]) {
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
+            /* Convert integer positions to floating points */
+            double x[3] = {p->x[0] * int_to_pos_fac,
+                           p->x[1] * int_to_pos_fac,
+                           p->x[2] * int_to_pos_fac};
+
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             if (MPI_Rank_Count == 1) {
-                accelCIC_single(&mass, p->x, acc);
+                accelCIC_single(&mass, x, acc);
             } else {
-                accelCIC(&mass, p->x, acc);
+                accelCIC(&mass, x, acc);
             }
 
             p->a[0] = acc[0];

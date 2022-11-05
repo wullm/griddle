@@ -105,6 +105,10 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     const double cell_factor = N / boxlen;
     const double cell_factor_3 = cell_factor * cell_factor * cell_factor;
 
+    /* Position factors */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+    const double int_to_pos_fac = 1.0 / pos_to_int_fac;
+
     /* Empty the grid */
     for (int i = 0; i < dgrid->NX + 2 * dgrid->buffer_width; i++) {
         for (int j = 0; j < N; j++) {
@@ -117,9 +121,9 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *part = &parts[i];
 
-        double X = part->x[0] * cell_factor;
-        double Y = part->x[1] * cell_factor;
-        double Z = part->x[2] * cell_factor;
+        double X = part->x[0] * int_to_pos_fac * cell_factor;
+        double Y = part->x[1] * int_to_pos_fac * cell_factor;
+        double Z = part->x[2] * int_to_pos_fac * cell_factor;
 
         double M = part->m * cell_factor_3;
 

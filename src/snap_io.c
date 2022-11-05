@@ -212,6 +212,11 @@ int exportSnapshot(struct params *pars, struct units *us,
         H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
         H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
 
+        /* Position factors */
+        const double boxlen = pars->BoxLength;
+        const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+        const double int_to_pos_fac = 1.0 / pos_to_int_fac;
+
         /* Unpack the remaining particle data into contiguous arrays */
         double *coords = malloc(3 * local_parts_per_type[t] * sizeof(double));
         double *vels = malloc(3 * local_parts_per_type[t] * sizeof(double));
@@ -220,9 +225,9 @@ int exportSnapshot(struct params *pars, struct units *us,
         double *weights;
         for (long long i = 0; i < local_parts_per_type[t]; i++) {
             /* Unpack the coordinates */
-            coords[i * 3 + 0] = particles[i + local_first_of_type[t]].x[0];
-            coords[i * 3 + 1] = particles[i + local_first_of_type[t]].x[1];
-            coords[i * 3 + 2] = particles[i + local_first_of_type[t]].x[2];
+            coords[i * 3 + 0] = particles[i + local_first_of_type[t]].x[0] * int_to_pos_fac;
+            coords[i * 3 + 1] = particles[i + local_first_of_type[t]].x[1] * int_to_pos_fac;
+            coords[i * 3 + 2] = particles[i + local_first_of_type[t]].x[2] * int_to_pos_fac;
             /* Convert internal velocities to peculiar velocities */
             vels[i * 3 + 0] = particles[i + local_first_of_type[t]].v[0] / a;
             vels[i * 3 + 1] = particles[i + local_first_of_type[t]].v[1] / a;
@@ -454,11 +459,23 @@ int readSnapshot(struct params *pars, struct units *us,
     hid_t h_file = H5Fopen(fname, H5F_ACC_RDONLY, prop_faxs);
     H5Pclose(prop_faxs);
 
+    /* Open the header group */
+    hid_t h_grp = H5Gopen(h_file, "Header", H5P_DEFAULT);
+
+    /* Read the BoxSize attribute */
+    double boxlen = 0.;
+    hid_t h_attr = H5Aopen(h_grp, "k_size", H5P_DEFAULT);
+    H5Aread(h_attr, H5T_NATIVE_DOUBLE, &boxlen);
+    H5Aclose(h_attr);
+
+    /* Close the header group */
+    H5Gclose(h_grp);
+
     /* The ExportName */
     const char *ExportName = "PartType1"; // cdm
 
     /* Open the particle group */
-    hid_t h_grp = H5Gopen(h_file, ExportName, H5P_DEFAULT);
+    h_grp = H5Gopen(h_file, ExportName, H5P_DEFAULT);
 
     /* Open the coordinates dataset */
     hid_t h_dat = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
@@ -537,11 +554,14 @@ int readSnapshot(struct params *pars, struct units *us,
      H5Sclose(h_space);
      H5Dclose(h_dat);
 
+     /* Position factors */
+     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
     /* Transfer the coordinate array to the particles */
     for (int i = 0; i < local_partnum; i++) {
-        particles[i].x[0] = coord_data[i * 3 + 0];
-        particles[i].x[1] = coord_data[i * 3 + 1];
-        particles[i].x[2] = coord_data[i * 3 + 2];
+        particles[i].x[0] = coord_data[i * 3 + 0] * pos_to_int_fac;
+        particles[i].x[1] = coord_data[i * 3 + 1] * pos_to_int_fac;
+        particles[i].x[2] = coord_data[i * 3 + 2] * pos_to_int_fac;
     }
 
     free(coord_data);

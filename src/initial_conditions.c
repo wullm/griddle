@@ -74,7 +74,7 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     fft_c2r_dg(dgrid);
 
     /* Export the GRF */
-    writeFieldFile_dg(dgrid, "grid.hdf5");
+    // writeFieldFile_dg(dgrid, "grid.hdf5");
 
     return 0;
 }
@@ -219,6 +219,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double Omega_m = ptpars->Omega_m;
     const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
 
+    /* Position factors */
+    const double grid_fac = boxlen / N;
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
     /* Generate a particle lattice */
     for (int i = X0; i < X0+NX; i++) {
         for (int j = 0; j < N; j++) {
@@ -226,36 +230,41 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 struct particle *part = &parts[(i-X0) * N * N + j * N + k];
                 part->id = (long long int) i * N * N + j * N + k;
 
-                part->x[0] = i * boxlen / N;
-                part->x[1] = j * boxlen / N;
-                part->x[2] = k * boxlen / N;
-                part->v[0] = 0.;
-                part->v[1] = 0.;
-                part->v[2] = 0.;
+                /* Regular grid positions */
+                double x[3] = {i * grid_fac,
+                               j * grid_fac,
+                               k * grid_fac};
 
                 /* Zel'dovich displacement */
                 double dx[3] = {0,0,0};
                 if (MPI_Rank_Count == 1) {
-                    accelCIC_single(lpt_potential, part->x, dx);
+                    accelCIC_single(lpt_potential, x, dx);
                 } else {
-                    accelCIC(lpt_potential, part->x, dx);
+                    accelCIC(lpt_potential, x, dx);
                 }
 
                 /* The 2LPT displacement */
                 double dx2[3] = {0,0,0};
                 if (MPI_Rank_Count == 1) {
-                    accelCIC_single(lpt_potential_2, part->x, dx2);
+                    accelCIC_single(lpt_potential_2, x, dx2);
                 } else {
-                    accelCIC(lpt_potential_2, part->x, dx2);
+                    accelCIC(lpt_potential_2, x, dx2);
                 }
 
                 /* CDM */
                 part->type = 1;
 
-                part->x[0] -= dx[0] + factor_2lpt * dx2[0];
-                part->x[1] -= dx[1] + factor_2lpt * dx2[1];
-                part->x[2] -= dx[2] + factor_2lpt * dx2[1];
+                /* Add the displacements */
+                x[0] -=  dx[0] + factor_2lpt * dx2[0];
+                x[1] -=  dx[1] + factor_2lpt * dx2[1];
+                x[2] -=  dx[2] + factor_2lpt * dx2[2];
 
+                /* Convert positions to integers */
+                part->x[0] = pos_to_int_fac * x[0];
+                part->x[1] = pos_to_int_fac * x[1];
+                part->x[2] = pos_to_int_fac * x[2];
+
+                /* Set the velocities */
                 part->v[0] -= vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
                 part->v[1] -= vel_fact * (dx[1] + factor_vel_2lpt * dx2[1]);
                 part->v[2] -= vel_fact * (dx[2] + factor_vel_2lpt * dx2[2]);
@@ -296,6 +305,9 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
     /* Fermi-Dirac conversion factor kb*T to km/s */
     const double fac = (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann) / pcs->ElectronVolt;
 
+    /* Position factors */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
     /* Generate neutrinos */
     for (long long i = 0; i < local_neutrino_num; i++) {
         struct particle *part = &parts[local_partnum + i];
@@ -305,9 +317,9 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
         part->type = 6;
 
         /* Sample a position uniformly in the box (on this rank) */
-        part->x[0] = (sampleUniform(state) * NX + X0) * boxlen / N;
-        part->x[1] = sampleUniform(state) * boxlen;
-        part->x[2] = sampleUniform(state) * boxlen;
+        part->x[0] = pos_to_int_fac * (sampleUniform(state) * NX + X0) * boxlen / N;
+        part->x[1] = pos_to_int_fac * sampleUniform(state) * boxlen;
+        part->x[2] = pos_to_int_fac * sampleUniform(state) * boxlen;
 
         /* Sample a neutrino species */
         int species = (int)(part->id % cosmo->N_nu);

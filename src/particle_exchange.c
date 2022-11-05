@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 #include <mpi.h>
 
 #include <assert.h>
@@ -48,14 +49,17 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
     MPI_Rank_Half = MPI_Rank_Count / 2;
 
-    /* Determine how the grid (of size Ng^3) is distributed over the ranks */
-    long long int block_size = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
-    double grid_factor = Ng / boxlen;
-
     /* Is there anything to do? */
     if (MPI_Rank_Count <= 1) {
         return 0;
     }
+
+    /* Determine the width of the local slice of the grid (of size Ng^3) */
+    long long int block_width = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
+
+    /* Position factors */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+    const IntPosType int_block_width = block_width * (boxlen / Ng * pos_to_int_fac);
 
     /* The MPI ranks are placed along a periodic ring */
     int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
@@ -70,7 +74,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         for (long long i = 0; i < *num_localpart; i++) {
             struct particle *p = &parts[i];
 
-            int home_rank = ((long long int) (p->x[0] * grid_factor)) / block_size;
+            int home_rank = p->x[0] / int_block_width;
             p->rank = home_rank;
 
             /* Decide whether the particle should be sent left or right */

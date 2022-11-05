@@ -20,11 +20,25 @@
 #ifndef PARTICLE_H
 #define PARTICLE_H
 
+#include <stdint.h>
+
+#define SINGLE_PRECISION_POSITIONS
+
+#ifdef SINGLE_PRECISION_POSITIONS
+#define POSITION_BITS 32
+typedef uint32_t IntPosType;
+#else
+#define POSITION_BITS 64
+typedef uint64_t IntPosType;
+#endif
+
 struct particle {
     /* Basic particle data */
     long long int id;
     char type;
-    double x[3];
+
+    /* Position, velocity, mass */
+    IntPosType x[3];
     double v[3];
     double m;
 
@@ -34,6 +48,7 @@ struct particle {
     /* Most recent accelerations */
     double a[3];
 
+    /* Communication data */
     int rank;
     int exchange_dir;
 };
