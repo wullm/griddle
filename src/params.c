@@ -44,7 +44,6 @@ int readParams(struct params *pars, const char *fname) {
      pars->ScaleFactorBegin = ini_getd("Simulation", "ScaleFactorBegin", 0.03125, fname);
      pars->ScaleFactorEnd = ini_getd("Simulation", "ScaleFactorEnd", 1.0, fname);
      pars->ScaleFactorStep = ini_getd("Simulation", "ScaleFactorStep", 0.05, fname);
-     pars->WithCOLA = ini_getl("Simulation", "WithCOLA", 0, fname);
 
      /* Read strings */
      int len = DEFAULT_STRING_LENGTH;

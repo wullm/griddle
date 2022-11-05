@@ -252,13 +252,6 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 /* CDM */
                 part->type = 1;
 
-                part->dx[0] = dx[0];
-                part->dx[1] = dx[1];
-                part->dx[2] = dx[2];
-                part->dx2[0] = dx2[0];
-                part->dx2[1] = dx2[1];
-                part->dx2[2] = dx2[2];
-
                 part->x[0] -= dx[0] + factor_2lpt * dx2[0];
                 part->x[1] -= dx[1] + factor_2lpt * dx2[1];
                 part->x[2] -= dx[2] + factor_2lpt * dx2[1];

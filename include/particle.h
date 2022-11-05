@@ -31,10 +31,6 @@ struct particle {
     /* Neutrino delta-f weight */
     double w;
 
-    /* LPT displacements (first- and second-order) */
-    double dx[3];
-    double dx2[3];
-
     /* Most recent accelerations */
     double a[3];
 
