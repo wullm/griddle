@@ -35,8 +35,7 @@
 /* Exchange particles between MPI ranks (Ng = N_grid != N_particle) */
 int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
                        long long int *num_localpart, long long int max_partnum,
-                       int iteration,
-                       long long int received_left,
+                       int iteration, long long int received_left,
                        long long int received_right) {
 
     /* Timer */
@@ -54,12 +53,12 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         return 0;
     }
 
-    /* Determine the width of the local slice of the grid (of size Ng^3) */
-    long long int block_width = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
+    /* Determine the maximum width of any local slice of the grid (of size Ng^3) */
+    long long int max_block_width = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
-    const IntPosType int_block_width = block_width * (boxlen / Ng * pos_to_int_fac);
+    const IntPosType int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
 
     /* The MPI ranks are placed along a periodic ring */
     int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
@@ -81,7 +80,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             int dist = home_rank - rank;
             if (dist == 0) {
                 p->exchange_dir = 0;
-            } else if ((dist < 0 && abs(dist) < MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
+            } else if ((dist < 0 && abs(dist) <= MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
                 num_send_left++;
                 p->exchange_dir = -1;
             } else {
@@ -194,7 +193,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         int dist = p->rank - rank;
         if (dist == 0) {
             p->exchange_dir = 0;
-        } else if ((dist < 0 && abs(dist) < MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
+        } else if ((dist < 0 && abs(dist) <= MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
             p->exchange_dir = -1;
             remaining_foreign_parts++;
         } else {
@@ -209,7 +208,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         int dist = p->rank - rank;
         if (dist == 0) {
             p->exchange_dir = 0;
-        } else if ((dist < 0 && abs(dist) < MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
+        } else if ((dist < 0 && abs(dist) <= MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
             p->exchange_dir = -1;
             remaining_foreign_parts++;
         } else {
