@@ -154,7 +154,7 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
 
     /* Fourier transform to configuration space */
     fft_c2r_dg(dgrid_2lpt);
-    fft_r2c_dg(dgrid);
+    fft_c2r_dg(dgrid);
 
     /* Export the 2LPT potential grid */
     // writeFieldFile_dg(dgrid_2lpt, "2lpt.hdf5");
