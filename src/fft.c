@@ -65,37 +65,24 @@ int fft_normalize_c2r(double *arr, int N, double boxlen) {
  * to momentum space */
 int fft_normalize_r2c_dg(struct distributed_grid *dg) {
     const int N = dg->N;
-    const int NX = dg->NX;
-    const int X0 = dg->X0;
     const double boxlen = dg->boxlen;
     const double boxvol = boxlen*boxlen*boxlen;
-    for (int x=X0; x<X0 + NX; x++) {
-        for (int y=0; y<N; y++) {
-            for (int z=0; z<=N/2; z++) {
-                dg->fbox[row_major_half_dg(x, y, z, dg)] *= boxvol/((long long)N*N*N);
-            }
-        }
+    const double fac = boxvol / ((double) N * N * N);
+    for (long int i = 0; i < dg->local_complex_size; i++) {
+        dg->fbox[i] *= fac;
     }
-
     return 0;
 }
 
 /* (Distributed grid version) Normalize the real array after transforming
  * to configuration space */
 int fft_normalize_c2r_dg(struct distributed_grid *dg) {
-    const int N = dg->N;
-    const int NX = dg->NX;
-    const int X0 = dg->X0;
     const double boxlen = dg->boxlen;
     const double boxvol = boxlen*boxlen*boxlen;
-    for (int x=X0; x<X0 + NX; x++) {
-        for (int y=0; y<N; y++) {
-            for (int z=0; z<N+2; z++) {
-                dg->box[row_major_dg(x, y, z, dg)] /= boxvol;
-            }
-        }
+    const double inv_boxvol = 1.0 / boxvol;
+    for (long int i = 0; i < dg->local_real_size; i++) {
+        dg->box[i] *= inv_boxvol;
     }
-
     return 0;
 }
 
@@ -271,8 +258,7 @@ int fft_apply_kernel_dg(struct distributed_grid *dg_write,
                 compute(&the_kernel);
 
                 /* Apply the kernel */
-                const long long int id = row_major_half_dg(x, y, z, dg_write);
-                dg_write->fbox[id] = dg_read->fbox[id] * the_kernel.kern;
+                *point_row_major_half_dg(x, y, z, dg_write) = *point_row_major_half_dg(x, y, z, dg_read) * the_kernel.kern;
             }
         }
     }

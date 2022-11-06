@@ -45,13 +45,6 @@ static inline long long int wrap_ll(long long int i, long long int N) {
     return ((i)%(N)+(N))%(N);
 }
 
-static inline long long int row_major_dist(long long i, long long j, long long k, long long N, long long NX) {
-    i = wrap_ll(i,NX);
-    j = wrap_ll(j,N);
-    k = wrap_ll(k,N);
-    return (long long int) i*N*N + j*N + k;
-}
-
 static inline long long int row_major(long long i, long long j, long long k, long long N) {
     i = wrap_ll(i,N);
     j = wrap_ll(j,N);
@@ -64,15 +57,6 @@ static inline long long int row_major_half(long long i, long long j, long long k
     j = wrap(j,N);
     k = wrap(k,N/2+1);
     return (long long int) i*(N/2+1)*N + j*(N/2+1) + k;
-}
-
-/* Distributed grids are padded, which is bug prone, so we should find an
- * good solution. */
-static inline long long int row_major_padded(long long i, long long j, long long k, long long N) {
-    i = wrap(i,N);
-    j = wrap(j,N);
-    k = wrap(k,N+2);
-    return (long long int) i*N*(N+2) + j*(N+2) + k;
 }
 
 static inline void inverse_row_major(long long int id, int *x, int *y, int *z, int N) {

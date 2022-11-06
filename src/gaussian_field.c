@@ -60,9 +60,9 @@ int generate_complex_grf(struct distributed_grid *dg, rng_state *state) {
                 if (k > 0) {
                     double a = sampleNorm(state) * factor;
                     double b = sampleNorm(state) * factor;
-                    dg->fbox[row_major_half_dg(x,y,z,dg)] = a + b * I;
+                    *point_row_major_half_dg(x,y,z,dg) = a + b * I;
                 } else {
-                    dg->fbox[row_major_half_dg(x,y,z,dg)] = 0;
+                    *point_row_major_half_dg(x,y,z,dg) = 0;
                 }
             }
         }
@@ -146,9 +146,9 @@ int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed) {
                     double delta = sqrt(-log(ampl)) * factor * ngenic_factor;
                     double a = delta * sin (phase);
                     double b = delta * cos (phase);
-                    dg->fbox[row_major_half_dg(x,y,z,dg)] = a + b * I;
+                    *point_row_major_half_dg(x,y,z,dg) = a + b * I;
                 } else {
-                    dg->fbox[row_major_half_dg(x,y,z,dg)] = 0;
+                    *point_row_major_half_dg(x,y,z,dg) = 0;
                 }
             }
         }
@@ -197,8 +197,7 @@ int enforce_hermiticity(struct distributed_grid *dg) {
         /* Fill our local slice of the plane */
         for (int x=X0; x<X0 + NX; x++) {
             for (int y=0; y<N; y++) {
-                long long int id = row_major_half_dg(x, y, z, dg);
-                our_slice[(x-X0)*N + y] = dg->fbox[id];
+                our_slice[(x-X0)*N + y] = *point_row_major_half_dg(x,y,z,dg);
             }
         }
 
@@ -217,14 +216,12 @@ int enforce_hermiticity(struct distributed_grid *dg) {
                 int invy = (y > 0) ? N - y : 0;
                 int invz = (z > 0) ? N - z : 0; //maps 0->0 and (N/2)->(N/2)
 
-                long long int id = row_major_half_dg(x,y,z,dg);
-
                 /* If the point maps to itself, throw away the imaginary part */
                 if (invx == x && invy == y && invz == z) {
-                    dg->fbox[id] = creal(dg->fbox[id]);
+                    *point_row_major_half_dg(x,y,z,dg) = creal(*point_row_major_half_dg(x,y,z,dg));
                 } else {
                     /* Otherwise, set it to the conjugate of its mirror point */
-                    dg->fbox[id] = conj(full_plane[invx*N + invy]);
+                    *point_row_major_half_dg(x,y,z,dg) = conj(full_plane[invx*N + invy]);
                 }
             }
         }
@@ -257,8 +254,8 @@ int fix_and_pairing(struct distributed_grid *dg, char fixing, char inverting) {
         for (int y = 0; y < N; y++) {
             for (int z = 0; z <= N/2; z++) {
                 /* The current real and imaginary parts and absolute value */
-                double a = creal(dg->fbox[row_major_half_dg(x,y,z,dg)]);
-                double b = cimag(dg->fbox[row_major_half_dg(x,y,z,dg)]);
+                double a = creal(*point_row_major_half_dg(x,y,z,dg));
+                double b = cimag(*point_row_major_half_dg(x,y,z,dg));
                 double norm = hypot(a, b);
 
                 /* Ignore the constant DC mode */
@@ -267,7 +264,7 @@ int fix_and_pairing(struct distributed_grid *dg, char fixing, char inverting) {
                     double invert_factor = (inverting ? -1.0 : 1.0);
                     double fact = fixing_factor * invert_factor;
 
-                    dg->fbox[row_major_half_dg(x,y,z,dg)] = (a + b * I) * fact;
+                    *point_row_major_half_dg(x,y,z,dg) = (a + b * I) * fact;
                 }
             }
         }

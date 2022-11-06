@@ -91,21 +91,12 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
     /* Execute the Fourier transform and normalize */
     fft_r2c_dg(dgrid);
 
-    /* The complex array is N * N * (N/2 + 1), locally we have NX * N * (N/2 + 1) */
-    const int N = dgrid->N;
-    const int NX = dgrid->NX;
-    const int X0 = dgrid->X0; //the local portion starts at X = X0
-
     /* We calculate derivatives using FFT kernels */
     const kernel_func derivatives[] = {kernel_dx, kernel_dy, kernel_dz};
 
     /* Erase the current data */
-    for (int x = X0; x < X0 + NX; x++) {
-        for (int y = 0; y < N; y++) {
-            for (int z = 0; z < N; z++) {
-                dgrid_2lpt->box[row_major_dg(x, y, z, dgrid)] = 0.;
-            }
-        }
+    for (long int i = 0; i < dgrid_2lpt->local_real_size; i++) {
+        dgrid_2lpt->box[i] = 0.;
     }
 
     /* First add the (xx)*(yy) + (xx)*(zz) + (yy)*(zz) terms */
@@ -129,13 +120,8 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
         fft_c2r_dg(temp2);
 
         /* Add the product (=convolution) to the intermediate answer */
-        for (int x = X0; x < X0 + NX; x++) {
-            for (int y = 0; y < N; y++) {
-                for (int z = 0; z < N; z++) {
-                    long long int id = row_major_dg(x, y, z, dgrid);
-                    dgrid_2lpt->box[id] += temp1->box[id] * temp1->box[id];
-                }
-            }
+        for (long int i = 0; i < dgrid_2lpt->local_real_size; i++) {
+            dgrid_2lpt->box[i] += temp1->box[i] * temp1->box[i];
         }
     }
 
@@ -151,13 +137,8 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
         fft_c2r_dg(temp1);
 
         /* Subtract the square (=convolution) from the intermediate answer */
-        for (int x = X0; x < X0 + NX; x++) {
-            for (int y = 0; y < N; y++) {
-                for (int z = 0; z < N; z++) {
-                    long long int id = row_major_dg(x, y, z, dgrid);
-                    dgrid_2lpt->box[id] -= temp1->box[id] * temp1->box[id];
-                }
-            }
+        for (long int i = 0; i < dgrid_2lpt->local_real_size; i++) {
+            dgrid_2lpt->box[i] -= temp1->box[i] * temp1->box[i];
         }
     }
 

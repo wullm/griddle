@@ -36,12 +36,8 @@ int mass_deposition_single(struct distributed_grid *dgrid,
     double total_mass = 0;
 
     /* Empty the grid */
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            for (int k = 0; k < N; k++) {
-                dgrid->box[row_major_dg(i, j, k, dgrid)] = 0;
-            }
-        }
+    for (long int i = 0; i < dgrid->local_real_size; i++) {
+        dgrid->box[i] = 0;
     }
 
     for (long long i = 0; i < local_partnum; i++) {
@@ -88,7 +84,7 @@ int mass_deposition_single(struct distributed_grid *dgrid,
                     double part_y = yy < 1.0 ? (1.0 - yy) : 0.;
                     double part_z = zz < 1.0 ? (1.0 - zz) : 0.;
 
-                    dgrid->box[row_major_dg2(ii, jj, kk, dgrid)] += M * cell_factor_3 * (part_x*part_y*part_z);
+                    *point_row_major_dg(ii, jj, kk, dgrid) += M * cell_factor_3 * (part_x*part_y*part_z);
 				}
 			}
 		}
@@ -150,14 +146,15 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         double tz = 1.0 - dz;
 
         /* Deposit the mass over the nearest 8 cells */
-        dgrid->buffered_box[row_major_dg3(iX, iY, iZ, dgrid)] += M * tx * ty * tz;
-        dgrid->buffered_box[row_major_dg3(iX+1, iY, iZ, dgrid)] += M * dx * ty * tz;
-        dgrid->buffered_box[row_major_dg3(iX, iY+1, iZ, dgrid)] += M * tx * dy * tz;
-        dgrid->buffered_box[row_major_dg3(iX, iY, iZ+1, dgrid)] += M * tx * ty * dz;
-        dgrid->buffered_box[row_major_dg3(iX+1, iY+1, iZ, dgrid)] += M * dx * dy * tz;
-        dgrid->buffered_box[row_major_dg3(iX+1, iY, iZ+1, dgrid)] += M * dx * ty * dz;
-        dgrid->buffered_box[row_major_dg3(iX, iY+1, iZ+1, dgrid)] += M * tx * dy * dz;
-        dgrid->buffered_box[row_major_dg3(iX+1, iY+1, iZ+1, dgrid)] += M * dx * dy * dz;
+        *point_row_major_dg_buffered(iX, iY, iZ, dgrid) += M * tx * ty * tz;
+        *point_row_major_dg_buffered(iX+1, iY, iZ, dgrid) += M * dx * ty * tz;
+        *point_row_major_dg_buffered(iX, iY+1, iZ, dgrid) += M * tx * dy * tz;
+        *point_row_major_dg_buffered(iX, iY, iZ+1, dgrid) += M * tx * ty * dz;
+        *point_row_major_dg_buffered(iX+1, iY+1, iZ, dgrid) += M * dx * dy * tz;
+        *point_row_major_dg_buffered(iX+1, iY, iZ+1, dgrid) += M * dx * ty * dz;
+        *point_row_major_dg_buffered(iX, iY+1, iZ+1, dgrid) += M * tx * dy * dz;
+        *point_row_major_dg_buffered(iX+1, iY+1, iZ+1, dgrid) += M * dx * dy * dz;
+        *point_row_major_dg_buffered(iX+1, iY+1, iZ+1, dgrid) += M * dx * dy * dz;
     }
 
     return 0;

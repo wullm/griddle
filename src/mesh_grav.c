@@ -23,40 +23,9 @@
 #include "../include/fft.h"
 
 /* Direct nearest grid point interpolation */
-static inline double safeNGP(const struct distributed_grid *dg, int N, int i,
-                             int j, int k) {
-
-    // if (i < dg->X0) {
-    //     return dg->buffer_left[row_major_dg_buffer_left(i, j, k, dg)];
-    // } else if (i >= dg->X0 + dg->NX) {
-    //     return dg->buffer_right[row_major_dg_buffer_right(i, j, k, dg)];
-    // } else {
-    //     return dg->box[row_major_dg2(i, j, k, dg)];
-    // }
-
-    return dg->buffered_box[row_major_dg3(i, j, k, dg)];
-
-}
-
-/* Direct nearest grid point interpolation */
 static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
-    return dg->buffered_box[row_major_dg3(i, j, k, dg)];
-}
-
-/* Direct cloud in cell interpolation */
-static inline double safeCIC(const struct distributed_grid *dg, int N, int i,
-                             int j, int k, double dx, double dy, double dz,
-                             double tx, double ty, double tz) {
-
-    return safeNGP(dg, N, i, j, k) * tx * ty * tz
-         + safeNGP(dg, N, i, j, k+1) * tx * ty * dz
-         + safeNGP(dg, N, i, j+1, k) * tx * dy * tz
-         + safeNGP(dg, N, i, j+1, k+1) * tx * dy * dz
-         + safeNGP(dg, N, i+1, j, k) * dx * ty * tz
-         + safeNGP(dg, N, i+1, j, k+1) * dx * ty * dz
-         + safeNGP(dg, N, i+1, j+1, k) * dx * dy * tz
-         + safeNGP(dg, N, i+1, j+1, k+1) * dx * dy * dz;
+    return *point_row_major_dg_buffered(i, j, k, dg);
 }
 
 /* Direct cloud in cell interpolation */

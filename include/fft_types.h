@@ -28,12 +28,14 @@ typedef fftwf_complex GridComplexType;
 typedef fftwf_plan FourierPlanType;
 #define MPI_GRID_TYPE MPI_FLOAT
 #define MPI_COMPLEX_GRID_TYPE MPI_COMPLEX
+#define H5T_GRID_TYPE H5T_NATIVE_FLOAT
 #else
 typedef double GridFloatType;
 typedef fftw_complex GridComplexType;
 typedef fftw_plan FourierPlanType;
 #define MPI_GRID_TYPE MPI_DOUBLE
 #define MPI_COMPLEX_GRID_TYPE MPI_DOUBLE_COMPLEX
+#define H5T_GRID_TYPE H5T_NATIVE_DOUBLE
 #endif
 
 #endif

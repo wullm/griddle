@@ -291,7 +291,7 @@ int writeFieldFile_dg(struct distributed_grid *dg, const char *fname) {
     hid_t h_fspace = H5Screate_simple(frank, fdims, NULL);
 
     /* Create the dataset for the field */
-    hid_t h_data = H5Dcreate(h_grp, "Field", H5T_NATIVE_DOUBLE, h_fspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t h_data = H5Dcreate(h_grp, "Field", H5T_GRID_TYPE, h_fspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     /* The chunk in question */
     const hsize_t chunk_rank = 3;
@@ -305,7 +305,7 @@ int writeFieldFile_dg(struct distributed_grid *dg, const char *fname) {
     H5Sselect_hyperslab(h_fspace, H5S_SELECT_SET, chunk_offset, NULL, chunk_dims, NULL);
 
     /* Write the data */
-    hid_t h_err = H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_memspace, h_fspace, H5P_DEFAULT, dg->box);
+    hid_t h_err = H5Dwrite(h_data, H5T_GRID_TYPE, h_memspace, h_fspace, H5P_DEFAULT, dg->box);
     if (h_err < 0) {
         printf("Error: writing chunk of hdf5 data.\n");
         return 1;
