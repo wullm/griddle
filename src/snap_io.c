@@ -511,7 +511,7 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Read the BoxSize attribute */
     double boxlen = 0.;
-    hid_t h_attr = H5Aopen(h_grp, "k_size", H5P_DEFAULT);
+    hid_t h_attr = H5Aopen(h_grp, "BoxSize", H5P_DEFAULT);
     H5Aread(h_attr, H5T_NATIVE_DOUBLE, &boxlen);
     H5Aclose(h_attr);
 
