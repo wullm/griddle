@@ -403,11 +403,11 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            // if (MPI_Rank_Count == 1) {
-            //     accelCIC_single(&mass, x, acc);
-            // } else {
+            if (MPI_Rank_Count == 1) {
+                accelCIC_single(&mass, x, acc);
+            } else {
                 accelCIC(&mass, x, acc);
-            // }
+            }
 
 #ifdef WITH_ACCELERATIONS
             p->a[0] = acc[0];
@@ -420,7 +420,6 @@ int main(int argc, char *argv[]) {
             p->v[1] += acc[1] * kick_dtau;
             p->v[2] += acc[2] * kick_dtau;
 
-#ifdef SPECIAL_NEUTRINO_STEP
             /* Relativistic drift correction */
             double rel_drift = relativistic_drift(p, &pcs, a);
 
@@ -440,12 +439,6 @@ int main(int argc, char *argv[]) {
             x[0] += p->v[0] * drift_dtau * rel_drift;
             x[1] += p->v[1] * drift_dtau * rel_drift;
             x[2] += p->v[2] * drift_dtau * rel_drift;
-#else
-            /* Execute drift */
-            x[0] += p->v[0] * drift_dtau;
-            x[1] += p->v[1] * drift_dtau;
-            x[2] += p->v[2] * drift_dtau;
-#endif
 
             /* Convert positions to integers (wrapping automatic by overflow) */
             p->x[0] = x[0] * pos_to_int_fac;
