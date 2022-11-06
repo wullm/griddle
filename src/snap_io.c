@@ -26,6 +26,7 @@
 #include <math.h>
 #include "../include/snap_io.h"
 #include "../include/relativity.h"
+#include "../include/git_version.h"
 
 /* The current limit of for parallel HDF5 writes is 2GB */
 #define HDF5_PARALLEL_LIMIT 2147000000LL
@@ -362,6 +363,30 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
     int num_files_per_snapshot = 1;
     h_attr = H5Acreate1(h_grp, "NumFilesPerSnapshot", H5T_NATIVE_INT, h_aspace, H5P_DEFAULT);
     H5Awrite(h_attr, H5T_NATIVE_INT, &num_files_per_snapshot);
+    H5Aclose(h_attr);
+
+    /* Variable-length string type */
+    hid_t vlstrtype = H5Tcopy(H5T_C_S1);
+
+    /* Write git versioning information to the snapshot */
+    H5Tset_size(vlstrtype, strlen(GIT_BRANCH));
+    h_attr = H5Acreate1(h_grp, "GitBranch", vlstrtype, h_aspace, H5P_DEFAULT);
+    H5Awrite(h_attr, vlstrtype, GIT_BRANCH);
+    H5Aclose(h_attr);
+
+    H5Tset_size(vlstrtype, strlen(GIT_COMMIT));
+    h_attr = H5Acreate1(h_grp, "GitCommit", vlstrtype, h_aspace, H5P_DEFAULT);
+    H5Awrite(h_attr, vlstrtype, GIT_COMMIT);
+    H5Aclose(h_attr);
+
+    H5Tset_size(vlstrtype, strlen(GIT_MESSAGE));
+    h_attr = H5Acreate1(h_grp, "GitMessage", vlstrtype, h_aspace, H5P_DEFAULT);
+    H5Awrite(h_attr, vlstrtype, GIT_MESSAGE);
+    H5Aclose(h_attr);
+
+    H5Tset_size(vlstrtype, strlen(GIT_DATE));
+    h_attr = H5Acreate1(h_grp, "GitDate", vlstrtype, h_aspace, H5P_DEFAULT);
+    H5Awrite(h_attr, vlstrtype, GIT_DATE);
     H5Aclose(h_attr);
 
     /* Change dataspace dimensions to particle type attributes */
