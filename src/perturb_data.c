@@ -44,8 +44,19 @@ int findTitle(char **titles, const char *title, int ntitles) {
 
 /* Read the perturbation data from file */
 int readPerturb(struct units *us, struct perturb_data *pt, char *fname) {
-    /* Open the hdf5 file (file exists error handled by HDF5) */
-    hid_t h_file = H5Fopen(fname, H5F_ACC_RDONLY, H5P_DEFAULT);
+
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* Property list for MPI file access */
+    hid_t prop_faxs = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_mpio(prop_faxs, MPI_COMM_WORLD, MPI_INFO_NULL);
+
+    /* Open the hdf5 file */
+    hid_t h_file = H5Fopen(fname, H5F_ACC_RDONLY, prop_faxs);
+    H5Pclose(prop_faxs);
 
     /* Open the Header group */
     hid_t h_grp = H5Gopen(h_file, "Header", H5P_DEFAULT);
