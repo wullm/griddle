@@ -58,7 +58,8 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
-    const IntPosType int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
+    const double int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
+    const double int_to_rank_fac = 1.0 / int_block_width;
 
     /* The MPI ranks are placed along a periodic ring */
     int rank_left = (rank == 0) ? MPI_Rank_Count - 1 : rank - 1;
@@ -73,7 +74,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         for (long long i = 0; i < *num_localpart; i++) {
             struct particle *p = &parts[i];
 
-            int home_rank = p->x[0] / int_block_width;
+            int home_rank = p->x[0] * int_to_rank_fac;
             p->rank = home_rank;
 
             /* Decide whether the particle should be sent left or right */

@@ -135,7 +135,7 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         int iY = (int) Y;
         int iZ = (int) Z;
 
-        if (iX < dgrid->X0 || iX > dgrid->X0 + dgrid->NX) {
+        if (iX < dgrid->X0 || iX >= dgrid->X0 + dgrid->NX) {
             printf("particle on the wrong rank %d %ld %ld\n", iX, dgrid->X0, dgrid->X0 + dgrid->NX);
         }
 

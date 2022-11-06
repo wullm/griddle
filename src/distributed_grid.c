@@ -84,7 +84,7 @@ int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double box
     /* This flag will be flipped each time we do a Fourier transform */
     dg->momentum_space = 0;
 
-    /* By default, we do not allocate buffers */
+    /* We did allocate buffers */
     dg->buffer_width = buffer_width;
 
     return 0;
