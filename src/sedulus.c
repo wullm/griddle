@@ -253,14 +253,14 @@ int main(int argc, char *argv[]) {
     FourierPlanType r2c_mpi, c2r_mpi;
 #ifdef SINGLE_PRECISION_FFTW
     r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
-                                        MPI_COMM_WORLD, FFTW_MEASURE);
+                                        MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_OUT);
     c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
-                                        MPI_COMM_WORLD, FFTW_MEASURE);
+                                        MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_IN);
 #else
     r2c_mpi = fftw_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
-                                       MPI_COMM_WORLD, FFTW_MEASURE);
+                                       MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_OUT);
     c2r_mpi = fftw_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
-                                       MPI_COMM_WORLD, FFTW_MEASURE);
+                                       MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_IN);
 #endif
 
     /* Timer */

@@ -178,9 +178,8 @@ int compute_potential(struct distributed_grid *dgrid,
     /* Carry out the forward Fourier transform */
     // fft_r2c_dg(dgrid);
 
-    /* Execute the Fourier transform and normalize */
+    /* Execute the Fourier transform */
     fft_execute(r2c);
-    // fft_normalize_r2c_dg(dgrid);
 
     timer_stop(rank, &run_timer, "FFT (1) took ");
 
@@ -204,12 +203,12 @@ int compute_potential(struct distributed_grid *dgrid,
 
     timer_stop(rank, &run_timer, "Creating look-up table took ");
 
-    /* Apply the inverse Poisson kernel */
+    /* Apply the inverse Poisson kernel (note that x and y are now transposed) */
     GridFloatType cx, cy, cz, ctot;
-    for (int x = X0; x < X0 + NX; x++) {
+    for (int x = 0; x < N; x++) {
         cx = cos_tab[x];
 
-        for (int y = 0; y < N; y++) {
+        for (int y = X0; y < X0 + NX; y++) {
             cy = cos_tab[y];
 
             for (int z = 0; z <= N / 2; z++) {
@@ -219,7 +218,7 @@ int compute_potential(struct distributed_grid *dgrid,
 
                 if (ctot != 3.0) {
                     GridComplexType kern = overall_fac / (ctot - 3.0);
-                    *point_row_major_half_dg_nobounds(x, y, z, dgrid) *= kern;
+                    *point_row_major_half_dg_transposed(x, y, z, dgrid) *= kern;
                 }
             }
         }
@@ -233,9 +232,8 @@ int compute_potential(struct distributed_grid *dgrid,
     /* Carry out the backward Fourier transform */
     // fft_c2r_dg(dgrid);
 
-    /* Execute the Fourier transform and normalize */
+    /* Execute the Fourier transform */
     fft_execute(c2r);
-    // fft_normalize_c2r_dg(dgrid);
 
     timer_stop(rank, &run_timer, "FFT (2) took ");
 
