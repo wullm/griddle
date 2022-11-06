@@ -17,6 +17,7 @@
  *
  ******************************************************************************/
 
+#include <complex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -24,6 +25,7 @@
 #include "../include/mass_deposit.h"
 #include "../include/fft.h"
 #include "../include/fft_kernels.h"
+#include "../include/message.h"
 
 int mass_deposition_single(struct distributed_grid *dgrid,
                            struct particle *parts,
@@ -163,18 +165,69 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs) {
 
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* Timer */
+    struct timepair run_timer;
+    timer_start(rank, &run_timer);
+
     /* Carry out the forward Fourier transform */
     fft_r2c_dg(dgrid);
 
-    /* Apply the inverse Poisson kernel */
-    fft_apply_kernel_dg(dgrid, dgrid, kernel_inv_poisson_alt, NULL);
+    timer_stop(rank, &run_timer, "FFT (1) took ");
 
-    /* Multiply by Newton's constant */
-    double factor = -4.0 * M_PI * pcs->GravityG;
-    fft_apply_kernel_dg(dgrid, dgrid, kernel_constant, &factor);
+    /* The complex array is N * N * (N/2 + 1), locally we have NX * N * (N/2 + 1) */
+    const int N = dgrid->N;
+    const int NX = dgrid->NX;
+    const int X0 = dgrid->X0; //the local portion starts at X = X0
+    const double boxlen = dgrid->boxlen;
+    const double dk = 2 * M_PI / boxlen;
+    const double grid_fac = boxlen / N;
+    const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
+    const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor;
+
+    /* Make a look-up table for the cosines */
+    GridFloatType *cos_tab = malloc(N * sizeof(GridFloatType));
+    for (int x = 0; x < N; x++) {
+        double kx = (x > N/2) ? (x - N) * dk : x * dk;
+        cos_tab[x] = cos(kx * grid_fac);
+    }
+
+    timer_stop(rank, &run_timer, "Creating look-up table took ");
+
+    /* Apply the inverse Poisson kernel */
+    GridFloatType cx, cy, cz, ctot;
+    for (int x = X0; x < X0 + NX; x++) {
+        cx = cos_tab[x];
+
+        for (int y = 0; y < N; y++) {
+            cy = cos_tab[y];
+
+            for (int z = 0; z <= N / 2; z++) {
+                cz = cos_tab[z];
+
+                ctot = cx + cy + cz;
+
+                if (ctot != 3.0) {
+                    GridComplexType kern = overall_fac / (ctot - 3.0);
+                    *point_row_major_half_dg_nobounds(x, y, z, dgrid) *= kern;
+                }
+            }
+        }
+    }
+
+    timer_stop(rank, &run_timer, "Inverse poisson kernel took ");
+
+    /* Free the look-up table */
+    free(cos_tab);
 
     /* Carry out the backward Fourier transform */
     fft_c2r_dg(dgrid);
+
+    timer_stop(rank, &run_timer, "FFT (2) took ");
 
     return 0;
 }

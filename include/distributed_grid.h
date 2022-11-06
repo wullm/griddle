@@ -118,4 +118,10 @@ static inline GridComplexType* point_row_major_half_dg(int i, int j, int k, cons
     return &dg->fbox[i*(dg->N/2+1)*dg->N + j*(dg->N/2+1) + k];
 }
 
+static inline GridComplexType* point_row_major_half_dg_nobounds(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0;
+    return &dg->fbox[i*(dg->N/2+1)*dg->N + j*(dg->N/2+1) + k];
+}
+
 #endif
