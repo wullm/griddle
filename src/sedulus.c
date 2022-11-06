@@ -245,6 +245,27 @@ int main(int argc, char *argv[]) {
     alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
     mass.momentum_space = 0;
 
+    /* Timer */
+    struct timepair fft_plan_timer;
+    timer_start(rank, &fft_plan_timer);
+
+    /* Prepare FFT plans */
+    FourierPlanType r2c_mpi, c2r_mpi;
+#ifdef SINGLE_PRECISION_FFTW
+    r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
+                                        MPI_COMM_WORLD, FFTW_MEASURE);
+    c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
+                                        MPI_COMM_WORLD, FFTW_MEASURE);
+#else
+    r2c_mpi = fftw_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
+                                       MPI_COMM_WORLD, FFTW_MEASURE);
+    c2r_mpi = fftw_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
+                                       MPI_COMM_WORLD, FFTW_MEASURE);
+#endif
+
+    /* Timer */
+    timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
+
     if (MPI_Rank_Count > 1) {
         /* Timer */
         struct timepair exchange_timer;
@@ -360,7 +381,7 @@ int main(int argc, char *argv[]) {
         }
 
         /* Re-compute the gravitational potential */
-        compute_potential(&mass, &pcs);
+        compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi);
         timer_stop(rank, &run_timer, "Computing the potential took ");
 
         if (MPI_Rank_Count > 1) {
@@ -469,6 +490,15 @@ int main(int argc, char *argv[]) {
 
     /* Free the mass grid */
     free_local_grid(&mass);
+
+    /* Destroy FFTW plans */
+#ifdef SINGLE_PRECISION_FFTW
+    fftwf_destroy_plan(r2c_mpi);
+    fftwf_destroy_plan(c2r_mpi);
+#else
+    fftwf_destroy_plan(r2c_mpi);
+    fftwf_destroy_plan(c2r_mpi);
+#endif
 
     /* Done with MPI parallelization */
     MPI_Barrier(MPI_COMM_WORLD);

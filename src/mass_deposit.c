@@ -163,7 +163,8 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 }
 
 int compute_potential(struct distributed_grid *dgrid,
-                      struct physical_consts *pcs) {
+                      struct physical_consts *pcs, FourierPlanType r2c,
+                      FourierPlanType c2r) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -175,7 +176,11 @@ int compute_potential(struct distributed_grid *dgrid,
     timer_start(rank, &run_timer);
 
     /* Carry out the forward Fourier transform */
-    fft_r2c_dg(dgrid);
+    // fft_r2c_dg(dgrid);
+
+    /* Execute the Fourier transform and normalize */
+    fft_execute(r2c);
+    // fft_normalize_r2c_dg(dgrid);
 
     timer_stop(rank, &run_timer, "FFT (1) took ");
 
@@ -187,7 +192,8 @@ int compute_potential(struct distributed_grid *dgrid,
     const double dk = 2 * M_PI / boxlen;
     const double grid_fac = boxlen / N;
     const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
-    const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor;
+    const double fft_factor = 1.0 / ((double) N * N * N);
+    const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
 
     /* Make a look-up table for the cosines */
     GridFloatType *cos_tab = malloc(N * sizeof(GridFloatType));
@@ -225,7 +231,11 @@ int compute_potential(struct distributed_grid *dgrid,
     free(cos_tab);
 
     /* Carry out the backward Fourier transform */
-    fft_c2r_dg(dgrid);
+    // fft_c2r_dg(dgrid);
+
+    /* Execute the Fourier transform and normalize */
+    fft_execute(c2r);
+    // fft_normalize_c2r_dg(dgrid);
 
     timer_stop(rank, &run_timer, "FFT (2) took ");
 

@@ -23,6 +23,7 @@
 #include "../include/distributed_grid.h"
 #include "../include/particle.h"
 #include "../include/units.h"
+#include "../include/fft.h"
 
 int mass_deposition_single(struct distributed_grid *dgrid,
                            struct particle *parts,
@@ -30,6 +31,7 @@ int mass_deposition_single(struct distributed_grid *dgrid,
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum);
 int compute_potential(struct distributed_grid *dgrid,
-                      struct physical_consts *pcs);
+                      struct physical_consts *pcs, FourierPlanType r2c,
+                      FourierPlanType c2r);
 
 #endif
