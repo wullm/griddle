@@ -257,25 +257,6 @@ int main(int argc, char *argv[]) {
     }
     message(rank, "\n");
 
-    /* First mass deposition */
-    if (MPI_Rank_Count == 1) {
-        mass_deposition_single(&mass, particles, local_partnum);
-    } else {
-        mass_deposition(&mass, particles, local_partnum);
-    }
-
-    /* Merge the buffers with the main grid */
-    add_local_buffers(&mass);
-
-    /* Export the GRF */
-    // writeFieldFile_dg(&mass, "ini_mass.hdf5");
-
-    /* Compute the gravitational potential */
-    compute_potential(&mass, &pcs);
-
-    /* Copy buffers and communicate them to the neighbour ranks */
-    create_local_buffers(&mass);
-
     /* Determine the snapshot output times */
     double *output_list;
     int num_outputs;
@@ -359,11 +340,36 @@ int main(int argc, char *argv[]) {
         const double fac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
 
         message(rank, "Step %d at z = %g\n", ITER, z);
-        message(rank, "Computing particle kicks and drifts.\n");
 
         /* Timer */
         struct timepair run_timer;
         timer_start(rank, &run_timer);
+
+        /* Initiate mass deposition */
+        if (MPI_Rank_Count == 1) {
+            mass_deposition_single(&mass, particles, local_partnum);
+        } else {
+            mass_deposition(&mass, particles, local_partnum);
+        }
+        timer_stop(rank, &run_timer, "Computing mass density took ");
+
+        if (MPI_Rank_Count > 1) {
+            /* Merge the buffers with the main grid */
+            add_local_buffers(&mass);
+            timer_stop(rank, &run_timer, "Communicating buffers took ");
+        }
+
+        /* Re-compute the gravitational potential */
+        compute_potential(&mass, &pcs);
+        timer_stop(rank, &run_timer, "Computing the potential took ");
+
+        if (MPI_Rank_Count > 1) {
+            /* Copy buffers and communicate them to the neighbour ranks */
+            create_local_buffers(&mass);
+            timer_stop(rank, &run_timer, "Communicating buffers took ");
+        }
+
+        message(rank, "Computing particle kicks and drifts.\n");
 
         /* Integrate the particles */
         for (long long i = 0; i < local_partnum; i++) {
@@ -443,45 +449,11 @@ int main(int argc, char *argv[]) {
             continue;
 
         if (MPI_Rank_Count > 1) {
-
             message(rank, "Starting particle exchange.\n");
-
             exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
-
             timer_stop(rank, &run_timer, "Exchanging particles took ");
         }
 
-        /* Initiate mass deposition */
-        if (MPI_Rank_Count == 1) {
-            mass_deposition_single(&mass, particles, local_partnum);
-        } else {
-            mass_deposition(&mass, particles, local_partnum);
-        }
-
-        /* Timer */
-        timer_stop(rank, &run_timer, "Computing mass density took ");
-
-        if (MPI_Rank_Count > 1) {
-            /* Merge the buffers with the main grid */
-            add_local_buffers(&mass);
-
-            /* Timer */
-            timer_stop(rank, &run_timer, "Communicating buffers took ");
-        }
-
-        /* Re-compute the gravitational potential */
-        compute_potential(&mass, &pcs);
-
-        /* Timer */
-        timer_stop(rank, &run_timer, "Computing the potential took ");
-
-        if (MPI_Rank_Count > 1) {
-            /* Copy buffers and communicate them to the neighbour ranks */
-            create_local_buffers(&mass);
-
-            /* Timer */
-            timer_stop(rank, &run_timer, "Communicating buffers took ");
-        }
 
         /* Step forward */
         a = a_next;
