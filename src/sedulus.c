@@ -61,6 +61,7 @@ int main(int argc, char *argv[]) {
         message(rank, "\n");
         message(rank, "sizeof(struct particle) = %d\n", sizeof(struct particle));
         message(rank, "sizeof(GridFloatType) = %d\n", sizeof(GridFloatType));
+        message(rank, "sizeof(GridComplexType) = %d\n", sizeof(GridComplexType));
         message(rank, "\n");
         if (argc == 1) {
             printf("No parameter file specified.\n");
@@ -245,27 +246,6 @@ int main(int argc, char *argv[]) {
     alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
     mass.momentum_space = 0;
 
-    /* Timer */
-    struct timepair fft_plan_timer;
-    timer_start(rank, &fft_plan_timer);
-
-    /* Prepare FFT plans */
-    FourierPlanType r2c_mpi, c2r_mpi;
-#ifdef SINGLE_PRECISION_FFTW
-    r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
-                                        MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_OUT);
-    c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
-                                        MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_IN);
-#else
-    r2c_mpi = fftw_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
-                                       MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_OUT);
-    c2r_mpi = fftw_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
-                                       MPI_COMM_WORLD, FFTW_MPI_TRANSPOSED_IN);
-#endif
-
-    /* Timer */
-    timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
-
     if (MPI_Rank_Count > 1) {
         /* Timer */
         struct timepair exchange_timer;
@@ -276,6 +256,35 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &exchange_timer, "Exchanging particles took ");
     }
+    message(rank, "\n");
+
+    /* Timer */
+    struct timepair fft_plan_timer;
+    timer_start(rank, &fft_plan_timer);
+
+    /* Prepare FFT plans for the gravity mesh */
+    message(rank, "Carefully planning FFTs. This may take awhile.\n");
+#ifdef USE_IN_PLACE_FFTS
+    int fftws_flag_in = FFTW_MPI_TRANSPOSED_IN;
+    int fftws_flag_out = FFTW_MPI_TRANSPOSED_OUT;
+#else
+    int fftws_flag_in = FFTW_MPI_TRANSPOSED_IN | FFTW_DESTROY_INPUT;
+    int fftws_flag_out = FFTW_MPI_TRANSPOSED_OUT | FFTW_DESTROY_INPUT;
+#endif
+#ifdef SINGLE_PRECISION_FFTW
+    FourierPlanType r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
+                                                        MPI_COMM_WORLD, fftws_flag_out);
+    FourierPlanType c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
+                                                        MPI_COMM_WORLD, fftws_flag_in);
+#else
+    FourierPlanType r2c_mpi = fftw_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
+                                                       MPI_COMM_WORLD, fftws_flag_out);
+    FourierPlanType c2r_mpi = fftw_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
+                                                       MPI_COMM_WORLD, fftws_flag_in);
+#endif
+
+    /* Timer */
+    timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
     message(rank, "\n");
 
     /* Determine the snapshot output times */

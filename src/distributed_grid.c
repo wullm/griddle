@@ -39,9 +39,16 @@ int alloc_local_grid(struct distributed_grid *dg, int N, double boxlen, MPI_Comm
     dg->Ny = N;
     dg->Nz = 2*(N/2+1); // for the real grid
 
-    /* Allocate memory for the complex and real arrays */
-    dg->fbox = fft_alloc_complex(dg->local_complex_size);
+    /* Allocate memory for the real array */
     dg->box = fft_alloc_real(dg->local_real_size);
+
+#ifdef USE_IN_PLACE_FFTS
+    /* We will use in-place transforms */
+    dg->fbox = (GridComplexType*) dg->box;
+#else
+    /* Allocate memory for the complex array */
+    dg->fbox = fft_alloc_complex(dg->local_complex_size);
+#endif
 
     /* This flag will be flipped each time we do a Fourier transform */
     dg->momentum_space = 0;
@@ -70,12 +77,18 @@ int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double box
     /* Store a reference to the communicator */
     dg->comm = comm;
 
-    /* Allocate memory for the complex and real arrays */
-    dg->fbox = fft_alloc_complex(dg->local_complex_size);
+    /* Allocate memory for the real array */
     dg->buffered_box = fft_alloc_real(dg->local_real_size_with_buffers);
-
     /* Point to where the local array actually begins (after the first buffer) */
     dg->box = dg->buffered_box + buffer_width * dg->Ny * dg->Nz;
+
+#ifdef USE_IN_PLACE_FFTS
+    /* We will use in-place transforms */
+    dg->fbox = (GridComplexType*) dg->box;
+#else
+    /* Allocate memory for the complex array */
+    dg->fbox = fft_alloc_complex(dg->local_complex_size);
+#endif
 
     /* Pointers to the start of the left and right buffers */
     dg->buffer_left = dg->buffered_box;
@@ -106,7 +119,9 @@ int free_local_real_grid(struct distributed_grid *dg) {
 }
 
 int free_local_complex_grid(struct distributed_grid *dg) {
+#ifndef USE_IN_PLACE_FFTS
     fft_free(dg->fbox);
+#endif
     return 0;
 }
 

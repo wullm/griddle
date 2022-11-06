@@ -21,6 +21,7 @@
 #define FFT_TYPES_H
 
 #define SINGLE_PRECISION_FFTW
+// #define USE_IN_PLACE_FFTS
 
 #ifdef SINGLE_PRECISION_FFTW
 typedef float GridFloatType;
