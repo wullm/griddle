@@ -22,7 +22,17 @@
 
 #include <stdint.h>
 
+#define SINGLE_PRECISION_IDS
 #define SINGLE_PRECISION_POSITIONS
+#define SINGLE_PRECISION_VELOCITIES
+
+#ifdef SINGLE_PRECISION_IDS
+#define PID_BITS 32
+typedef uint32_t IntIDType;
+#else
+#define PID_BITS 64
+typedef uint64_t IntIDType;
+#endif
 
 #ifdef SINGLE_PRECISION_POSITIONS
 #define POSITION_BITS 32
@@ -32,25 +42,33 @@ typedef uint32_t IntPosType;
 typedef uint64_t IntPosType;
 #endif
 
+#ifdef SINGLE_PRECISION_VELOCITIES
+#define VELOCITY_BITS 32
+typedef float FloatVelType;
+#else
+#define VELOCITY_BITS 64
+typedef double FloatVelType;
+#endif
+
 struct particle {
     /* Basic particle data */
-    long long int id;
-    char type;
+    IntIDType id;
 
     /* Position, velocity, mass */
     IntPosType x[3];
-    double v[3];
-    double m;
+    FloatVelType v[3];
+    float m;
 
     /* Neutrino delta-f weight */
-    double w;
-
-    /* Most recent accelerations */
-    double a[3];
+    float w;
 
     /* Communication data */
-    int rank;
-    int exchange_dir;
+    uint16_t rank;
+    int8_t exchange_dir;
+
+    /* The particle type */
+    uint8_t type;
+
 };
 
 static inline int particleSort(const void *a, const void *b) {

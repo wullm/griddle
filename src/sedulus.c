@@ -59,6 +59,9 @@ int main(int argc, char *argv[]) {
         message(rank, "\n");
         message(rank, "%s\n", GIT_STATUS);
         message(rank, "\n");
+        message(rank, "sizeof(struct particle) = %d\n", sizeof(struct particle));
+        message(rank, "sizeof(GridFloatType) = %d\n", sizeof(GridFloatType));
+        message(rank, "\n");
         if (argc == 1) {
             printf("No parameter file specified.\n");
             return 0;
@@ -139,6 +142,13 @@ int main(int argc, char *argv[]) {
         fft_mpi_local_size_3d(N_nu, N_nu, N_nu/2+1, MPI_COMM_WORLD, &NX_nu, &X0_nu);
         local_neutrino_num = NX_nu * N_nu * N_nu;
     }
+
+#ifdef SINGLE_PRECISION_IDS
+    if (N * N * N + N_nu * N_nu * N_nu > UINT32_MAX) {
+        printf("Number of particles exceeds UINT32_MAX. Please disable SINGLE_PRECISION_IDS.\n");
+        exit(1);
+    }
+#endif
 
     /* Each MPI rank stores a portion of the full 3D mesh, as well as copies
      * of the edges of its left & right neighbours, necessary for interpolation
@@ -321,38 +331,38 @@ int main(int argc, char *argv[]) {
     /* The main loop */
     for (int ITER = 0; ITER < MAX_ITER; ITER++) {
 
-        /* Determine the next scale factor */
-        double a_next;
+        /* Determine the previous and next scale factor */
+        double a_prev, a_next;
         if (ITER == 0) {
-            a_next = a; //start with a step that does nothing
+            a_prev = a;
+            a_next = a * a_factor;
         } else if (ITER < MAX_ITER - 1) {
+            a_prev = a / a_factor;
             a_next = a * a_factor;
         } else {
+            a_prev = a / a_factor;
             a_next = a_end;
         }
 
         /* Compute the current redshift and log conformal time */
         double z = 1./a - 1.;
 
-        /* Determine the half-step scale factor */
-        double a_half = sqrt(a_next * a);
+        /* Determine the adjacent half-step scale factor */
+        double a_half_prev = sqrt(a_prev * a);
+        double a_half_next = sqrt(a_next * a);
 
         /* Obtain the kick and drift time steps */
-        double kick_dtau1 = strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half) -
-                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a);
-        double kick_dtau2 = strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next) -
-                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half);
+        double kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next) -
+                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_prev);
         double drift_dtau = strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next) -
                             strooklat_interp(&spline_bg_a, ctabs.drift_factors, a);
 
         /* Conversion factor for neutrino momenta */
         const double fac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
 
-        /* Skip the particle integration during the first step */
-        if (ITER == 0)
-            continue;
-
         message(rank, "Step %d at z = %g\n", ITER, z);
+        // message(rank, "Kick %g -> %g = %g\n", ITER, a_half_prev, a_half_next, kick_dtau);
+        // message(rank, "Drift %g -> %g = %g\n", ITER, a, a_next, drift_dtau);
         message(rank, "Computing particle kicks and drifts.\n");
 
         /* Timer */
@@ -370,22 +380,16 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            if (ITER == 1) {
-                if (MPI_Rank_Count == 1) {
-                    accelCIC_single(&mass, x, acc);
-                } else {
-                    accelCIC(&mass, x, acc);
-                }
+            if (MPI_Rank_Count == 1) {
+                accelCIC_single(&mass, x, acc);
             } else {
-                acc[0] = p->a[0];
-                acc[1] = p->a[1];
-                acc[2] = p->a[2];
+                accelCIC(&mass, x, acc);
             }
 
-            /* Execute first half-kick */
-            p->v[0] += acc[0] * kick_dtau1;
-            p->v[1] += acc[1] * kick_dtau1;
-            p->v[2] += acc[2] * kick_dtau1;
+            /* Execute first kick */
+            p->v[0] += acc[0] * kick_dtau;
+            p->v[1] += acc[1] * kick_dtau;
+            p->v[2] += acc[2] * kick_dtau;
 
             /* Relativistic drift correction */
             double rel_drift = 1.0;
@@ -468,36 +472,6 @@ int main(int argc, char *argv[]) {
             /* Timer */
             timer_stop(rank, &run_timer, "Communicating buffers took ");
         }
-
-        /* Integrate the particles */
-        for (long long i = 0; i < local_partnum; i++) {
-            struct particle *p = &particles[i];
-
-            /* Convert integer positions to floating points */
-            double x[3] = {p->x[0] * int_to_pos_fac,
-                           p->x[1] * int_to_pos_fac,
-                           p->x[2] * int_to_pos_fac};
-
-            /* Obtain the acceleration by differentiating the potential */
-            double acc[3] = {0, 0, 0};
-            if (MPI_Rank_Count == 1) {
-                accelCIC_single(&mass, x, acc);
-            } else {
-                accelCIC(&mass, x, acc);
-            }
-
-            p->a[0] = acc[0];
-            p->a[1] = acc[1];
-            p->a[2] = acc[2];
-
-            /* Execute second half-kick */
-            p->v[0] += acc[0] * kick_dtau2;
-            p->v[1] += acc[1] * kick_dtau2;
-            p->v[2] += acc[2] * kick_dtau2;
-        }
-
-
-        timer_stop(rank, &run_timer, "Computing particle kicks took ");
 
         /* Should there be a snapshot output? */
         while (output_list[last_output] > a && output_list[last_output] <= a_next) {
