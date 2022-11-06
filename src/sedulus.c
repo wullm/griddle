@@ -237,14 +237,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // /* Make sure that particle coordinates are wrapped */
-    // for (long long i = 0; i < local_partnum; i++) {
-    //     struct particle *p = &particles[i];
-    //     p->x[0] = fwrap(p->x[0], boxlen);
-    //     p->x[1] = fwrap(p->x[1], boxlen);
-    //     p->x[2] = fwrap(p->x[2], boxlen);
-    // }
-
     /* The gravity mesh can be a different size than the particle lattice */
     long int M = pars.MeshGridSize;
 
@@ -287,7 +279,6 @@ int main(int argc, char *argv[]) {
     /* Determine the snapshot output times */
     double *output_list;
     int num_outputs;
-    int last_output = 0;
     parseArrayString(pars.SnapshotTimesString, &output_list, &num_outputs);
 
     if (num_outputs < 1) {
@@ -303,7 +294,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Check that the first output is after the beginning and before the end */
+    /* Check that the first output is after the beginning and the last before the end */
     if (output_list[0] < a_begin) {
         printf("The first output should be after the start of the simulation.\n");
         exit(1);
@@ -314,8 +305,15 @@ int main(int argc, char *argv[]) {
 
     /* Check if there should be an output at the start */
     if (output_list[0] == a_begin) {
-        exportSnapshot(&pars, &us, particles, 0, a_begin, N, local_partnum);
-        last_output++;
+        /* Timer */
+        struct timepair snapshot_timer;
+        timer_start(rank, &snapshot_timer);
+
+        message(rank, "Exporting a snapshot at a = %g.\n", output_list[0]);
+        exportSnapshot(&pars, &us, &pcs, particles, 0, a_begin, N, local_partnum, /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
+
+        timer_stop(rank, &snapshot_timer, "Exporting a snapshot took ");
+        message(rank, "\n");
     }
 
     /* Position factors */
@@ -361,8 +359,6 @@ int main(int argc, char *argv[]) {
         const double fac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
 
         message(rank, "Step %d at z = %g\n", ITER, z);
-        // message(rank, "Kick %g -> %g = %g\n", ITER, a_half_prev, a_half_next, kick_dtau);
-        // message(rank, "Drift %g -> %g = %g\n", ITER, a, a_next, drift_dtau);
         message(rank, "Computing particle kicks and drifts.\n");
 
         /* Timer */
@@ -386,17 +382,22 @@ int main(int argc, char *argv[]) {
                 accelCIC(&mass, x, acc);
             }
 
-            /* Execute first kick */
+#ifdef WITH_ACCELERATIONS
+            p->a[0] = acc[0];
+            p->a[1] = acc[1];
+            p->a[2] = acc[2];
+#endif
+
+            /* Execute kick */
             p->v[0] += acc[0] * kick_dtau;
             p->v[1] += acc[1] * kick_dtau;
             p->v[2] += acc[2] * kick_dtau;
 
             /* Relativistic drift correction */
-            double rel_drift = 1.0;
+            double rel_drift = relativistic_drift(p, &pcs, a);
 
-            /* Neutrino particle operations */
+            /* Delta-f weighting for neutrino variance reduction (2010.07321) */
             if (p->type == 6) {
-                /* Delta-f weighting for variance reduction (2010.07321) */
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
                 double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
                 double q = sqrt(v2) * fac * m_eV;
@@ -405,15 +406,9 @@ int main(int argc, char *argv[]) {
                 double fi = fermi_dirac_density(qi);
 
                 p->w = 1.0 - f / fi;
-
-                /* Relativistic equations of motion (2207.14256) */
-                double ac = a * pcs.SpeedOfLight;
-                double ac2 = ac * ac;
-
-                rel_drift = ac / sqrt(ac2 + v2);
             }
 
-            /* Execute drift (only one drift, so use dtau = dtau1 + dtau2) */
+            /* Execute drift */
             x[0] += p->v[0] * drift_dtau * rel_drift;
             x[1] += p->v[1] * drift_dtau * rel_drift;
             x[2] += p->v[2] * drift_dtau * rel_drift;
@@ -422,15 +417,30 @@ int main(int argc, char *argv[]) {
             p->x[0] = x[0] * pos_to_int_fac;
             p->x[1] = x[1] * pos_to_int_fac;
             p->x[2] = x[2] * pos_to_int_fac;
-
-            /* Wrap particles in the periodic domain */
-            // p->x[0] = fwrap(p->x[0], boxlen);
-            // p->x[1] = fwrap(p->x[1], boxlen);
-            // p->x[2] = fwrap(p->x[2], boxlen);
         }
 
         /* Timer */
         timer_stop(rank, &run_timer, "Evolving particles took ");
+
+        /* Should there be a snapshot output? */
+        for (int j = 0; j < num_outputs; j++) {
+            if (output_list[j] > a && output_list[j] <= a_next) {
+
+                /* Drift and kick particles to the right time */
+                double snap_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list[j]) -
+                                         strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
+                double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list[j]) -
+                                          strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+
+                message(rank, "Exporting a snapshot at a = %g.\n", output_list[j]);
+                exportSnapshot(&pars, &us, &pcs, particles, j, output_list[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
+                timer_stop(rank, &run_timer, "Exporting a snapshot took ");
+            }
+        }
+
+        /* Are we done? */
+        if (a_next == a_end)
+            continue;
 
         if (MPI_Rank_Count > 1) {
 
@@ -473,31 +483,11 @@ int main(int argc, char *argv[]) {
             timer_stop(rank, &run_timer, "Communicating buffers took ");
         }
 
-        /* Should there be a snapshot output? */
-        while (output_list[last_output] > a && output_list[last_output] <= a_next) {
-
-            message(rank, "Exporting a snapshot at a = %g.\n", output_list[last_output]);
-            exportSnapshot(&pars, &us, particles, last_output, output_list[last_output], N, local_partnum);
-            last_output++;
-
-            timer_stop(rank, &run_timer, "Exporting a snapshot took took ");
-        }
-
         /* Step forward */
         a = a_next;
 
         message(rank, "\n");
     }
-
-    // /* Initiate mass deposition */
-    // if (MPI_Rank_Count == 1) {
-    //     mass_deposition_single(&mass, particles, local_partnum);
-    // } else {
-    //     mass_deposition(&mass, particles, local_partnum);
-    // }
-
-    /* Export the GRF */
-    // writeFieldFile_dg(&mass, "final_mass.hdf5");
 
     /* Free the list with snapshot output times */
     free(output_list);

@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <math.h>
 #include "../include/snap_io.h"
+#include "../include/relativity.h"
 
 /* The current limit of for parallel HDF5 writes is 2GB */
 #define HDF5_PARALLEL_LIMIT 2147000000LL
@@ -32,8 +33,9 @@
 #define HDF5_CHUNK_SIZE 65536LL
 
 int exportSnapshot(struct params *pars, struct units *us,
-                   struct particle *particles, int output_num, double a,
-                   int N, long long int local_partnum) {
+                   struct physical_consts *pcs, struct particle *particles,
+                   int output_num, double a, int N, long long int local_partnum,
+                   double dtau_kick, double dtau_drift) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -224,17 +226,37 @@ int exportSnapshot(struct params *pars, struct units *us,
         double *masses = malloc(1 * local_parts_per_type[t] * sizeof(double));
         double *weights;
         for (long long i = 0; i < local_parts_per_type[t]; i++) {
+            struct particle *p = &particles[i + local_first_of_type[t]];
             /* Unpack the coordinates */
-            coords[i * 3 + 0] = particles[i + local_first_of_type[t]].x[0] * int_to_pos_fac;
-            coords[i * 3 + 1] = particles[i + local_first_of_type[t]].x[1] * int_to_pos_fac;
-            coords[i * 3 + 2] = particles[i + local_first_of_type[t]].x[2] * int_to_pos_fac;
+            coords[i * 3 + 0] = p->x[0] * int_to_pos_fac;
+            coords[i * 3 + 1] = p->x[1] * int_to_pos_fac;
+            coords[i * 3 + 2] = p->x[2] * int_to_pos_fac;
+            /* Unpack the velocities */
+            vels[i * 3 + 0] = p->v[0];
+            vels[i * 3 + 1] = p->v[1];
+            vels[i * 3 + 2] = p->v[2];
+            /* Drift to the right time */
+            if (dtau_drift != 0.) {
+                double rel_drift = relativistic_drift(p, pcs, a);
+                coords[i * 3 + 0] += vels[i * 3 + 0] * dtau_drift * rel_drift;
+                coords[i * 3 + 1] += vels[i * 3 + 0] * dtau_drift * rel_drift;
+                coords[i * 3 + 2] += vels[i * 3 + 0] * dtau_drift * rel_drift;
+            }
+#ifdef WITH_ACCELERATIONS
+            /* Kick to the right time */
+            if (dtau_kick != 0.) {
+                vels[i * 3 + 0] += p->a[0] * dtau_kick;
+                vels[i * 3 + 1] += p->a[1] * dtau_kick;
+                vels[i * 3 + 2] += p->a[2] * dtau_kick;
+            }
+#endif
             /* Convert internal velocities to peculiar velocities */
-            vels[i * 3 + 0] = particles[i + local_first_of_type[t]].v[0] / a;
-            vels[i * 3 + 1] = particles[i + local_first_of_type[t]].v[1] / a;
-            vels[i * 3 + 2] = particles[i + local_first_of_type[t]].v[2] / a;
+            vels[i * 3 + 0] /= a;
+            vels[i * 3 + 1] /= a;
+            vels[i * 3 + 2] /= a;
             /* Unpack the IDs and masses */
-            ids[i] = particles[i + local_first_of_type[t]].id;
-            masses[i] = particles[i + local_first_of_type[t]].m;
+            ids[i] = p->id;
+            masses[i] = p->m;
         }
 
         /* Unpack neutrino weights only for type 1 */

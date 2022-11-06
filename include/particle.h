@@ -25,6 +25,7 @@
 #define SINGLE_PRECISION_IDS
 #define SINGLE_PRECISION_POSITIONS
 #define SINGLE_PRECISION_VELOCITIES
+#define WITH_ACCELERATIONS
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
@@ -58,6 +59,11 @@ struct particle {
     IntPosType x[3];
     FloatVelType v[3];
     float m;
+
+#ifdef WITH_ACCELERATIONS
+    /* Accelerations */
+    float a[3];
+#endif
 
     /* Neutrino delta-f weight */
     float w;

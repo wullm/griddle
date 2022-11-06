@@ -40,5 +40,6 @@
 #include "mass_deposit.h"
 #include "snap_io.h"
 #include "git_version.h"
+#include "relativity.h"
 
 #endif
