@@ -45,6 +45,8 @@ int readParams(struct params *pars, const char *fname) {
      pars->ScaleFactorEnd = ini_getd("Simulation", "ScaleFactorEnd", 1.0, fname);
      pars->ScaleFactorStep = ini_getd("Simulation", "ScaleFactorStep", 0.05, fname);
 
+     pars->DerivativeOrder = ini_getl("Simulation", "DerivativeOrder", 4, fname);
+
      /* Read strings */
      int len = DEFAULT_STRING_LENGTH;
      pars->InitialConditionsFile = malloc(len);

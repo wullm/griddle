@@ -47,6 +47,7 @@ struct params {
     double ScaleFactorBegin;
     double ScaleFactorEnd;
     double ScaleFactorStep;
+    int DerivativeOrder;
 
     /* Snapshot parameters */
     char *SnapshotTimesString;

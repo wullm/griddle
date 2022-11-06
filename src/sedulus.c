@@ -403,10 +403,10 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            if (MPI_Rank_Count == 1) {
-                accelCIC_single(&mass, x, acc);
+            if (pars.DerivativeOrder == 2) {
+                accelCIC_2nd(&mass, x, acc); /* second order */
             } else {
-                accelCIC(&mass, x, acc);
+                accelCIC(&mass, x, acc); /* fourth order */
             }
 
 #ifdef WITH_ACCELERATIONS
