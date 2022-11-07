@@ -216,11 +216,25 @@ int compute_potential(struct distributed_grid *dgrid,
 
     timer_stop(rank, &run_timer, "FFT (1) took ");
 
-    /* The complex array is N * N * (N/2 + 1), locally we have NX * N * (N/2 + 1) */
+    /* The local slice of the real array is NX * N * (2*(N/2 + 1)). The x-index
+     * runs over [X0, X0 + NX]. After the FFT, the complex is array is transposed
+     * and the local slice is NY * N * (N/2 + 1), with the y-index running over
+     * [Y0, Y0 + NY]. Note that the complex array has half the size. */
     const int N = dgrid->N;
-    const int NX = dgrid->NX;
-    const int X0 = dgrid->X0; //the local portion starts at X = X0
     const int Nz_half = N/2 + 1;
+
+    /* Get the local portion of the transposed array */
+    long int NX, X0, NY, Y0;
+    fftwf_mpi_local_size_3d_transposed(N, N, N, MPI_COMM_WORLD, &NX, &X0, &NY, &Y0);
+#ifdef DEBUG_CHECKS
+    /* We expect that NX == NY and X0 == Y0, since Nx == Ny in this problem */
+    assert(NX == dgrid->NX);
+    assert(X0 == dgrid->X0);
+    assert(NX == NY);
+    assert(X0 == Y0);
+#endif
+
+    /* Pull out other grid constants */
     const double boxlen = dgrid->boxlen;
     const double dk = 2 * M_PI / boxlen;
     const double grid_fac = boxlen / N;
@@ -240,11 +254,11 @@ int compute_potential(struct distributed_grid *dgrid,
 
     /* Apply the inverse Poisson kernel (note that x and y are now transposed) */
     GridFloatType cx, cy, cz, ctot;
-    for (int x = 0; x < N; x++) {
-        cx = cos_tab[x];
+    for (int y = Y0; y < Y0 + NY; y++) {
+        cy = cos_tab[y];
 
-        for (int y = X0; y < X0 + NX; y++) {
-            cy = cos_tab[y];
+        for (int x = 0; x < N; x++) {
+            cx = cos_tab[x];
 
             for (int z = 0; z <= N / 2; z++) {
                 cz = cos_tab[z];
@@ -253,7 +267,7 @@ int compute_potential(struct distributed_grid *dgrid,
 
                 if (ctot != 3.0) {
                     GridComplexType kern = overall_fac / (ctot - 3.0);
-                    fbox[row_major_half_transposed(x, y - X0, z, N, Nz_half)] *= kern;
+                    fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
                 }
             }
         }
