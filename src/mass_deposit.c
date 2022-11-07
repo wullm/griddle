@@ -27,6 +27,10 @@
 #include "../include/fft_kernels.h"
 #include "../include/message.h"
 
+static inline long int row_major_index(int i, int j, int k, int N, int Nz) {
+    return i*N*Nz + j*Nz + k;
+}
+
 int mass_deposition_single(struct distributed_grid *dgrid,
                            struct particle *parts,
                            long long int local_partnum) {
@@ -105,6 +109,9 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum) {
 
     const long long int N = dgrid->N;
+    const int Nz = dgrid->Nz;
+    const int X0 = dgrid->X0;
+    const int buffer_width = dgrid->buffer_width;
     const double boxlen = dgrid->boxlen;
     const double cell_factor = N / boxlen;
     const double cell_factor_3 = cell_factor * cell_factor * cell_factor;
@@ -112,22 +119,21 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
     const double int_to_pos_fac = 1.0 / pos_to_int_fac;
+    const double int_to_grid_fac = int_to_pos_fac * cell_factor;
+
+    GridFloatType *box = dgrid->buffered_box;
 
     /* Empty the grid */
-    for (int i = 0; i < dgrid->NX + 2 * dgrid->buffer_width; i++) {
-        for (int j = 0; j < N; j++) {
-            for (int k = 0; k < N; k++) {
-                dgrid->buffered_box[i*dgrid->Ny*dgrid->Nz + j*dgrid->Nz + k] = 0;
-            }
-        }
+    for (long int i = 0; i < dgrid->local_real_size_with_buffers; i++) {
+        dgrid->buffered_box[i] = 0.;
     }
 
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *part = &parts[i];
 
-        double X = part->x[0] * int_to_pos_fac * cell_factor;
-        double Y = part->x[1] * int_to_pos_fac * cell_factor;
-        double Z = part->x[2] * int_to_pos_fac * cell_factor;
+        double X = part->x[0] * int_to_grid_fac;
+        double Y = part->x[1] * int_to_grid_fac;
+        double Z = part->x[2] * int_to_grid_fac;
 
 #ifdef WITH_MASSES
         double M = part->m * cell_factor_3;
@@ -143,13 +149,15 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 #endif
 
         /* The particles coordinates must be wrapped here! */
-        int iX = (int) X;
-        int iY = (int) Y;
-        int iZ = (int) Z;
+        int iX = X;
+        int iY = Y;
+        int iZ = Z;
 
+#ifdef DEBUG_CHECKS
         if (iX < dgrid->X0 || iX >= dgrid->X0 + dgrid->NX) {
             printf("particle on the wrong rank %d %ld %ld\n", iX, dgrid->X0, dgrid->X0 + dgrid->NX);
         }
+#endif
 
         /* Displacements from grid corner */
         double dx = X - iX;
@@ -159,16 +167,21 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         double ty = 1.0 - dy;
         double tz = 1.0 - dz;
 
+        int iX2 = iX + 1 - X0 + buffer_width;
+        int iY2 = (iY + 1 % N);
+        int iZ2 = (iZ + 1 % N);
+        iX += - X0 + buffer_width;
+
+
         /* Deposit the mass over the nearest 8 cells */
-        *point_row_major_dg_buffered(iX, iY, iZ, dgrid) += M * tx * ty * tz;
-        *point_row_major_dg_buffered(iX+1, iY, iZ, dgrid) += M * dx * ty * tz;
-        *point_row_major_dg_buffered(iX, iY+1, iZ, dgrid) += M * tx * dy * tz;
-        *point_row_major_dg_buffered(iX, iY, iZ+1, dgrid) += M * tx * ty * dz;
-        *point_row_major_dg_buffered(iX+1, iY+1, iZ, dgrid) += M * dx * dy * tz;
-        *point_row_major_dg_buffered(iX+1, iY, iZ+1, dgrid) += M * dx * ty * dz;
-        *point_row_major_dg_buffered(iX, iY+1, iZ+1, dgrid) += M * tx * dy * dz;
-        *point_row_major_dg_buffered(iX+1, iY+1, iZ+1, dgrid) += M * dx * dy * dz;
-        *point_row_major_dg_buffered(iX+1, iY+1, iZ+1, dgrid) += M * dx * dy * dz;
+        box[row_major_index(iX, iY, iZ, N, Nz)] += M * tx * ty * tz;
+        box[row_major_index(iX, iY2, iZ, N, Nz)] += M * tx * dy * tz;
+        box[row_major_index(iX, iY, iZ2, N, Nz)] += M * tx * ty * dz;
+        box[row_major_index(iX, iY2, iZ2, N, Nz)] += M * tx * dy * dz;
+        box[row_major_index(iX2, iY, iZ, N, Nz)] += M * dx * ty * tz;
+        box[row_major_index(iX2, iY2, iZ, N, Nz)] += M * dx * dy * tz;
+        box[row_major_index(iX2, iY, iZ2, N, Nz)] += M * dx * ty * dz;
+        box[row_major_index(iX2, iY2, iZ2, N, Nz)] += M * dx * dy * dz;
     }
 
     return 0;
