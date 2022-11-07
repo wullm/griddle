@@ -22,6 +22,10 @@
 #include "../include/mesh_grav.h"
 #include "../include/fft.h"
 
+static inline long int row_major_index(int i, int j, int k, int N, int Nz) {
+    return i*N*Nz + j*Nz + k;
+}
+
 /* Direct nearest grid point interpolation */
 static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
                              int j, int k) {
@@ -29,8 +33,7 @@ static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
 }
 
 /* Direct nearest grid point interpolation (without bounds checking) */
-static inline GridFloatType nowrapNGP(const struct distributed_grid *dg, int N, int i,
-                             int j, int k) {
+static inline GridFloatType nowrapNGP(const struct distributed_grid *dg, int i, int j, int k) {
     return *point_row_major_dg_buffered_nobounds(i, j, k, dg);
 }
 
@@ -105,62 +108,62 @@ void accelCIC(const struct distributed_grid *dg, double *x, double *a) {
     int iZ5 = wrap(iZ + 3, N);
 
     /* Retrieve the values necessary for the finite difference scheme */
-    double val_202 = nowrapNGP(dg, N, iX, iY0, iZ);
-    double val_313 = nowrapNGP(dg, N, iX3, iY1, iZ3);
-    double val_023 = nowrapNGP(dg, N, iX0, iY, iZ3);
-    double val_332 = nowrapNGP(dg, N, iX3, iY3, iZ);
-    double val_212 = nowrapNGP(dg, N, iX, iY1, iZ);
-    double val_122 = nowrapNGP(dg, N, iX1, iY, iZ);
-    double val_222 = nowrapNGP(dg, N, iX, iY, iZ);
-    double val_221 = nowrapNGP(dg, N, iX, iY, iZ1);
-    double val_232 = nowrapNGP(dg, N, iX, iY3, iZ);
-    double val_343 = nowrapNGP(dg, N, iX3, iY4, iZ3);
-    double val_333 = nowrapNGP(dg, N, iX3, iY3, iZ3);
-    double val_225 = nowrapNGP(dg, N, iX, iY, iZ5);
-    double val_235 = nowrapNGP(dg, N, iX, iY3, iZ5);
-    double val_352 = nowrapNGP(dg, N, iX3, iY5, iZ);
-    double val_132 = nowrapNGP(dg, N, iX1, iY3, iZ);
-    double val_523 = nowrapNGP(dg, N, iX5, iY, iZ3);
-    double val_253 = nowrapNGP(dg, N, iX, iY5, iZ3);
-    double val_233 = nowrapNGP(dg, N, iX, iY3, iZ3);
-    double val_303 = nowrapNGP(dg, N, iX3, iY0, iZ3);
-    double val_022 = nowrapNGP(dg, N, iX0, iY, iZ);
-    double val_423 = nowrapNGP(dg, N, iX4, iY, iZ3);
-    double val_213 = nowrapNGP(dg, N, iX, iY1, iZ3);
-    double val_325 = nowrapNGP(dg, N, iX3, iY, iZ5);
-    double val_252 = nowrapNGP(dg, N, iX, iY5, iZ);
-    double val_323 = nowrapNGP(dg, N, iX3, iY, iZ3);
-    double val_342 = nowrapNGP(dg, N, iX3, iY4, iZ);
-    double val_242 = nowrapNGP(dg, N, iX, iY4, iZ);
-    double val_230 = nowrapNGP(dg, N, iX, iY3, iZ0);
-    double val_234 = nowrapNGP(dg, N, iX, iY3, iZ4);
-    double val_243 = nowrapNGP(dg, N, iX, iY4, iZ3);
-    double val_312 = nowrapNGP(dg, N, iX3, iY1, iZ);
-    double val_033 = nowrapNGP(dg, N, iX0, iY3, iZ3);
-    double val_220 = nowrapNGP(dg, N, iX, iY, iZ0);
-    double val_422 = nowrapNGP(dg, N, iX4, iY, iZ);
-    double val_324 = nowrapNGP(dg, N, iX3, iY, iZ4);
-    double val_231 = nowrapNGP(dg, N, iX, iY3, iZ1);
-    double val_133 = nowrapNGP(dg, N, iX1, iY3, iZ3);
-    double val_320 = nowrapNGP(dg, N, iX3, iY, iZ0);
-    double val_224 = nowrapNGP(dg, N, iX, iY, iZ4);
-    double val_432 = nowrapNGP(dg, N, iX4, iY3, iZ);
-    double val_203 = nowrapNGP(dg, N, iX, iY0, iZ3);
-    double val_433 = nowrapNGP(dg, N, iX4, iY3, iZ3);
-    double val_522 = nowrapNGP(dg, N, iX5, iY, iZ);
-    double val_533 = nowrapNGP(dg, N, iX5, iY3, iZ3);
-    double val_334 = nowrapNGP(dg, N, iX3, iY3, iZ4);
-    double val_123 = nowrapNGP(dg, N, iX1, iY, iZ3);
-    double val_321 = nowrapNGP(dg, N, iX3, iY, iZ1);
-    double val_302 = nowrapNGP(dg, N, iX3, iY0, iZ);
-    double val_322 = nowrapNGP(dg, N, iX3, iY, iZ);
-    double val_223 = nowrapNGP(dg, N, iX, iY, iZ3);
-    double val_330 = nowrapNGP(dg, N, iX3, iY3, iZ0);
-    double val_532 = nowrapNGP(dg, N, iX5, iY3, iZ);
-    double val_353 = nowrapNGP(dg, N, iX3, iY5, iZ3);
-    double val_032 = nowrapNGP(dg, N, iX0, iY3, iZ);
-    double val_331 = nowrapNGP(dg, N, iX3, iY3, iZ1);
-    double val_335 = nowrapNGP(dg, N, iX3, iY3, iZ5);
+    double val_202 = nowrapNGP(dg, iX, iY0, iZ);
+    double val_313 = nowrapNGP(dg, iX3, iY1, iZ3);
+    double val_023 = nowrapNGP(dg, iX0, iY, iZ3);
+    double val_332 = nowrapNGP(dg, iX3, iY3, iZ);
+    double val_212 = nowrapNGP(dg, iX, iY1, iZ);
+    double val_122 = nowrapNGP(dg, iX1, iY, iZ);
+    double val_222 = nowrapNGP(dg, iX, iY, iZ);
+    double val_221 = nowrapNGP(dg, iX, iY, iZ1);
+    double val_232 = nowrapNGP(dg, iX, iY3, iZ);
+    double val_343 = nowrapNGP(dg, iX3, iY4, iZ3);
+    double val_333 = nowrapNGP(dg, iX3, iY3, iZ3);
+    double val_225 = nowrapNGP(dg, iX, iY, iZ5);
+    double val_235 = nowrapNGP(dg, iX, iY3, iZ5);
+    double val_352 = nowrapNGP(dg, iX3, iY5, iZ);
+    double val_132 = nowrapNGP(dg, iX1, iY3, iZ);
+    double val_523 = nowrapNGP(dg, iX5, iY, iZ3);
+    double val_253 = nowrapNGP(dg, iX, iY5, iZ3);
+    double val_233 = nowrapNGP(dg, iX, iY3, iZ3);
+    double val_303 = nowrapNGP(dg, iX3, iY0, iZ3);
+    double val_022 = nowrapNGP(dg, iX0, iY, iZ);
+    double val_423 = nowrapNGP(dg, iX4, iY, iZ3);
+    double val_213 = nowrapNGP(dg, iX, iY1, iZ3);
+    double val_325 = nowrapNGP(dg, iX3, iY, iZ5);
+    double val_252 = nowrapNGP(dg, iX, iY5, iZ);
+    double val_323 = nowrapNGP(dg, iX3, iY, iZ3);
+    double val_342 = nowrapNGP(dg, iX3, iY4, iZ);
+    double val_242 = nowrapNGP(dg, iX, iY4, iZ);
+    double val_230 = nowrapNGP(dg, iX, iY3, iZ0);
+    double val_234 = nowrapNGP(dg, iX, iY3, iZ4);
+    double val_243 = nowrapNGP(dg, iX, iY4, iZ3);
+    double val_312 = nowrapNGP(dg, iX3, iY1, iZ);
+    double val_033 = nowrapNGP(dg, iX0, iY3, iZ3);
+    double val_220 = nowrapNGP(dg, iX, iY, iZ0);
+    double val_422 = nowrapNGP(dg, iX4, iY, iZ);
+    double val_324 = nowrapNGP(dg, iX3, iY, iZ4);
+    double val_231 = nowrapNGP(dg, iX, iY3, iZ1);
+    double val_133 = nowrapNGP(dg, iX1, iY3, iZ3);
+    double val_320 = nowrapNGP(dg, iX3, iY, iZ0);
+    double val_224 = nowrapNGP(dg, iX, iY, iZ4);
+    double val_432 = nowrapNGP(dg, iX4, iY3, iZ);
+    double val_203 = nowrapNGP(dg, iX, iY0, iZ3);
+    double val_433 = nowrapNGP(dg, iX4, iY3, iZ3);
+    double val_522 = nowrapNGP(dg, iX5, iY, iZ);
+    double val_533 = nowrapNGP(dg, iX5, iY3, iZ3);
+    double val_334 = nowrapNGP(dg, iX3, iY3, iZ4);
+    double val_123 = nowrapNGP(dg, iX1, iY, iZ3);
+    double val_321 = nowrapNGP(dg, iX3, iY, iZ1);
+    double val_302 = nowrapNGP(dg, iX3, iY0, iZ);
+    double val_322 = nowrapNGP(dg, iX3, iY, iZ);
+    double val_223 = nowrapNGP(dg, iX, iY, iZ3);
+    double val_330 = nowrapNGP(dg, iX3, iY3, iZ0);
+    double val_532 = nowrapNGP(dg, iX5, iY3, iZ);
+    double val_353 = nowrapNGP(dg, iX3, iY5, iZ3);
+    double val_032 = nowrapNGP(dg, iX0, iY3, iZ);
+    double val_331 = nowrapNGP(dg, iX3, iY3, iZ1);
+    double val_335 = nowrapNGP(dg, iX3, iY3, iZ5);
 
     /* Compute the finite difference along the x-axis */
     a[0] -= val_422 * ttt;
@@ -331,103 +334,84 @@ void accelCIC_2nd(const struct distributed_grid *dg, double *x, double *a) {
     double ddd = dx * dy * dz;
 
     /* Wrap the integer coordinates (not necessary for x) */
-    int iX0 = iX - 1;
-    int iY0 = wrap(iY - 1, N);
-    int iZ0 = wrap(iZ - 1, N);
-    int iX2 = iX + 1;
-    int iY2 = wrap(iY + 1, N);
-    int iZ2 = wrap(iZ + 1, N);
-    int iX3 = iX + 2;
-    int iY3 = wrap(iY + 2, N);
-    int iZ3 = wrap(iZ + 2, N);
+    int iX0 = iX - 1 - dg->X0 + dg->buffer_width;
+    int iY0 = (iY - 1 % N);
+    int iZ0 = (iZ - 1 % N);
+    int iX2 = iX + 1 - dg->X0 + dg->buffer_width;
+    int iY2 = (iY + 1 % N);
+    int iZ2 = (iZ + 1 % N);
+    int iX3 = iX + 2 - dg->X0 + dg->buffer_width;
+    int iY3 = (iY + 2 % N);
+    int iZ3 = (iZ + 2 % N);
+
+    iX += - dg->X0 + dg->buffer_width;
+
+    GridFloatType *box = dg->buffered_box;
+    int Nz = dg->Nz;
 
     /* Retrieve the values necessary for the finite difference scheme */
-    double val_111 = nowrapNGP(dg, N, iX, iY, iZ);
-    double val_121 = nowrapNGP(dg, N, iX, iY2, iZ);
-    double val_223 = nowrapNGP(dg, N, iX2, iY2, iZ3);
-    double val_110 = nowrapNGP(dg, N, iX, iY, iZ0);
-    double val_022 = nowrapNGP(dg, N, iX0, iY2, iZ2);
-    double val_221 = nowrapNGP(dg, N, iX2, iY2, iZ);
-    double val_222 = nowrapNGP(dg, N, iX2, iY2, iZ2);
-    double val_201 = nowrapNGP(dg, N, iX2, iY0, iZ);
-    double val_123 = nowrapNGP(dg, N, iX, iY2, iZ3);
-    double val_021 = nowrapNGP(dg, N, iX0, iY2, iZ);
-    double val_131 = nowrapNGP(dg, N, iX, iY3, iZ);
-    double val_120 = nowrapNGP(dg, N, iX, iY2, iZ0);
-    double val_232 = nowrapNGP(dg, N, iX2, iY3, iZ2);
-    double val_132 = nowrapNGP(dg, N, iX, iY3, iZ2);
-    double val_312 = nowrapNGP(dg, N, iX3, iY, iZ2);
-    double val_101 = nowrapNGP(dg, N, iX, iY0, iZ);
-    double val_202 = nowrapNGP(dg, N, iX2, iY0, iZ2);
-    double val_220 = nowrapNGP(dg, N, iX2, iY2, iZ0);
-    double val_113 = nowrapNGP(dg, N, iX, iY, iZ3);
-    double val_112 = nowrapNGP(dg, N, iX, iY, iZ2);
-    double val_210 = nowrapNGP(dg, N, iX2, iY, iZ0);
-    double val_122 = nowrapNGP(dg, N, iX, iY2, iZ2);
-    double val_102 = nowrapNGP(dg, N, iX, iY0, iZ2);
-    double val_213 = nowrapNGP(dg, N, iX2, iY, iZ3);
-    double val_231 = nowrapNGP(dg, N, iX2, iY3, iZ);
-    double val_311 = nowrapNGP(dg, N, iX3, iY, iZ);
-    double val_211 = nowrapNGP(dg, N, iX2, iY, iZ);
-    double val_011 = nowrapNGP(dg, N, iX0, iY, iZ);
-    double val_012 = nowrapNGP(dg, N, iX0, iY, iZ2);
-    double val_321 = nowrapNGP(dg, N, iX3, iY2, iZ);
-    double val_212 = nowrapNGP(dg, N, iX2, iY, iZ2);
-    double val_322 = nowrapNGP(dg, N, iX3, iY2, iZ2);
+    double val_111 = box[row_major_index(iX, iY, iZ, N, Nz)];
+    double val_121 = box[row_major_index(iX, iY2, iZ, N, Nz)];
+    double val_223 = box[row_major_index(iX2, iY2, iZ3, N, Nz)];
+    double val_110 = box[row_major_index(iX, iY, iZ0, N, Nz)];
+    double val_022 = box[row_major_index(iX0, iY2, iZ2, N, Nz)];
+    double val_221 = box[row_major_index(iX2, iY2, iZ, N, Nz)];
+    double val_222 = box[row_major_index(iX2, iY2, iZ2, N, Nz)];
+    double val_201 = box[row_major_index(iX2, iY0, iZ, N, Nz)];
+    double val_123 = box[row_major_index(iX, iY2, iZ3, N, Nz)];
+    double val_021 = box[row_major_index(iX0, iY2, iZ, N, Nz)];
+    double val_131 = box[row_major_index(iX, iY3, iZ, N, Nz)];
+    double val_120 = box[row_major_index(iX, iY2, iZ0, N, Nz)];
+    double val_232 = box[row_major_index(iX2, iY3, iZ2, N, Nz)];
+    double val_132 = box[row_major_index(iX, iY3, iZ2, N, Nz)];
+    double val_312 = box[row_major_index(iX3, iY, iZ2, N, Nz)];
+    double val_101 = box[row_major_index(iX, iY0, iZ, N, Nz)];
+    double val_202 = box[row_major_index(iX2, iY0, iZ2, N, Nz)];
+    double val_220 = box[row_major_index(iX2, iY2, iZ0, N, Nz)];
+    double val_113 = box[row_major_index(iX, iY, iZ3, N, Nz)];
+    double val_112 = box[row_major_index(iX, iY, iZ2, N, Nz)];
+    double val_210 = box[row_major_index(iX2, iY, iZ0, N, Nz)];
+    double val_122 = box[row_major_index(iX, iY2, iZ2, N, Nz)];
+    double val_102 = box[row_major_index(iX, iY0, iZ2, N, Nz)];
+    double val_213 = box[row_major_index(iX2, iY, iZ3, N, Nz)];
+    double val_231 = box[row_major_index(iX2, iY3, iZ, N, Nz)];
+    double val_311 = box[row_major_index(iX3, iY, iZ, N, Nz)];
+    double val_211 = box[row_major_index(iX2, iY, iZ, N, Nz)];
+    double val_011 = box[row_major_index(iX0, iY, iZ, N, Nz)];
+    double val_012 = box[row_major_index(iX0, iY, iZ2, N, Nz)];
+    double val_321 = box[row_major_index(iX3, iY2, iZ, N, Nz)];
+    double val_212 = box[row_major_index(iX2, iY, iZ2, N, Nz)];
+    double val_322 = box[row_major_index(iX3, iY2, iZ2, N, Nz)];
 
     /* Compute the finite difference along the x-axis */
-    a[0] += val_211 * ttt;
-    a[0] += val_212 * ttd;
-    a[0] += val_311 * dtt;
-    a[0] += val_312 * dtd;
-    a[0] += val_221 * tdt;
-    a[0] += val_222 * tdd;
-    a[0] += val_321 * ddt;
-    a[0] += val_322 * ddd;
-    a[0] -= val_011 * ttt;
-    a[0] -= val_012 * ttd;
-    a[0] -= val_111 * dtt;
-    a[0] -= val_112 * dtd;
-    a[0] -= val_021 * tdt;
-    a[0] -= val_022 * tdd;
-    a[0] -= val_121 * ddt;
-    a[0] -= val_122 * ddd;
+    a[0] += (val_211 - val_011) * ttt;
+    a[0] += (val_212 - val_012) * ttd;
+    a[0] += (val_311 - val_111) * dtt;
+    a[0] += (val_312 - val_112) * dtd;
+    a[0] += (val_221 - val_021) * tdt;
+    a[0] += (val_222 - val_022) * tdd;
+    a[0] += (val_321 - val_121) * ddt;
+    a[0] += (val_322 - val_122) * ddd;
 
     /* Compute the finite difference along the y-axis */
-    a[1] += val_121 * ttt;
-    a[1] += val_122 * ttd;
-    a[1] += val_221 * dtt;
-    a[1] += val_222 * dtd;
-    a[1] += val_131 * tdt;
-    a[1] += val_132 * tdd;
-    a[1] += val_231 * ddt;
-    a[1] += val_232 * ddd;
-    a[1] -= val_101 * ttt;
-    a[1] -= val_102 * ttd;
-    a[1] -= val_201 * dtt;
-    a[1] -= val_202 * dtd;
-    a[1] -= val_111 * tdt;
-    a[1] -= val_112 * tdd;
-    a[1] -= val_211 * ddt;
-    a[1] -= val_212 * ddd;
+    a[1] += (val_121 - val_101) * ttt;
+    a[1] += (val_122 - val_102) * ttd;
+    a[1] += (val_221 - val_201) * dtt;
+    a[1] += (val_222 - val_202) * dtd;
+    a[1] += (val_131 - val_111) * tdt;
+    a[1] += (val_132 - val_112) * tdd;
+    a[1] += (val_231 - val_211) * ddt;
+    a[1] += (val_232 - val_212) * ddd;
 
     /* Compute the finite difference along the z-axis */
-    a[2] += val_112 * ttt;
-    a[2] += val_113 * ttd;
-    a[2] += val_212 * dtt;
-    a[2] += val_213 * dtd;
-    a[2] += val_122 * tdt;
-    a[2] += val_123 * tdd;
-    a[2] += val_222 * ddt;
-    a[2] += val_223 * ddd;
-    a[2] -= val_110 * ttt;
-    a[2] -= val_111 * ttd;
-    a[2] -= val_210 * dtt;
-    a[2] -= val_211 * dtd;
-    a[2] -= val_120 * tdt;
-    a[2] -= val_121 * tdd;
-    a[2] -= val_220 * ddt;
-    a[2] -= val_221 * ddd;
+    a[2] += (val_112 - val_110) * ttt;
+    a[2] += (val_113 - val_111) * ttd;
+    a[2] += (val_212 - val_210) * dtt;
+    a[2] += (val_213 - val_211) * dtd;
+    a[2] += (val_122 - val_120) * tdt;
+    a[2] += (val_123 - val_121) * tdd;
+    a[2] += (val_222 - val_220) * ddt;
+    a[2] += (val_223 - val_221) * ddd;
 
     a[0] *= fac_over_2;
     a[1] *= fac_over_2;
