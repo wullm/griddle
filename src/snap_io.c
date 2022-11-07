@@ -247,8 +247,8 @@ int exportSnapshot(struct params *pars, struct units *us,
             if (dtau_drift != 0.) {
                 double rel_drift = relativistic_drift(p, pcs, a);
                 coords[i * 3 + 0] += vels[i * 3 + 0] * dtau_drift * rel_drift;
-                coords[i * 3 + 1] += vels[i * 3 + 0] * dtau_drift * rel_drift;
-                coords[i * 3 + 2] += vels[i * 3 + 0] * dtau_drift * rel_drift;
+                coords[i * 3 + 1] += vels[i * 3 + 1] * dtau_drift * rel_drift;
+                coords[i * 3 + 2] += vels[i * 3 + 2] * dtau_drift * rel_drift;
             }
 #ifdef WITH_ACCELERATIONS
             /* Kick to the right time */

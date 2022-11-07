@@ -468,9 +468,9 @@ int main(int argc, char *argv[]) {
 #endif
 
             /* Execute drift */
-            p->x[0] += p->v[0] * drift_dtau * rel_drift * grid_to_int_fac;
-            p->x[1] += p->v[1] * drift_dtau * rel_drift * grid_to_int_fac;
-            p->x[2] += p->v[2] * drift_dtau * rel_drift * grid_to_int_fac;
+            p->x[0] += p->v[0] * drift_dtau * rel_drift * pos_to_int_fac;
+            p->x[1] += p->v[1] * drift_dtau * rel_drift * pos_to_int_fac;
+            p->x[2] += p->v[2] * drift_dtau * rel_drift * pos_to_int_fac;
 
             // /* Convert positions to integers (wrapping automatic by overflow) */
             // p->x[0] = x[0] * grid_to_int_fac;
