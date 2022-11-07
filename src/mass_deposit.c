@@ -31,6 +31,10 @@ static inline long int row_major_index(int i, int j, int k, int N, int Nz) {
     return i*N*Nz + j*Nz + k;
 }
 
+static inline long int row_major_half_transposed(int i, int j, int k, int N, int Nz_half) {
+    return j*Nz_half*N + i*Nz_half + k;
+}
+
 int mass_deposition_single(struct distributed_grid *dgrid,
                            struct particle *parts,
                            long long int local_partnum) {
@@ -212,12 +216,14 @@ int compute_potential(struct distributed_grid *dgrid,
     const int N = dgrid->N;
     const int NX = dgrid->NX;
     const int X0 = dgrid->X0; //the local portion starts at X = X0
+    const int Nz_half = N/2 + 1;
     const double boxlen = dgrid->boxlen;
     const double dk = 2 * M_PI / boxlen;
     const double grid_fac = boxlen / N;
     const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
     const double fft_factor = 1.0 / ((double) N * N * N);
     const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
+    GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the cosines */
     GridFloatType *cos_tab = malloc(N * sizeof(GridFloatType));
@@ -243,7 +249,7 @@ int compute_potential(struct distributed_grid *dgrid,
 
                 if (ctot != 3.0) {
                     GridComplexType kern = overall_fac / (ctot - 3.0);
-                    *point_row_major_half_dg_transposed(x, y, z, dgrid) *= kern;
+                    fbox[row_major_half_transposed(x, y - X0, z, N, Nz_half)] *= kern;
                 }
             }
         }
