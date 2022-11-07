@@ -75,7 +75,6 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             struct particle *p = &parts[i];
 
             int home_rank = p->x[0] * int_to_rank_fac;
-            p->rank = home_rank;
 
             /* Decide whether the particle should be sent left or right */
             int dist = home_rank - rank;
@@ -131,9 +130,9 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         /* We only need to search the particles that we received from the right ... */
         for (long long i = 0; i < received_right; i++) {
             struct particle *p = &parts[i];
-            if (p->exchange_dir == 1) {
-                num_send_right++;
-            } else if (p->exchange_dir == -1) {
+
+            int home_rank = p->x[0] * int_to_rank_fac;
+            if (home_rank != rank) {
                 num_send_left++;
             }
         }
@@ -141,10 +140,10 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         /* ... and those that we received from the left */
         for (long long i = *num_localpart - received_left; i < *num_localpart; i++) {
             struct particle *p = &parts[i];
-            if (p->exchange_dir == 1) {
+
+            int home_rank = p->x[0] * int_to_rank_fac;
+            if (home_rank != rank) {
                 num_send_right++;
-            } else if (p->exchange_dir == -1) {
-                num_send_left++;
             }
         }
 
@@ -225,30 +224,24 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     long long int remaining_foreign_parts = 0;
     for (long long i = 0; i < receive_from_right; i++) {
         struct particle *p = &receive_parts_right[i];
-        int dist = p->rank - rank;
-        if (dist == 0) {
-            p->exchange_dir = 0;
-        } else if ((dist < 0 && abs(dist) <= MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
-            p->exchange_dir = -1;
+
+        int home_rank = p->x[0] * int_to_rank_fac;
+        if (home_rank != rank) {
             remaining_foreign_parts++;
         } else {
-            p->exchange_dir = +1;
-            remaining_foreign_parts++;
+            p->exchange_dir = 0;
         }
     }
 
     /* For the received particles, determine whether they should be moved on */
     for (long long i = 0; i < receive_from_left; i++) {
         struct particle *p = &receive_parts_left[i];
-        int dist = p->rank - rank;
-        if (dist == 0) {
-            p->exchange_dir = 0;
-        } else if ((dist < 0 && abs(dist) <= MPI_Rank_Half) || (dist > 0 && abs(dist) >= MPI_Rank_Half)) {
-            p->exchange_dir = -1;
+
+        int home_rank = p->x[0] * int_to_rank_fac;
+        if (home_rank != rank) {
             remaining_foreign_parts++;
         } else {
-            p->exchange_dir = +1;
-            remaining_foreign_parts++;
+            p->exchange_dir = 0;
         }
     }
 
