@@ -52,19 +52,25 @@ int exportSnapshot(struct params *pars, struct units *us,
     }
 
     /* We need to sort the local particles by type */
+#ifdef WITH_PARTTYPE
     if (num_types > 1)
         qsort(particles, local_partnum, sizeof(struct particle), particleTypeSort);
+#endif
 
     /* Find the numbers of particles per type */
     long long int local_parts_per_type[2] = {0, 0};
     long long int local_first_of_type[2] = {0, 0};
 
     for (long long int i = 0; i < local_partnum; i++) {
+#ifdef WITH_PARTTYPE
         if (particles[i].type == 1) {
             local_parts_per_type[0]++;
         } else {
             local_parts_per_type[1]++;
         }
+#else
+        local_parts_per_type[0]++;
+#endif
     }
 
     /* Find the first index of each type */
@@ -224,8 +230,9 @@ int exportSnapshot(struct params *pars, struct units *us,
         double *coords = malloc(3 * local_parts_per_type[t] * sizeof(double));
         double *vels = malloc(3 * local_parts_per_type[t] * sizeof(double));
         long long *ids = malloc(1 * local_parts_per_type[t] * sizeof(long long));
+#ifdef WITH_MASSES
         double *masses = malloc(1 * local_parts_per_type[t] * sizeof(double));
-        double *weights;
+#endif
         for (long long i = 0; i < local_parts_per_type[t]; i++) {
             struct particle *p = &particles[i + local_first_of_type[t]];
             /* Unpack the coordinates */
@@ -257,16 +264,21 @@ int exportSnapshot(struct params *pars, struct units *us,
             vels[i * 3 + 2] /= a;
             /* Unpack the IDs and masses */
             ids[i] = p->id;
+#ifdef WITH_MASSES
             masses[i] = p->m;
+#endif
         }
 
         /* Unpack neutrino weights only for type 1 */
+#ifdef WITH_PARTTYPE
+        double *weights;
         if (t == 1) {
             weights = malloc(1 * local_parts_per_type[t] * sizeof(double));
             for (long long i = 0; i < local_parts_per_type[t]; i++) {
                 weights[i] = particles[i + local_first_of_type[t]].w;
             }
         }
+#endif
 
         /* Open the particle group in the output file */
         hid_t h_grp = H5Gopen(h_out_file, ExportNames[t], H5P_DEFAULT);
@@ -289,12 +301,15 @@ int exportSnapshot(struct params *pars, struct units *us,
         H5Dclose(h_data);
         free(ids);
 
+#ifdef WITH_MASSES
         /* Write mass data (scalar) */
         h_data = H5Dopen(h_grp, "Masses", H5P_DEFAULT);
         H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
         H5Dclose(h_data);
         free(masses);
+#endif
 
+#ifdef WITH_PARTTYPE
         if (t == 1) {
             /* Write weights data (scalar) */
             h_data = H5Dopen(h_grp, "Weights", H5P_DEFAULT);
@@ -302,6 +317,7 @@ int exportSnapshot(struct params *pars, struct units *us,
             H5Dclose(h_data);
             free(weights);
         }
+#endif
 
         /* Close the group */
         H5Gclose(h_grp);
@@ -613,6 +629,7 @@ int readSnapshot(struct params *pars, struct units *us,
 
     free(coord_data);
 
+#ifdef WITH_MASSES
     /* Open the masses dataset and corresponding data space */
     h_dat = H5Dopen(h_grp, "Masses", H5P_DEFAULT);
     h_space = H5Dget_space (h_dat);
@@ -641,6 +658,7 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Free the contiguous array */
     free(mass_data);
+#endif
 
     /* Open the velocities dataset and corresponding dataspace */
     h_dat = H5Dopen(h_grp, "Velocities", H5P_DEFAULT);
@@ -678,8 +696,8 @@ int readSnapshot(struct params *pars, struct units *us,
     h_space = H5Dget_space(h_dat);
 
     /* Select the hyperslab */
-    status = H5Sselect_hyperslab(h_space, H5S_SELECT_SET, start,
-                                 NULL, slab_dims, NULL);
+    status = H5Sselect_hyperslab(h_space, H5S_SELECT_SET, start_one,
+                                 NULL, slab_dims_one, NULL);
 
     /* Create a memory space */
     h_mems = H5Screate_simple(1, slab_dims_one, NULL);

@@ -26,6 +26,7 @@
 #define SINGLE_PRECISION_POSITIONS
 #define SINGLE_PRECISION_VELOCITIES
 #define WITH_ACCELERATIONS
+#define WITH_MASSES
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
@@ -55,26 +56,30 @@ struct particle {
     /* Basic particle data */
     IntIDType id;
 
-    /* Position, velocity, mass */
+    /* Position, velocity */
     IntPosType x[3];
     FloatVelType v[3];
+
+#ifdef WITH_MASSES
+    /* Particle mass */
     float m;
+#endif
 
 #ifdef WITH_ACCELERATIONS
     /* Accelerations */
     float a[3];
 #endif
 
+#ifdef WITH_PARTTYPE
     /* Neutrino delta-f weight */
     float w;
 
-    /* Communication data */
-    uint16_t rank;
-    int8_t exchange_dir;
-
     /* The particle type */
-    uint8_t type;
+    uint16_t type;
+#endif
 
+    /* Used for communications (only 2 bits used) */
+    int16_t exchange_dir;
 };
 
 static inline int particleSort(const void *a, const void *b) {
@@ -83,11 +88,12 @@ static inline int particleSort(const void *a, const void *b) {
     return pa->exchange_dir >= pb->exchange_dir;
 }
 
-
+#ifdef WITH_PARTTYPE
 static inline int particleTypeSort(const void *a, const void *b) {
     struct particle *pa = (struct particle*) a;
     struct particle *pb = (struct particle*) b;
     return pa->type >= pb->type;
 }
+#endif
 
 #endif

@@ -327,6 +327,17 @@ int main(int argc, char *argv[]) {
         message(rank, "\n");
     }
 
+#ifndef WITH_MASSES
+    /* If particles do not have individual masses, then the mass density grid
+     * is instead a number density grid. We then multiply the accelerations by
+     * the appropriate factor in the main loop. */
+    const double h = cosmo.h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us.UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs.GravityG);
+    const double Omega_m = ptpars.Omega_m;
+    const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
+#endif
+
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
     const double int_to_pos_fac = 1.0 / pos_to_int_fac;
@@ -334,7 +345,6 @@ int main(int argc, char *argv[]) {
     /* Position factors on [0, M] where M is the PM size */
     const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
     const double int_to_grid_fac = 1.0 / grid_to_int_fac;
-    const double grid_fac = M / boxlen;
 
     /* Start at the beginning */
     double a = a_begin;
@@ -423,6 +433,12 @@ int main(int argc, char *argv[]) {
                 accelCIC(&mass, x, acc); /* fourth order */
             }
 
+#ifndef WITH_MASSES
+            acc[0] *= part_mass;
+            acc[1] *= part_mass;
+            acc[2] *= part_mass;
+#endif
+
 #ifdef WITH_ACCELERATIONS
             p->a[0] = acc[0];
             p->a[1] = acc[1];
@@ -438,6 +454,7 @@ int main(int argc, char *argv[]) {
             double rel_drift = relativistic_drift(p, &pcs, a);
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
+#ifdef WITH_PARTTYPE
             if (p->type == 6) {
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
                 double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
@@ -448,6 +465,7 @@ int main(int argc, char *argv[]) {
 
                 p->w = 1.0 - f / fi;
             }
+#endif
 
             /* Execute drift */
             p->x[0] += p->v[0] * drift_dtau * rel_drift * grid_to_int_fac;

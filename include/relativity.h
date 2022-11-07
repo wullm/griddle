@@ -27,6 +27,7 @@
 static inline double relativistic_drift(const struct particle *p,
                                         const struct physical_consts *pcs,
                                         double a) {
+#ifdef WITH_PARTTYPE
     if (p->type == 6) {
         double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
         double ac = a * pcs->SpeedOfLight;
@@ -35,6 +36,9 @@ static inline double relativistic_drift(const struct particle *p,
     } else {
         return 1.0;
     }
+#else
+    return 1.0;
+#endif
 }
 
 #endif
