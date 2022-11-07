@@ -335,14 +335,21 @@ void accelCIC_2nd(const struct distributed_grid *dg, double *x, double *a) {
 
     /* Wrap the integer coordinates (not necessary for x) */
     int iX0 = iX - 1 - dg->X0 + dg->buffer_width;
-    int iY0 = wrap(iY - 1, N);
-    int iZ0 = wrap(iZ - 1, N);
+    int iY0 = iY - 1;
+    int iZ0 = iZ - 1;
     int iX2 = iX + 1 - dg->X0 + dg->buffer_width;
-    int iY2 = wrap(iY + 1, N);
-    int iZ2 = wrap(iZ + 1, N);
+    int iY2 = iY + 1;
+    int iZ2 = iZ + 1;
     int iX3 = iX + 2 - dg->X0 + dg->buffer_width;
-    int iY3 = wrap(iY + 2, N);
-    int iZ3 = wrap(iZ + 2, N);
+    int iY3 = iY + 2;
+    int iZ3 = iZ + 2;
+
+    if (iY0 < 0) iY0 += N;
+    if (iZ0 < 0) iZ0 += N;
+    if (iY2 >= N) iY2 -= N;
+    if (iZ2 >= N) iZ2 -= N;
+    if (iY3 >= N) iY3 -= N;
+    if (iZ3 >= N) iZ3 -= N;
 
     iX += - dg->X0 + dg->buffer_width;
 
