@@ -28,6 +28,12 @@ static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
     return *point_row_major_dg_buffered(i, j, k, dg);
 }
 
+/* Direct nearest grid point interpolation (without bounds checking) */
+static inline GridFloatType nowrapNGP(const struct distributed_grid *dg, int N, int i,
+                             int j, int k) {
+    return *point_row_major_dg_buffered_nobounds(i, j, k, dg);
+}
+
 /* Direct cloud in cell interpolation */
 static inline double fastCIC(const struct distributed_grid *dg, int N, int i,
                              int j, int k, double dx, double dy, double dz,
@@ -53,15 +59,15 @@ void accelCIC(const struct distributed_grid *dg, double *x, double *a) {
     double fac = N / boxlen;
     double fac_over_12 = fac / 12;
 
-    /* Convert to float grid dimensions */
-    double X = x[0] * fac;
-    double Y = x[1] * fac;
-    double Z = x[2] * fac;
+    /* Coordinates are mapped to [0, N] */
+    double X = x[0];
+    double Y = x[1];
+    double Z = x[2];
 
-    /* Integer grid position (floor is necessary to handle negatives) */
-    int iX = floor(X);
-    int iY = floor(Y);
-    int iZ = floor(Z);
+    /* Integer grid position (floor not needed, as wrapping is ensured) */
+    int iX = X;
+    int iY = Y;
+    int iZ = Z;
 
     /* Displacements from grid corner */
     double dx = X - iX;
@@ -71,26 +77,217 @@ void accelCIC(const struct distributed_grid *dg, double *x, double *a) {
     double ty = 1.0 - dy;
     double tz = 1.0 - dz;
 
-    a[0] = 0.0;
-    a[0] -= fastCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
-    a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[0] += fastCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+    /* Products of fractional displacements from cell corners */
+    double ttt = tx * ty * tz;
+    double ttd = tx * ty * dz;
+    double dtt = dx * ty * tz;
+    double dtd = dx * ty * dz;
+    double tdt = tx * dy * tz;
+    double tdd = tx * dy * dz;
+    double ddt = dx * dy * tz;
+    double ddd = dx * dy * dz;
+
+    /* Wrap the integer coordinates (not necessary for x) */
+    int iX0 = iX - 2;
+    int iY0 = wrap(iY - 2, N);
+    int iZ0 = wrap(iZ - 2, N);
+    int iX1 = iX - 1;
+    int iY1 = wrap(iY - 1, N);
+    int iZ1 = wrap(iZ - 1, N);
+    int iX3 = iX + 1;
+    int iY3 = wrap(iY + 1, N);
+    int iZ3 = wrap(iZ + 1, N);
+    int iX4 = iX + 2;
+    int iY4 = wrap(iY + 2, N);
+    int iZ4 = wrap(iZ + 2, N);
+    int iX5 = iX + 3;
+    int iY5 = wrap(iY + 3, N);
+    int iZ5 = wrap(iZ + 3, N);
+
+    /* Retrieve the values necessary for the finite difference scheme */
+    double val_202 = nowrapNGP(dg, N, iX, iY0, iZ);
+    double val_313 = nowrapNGP(dg, N, iX3, iY1, iZ3);
+    double val_023 = nowrapNGP(dg, N, iX0, iY, iZ3);
+    double val_332 = nowrapNGP(dg, N, iX3, iY3, iZ);
+    double val_212 = nowrapNGP(dg, N, iX, iY1, iZ);
+    double val_122 = nowrapNGP(dg, N, iX1, iY, iZ);
+    double val_222 = nowrapNGP(dg, N, iX, iY, iZ);
+    double val_221 = nowrapNGP(dg, N, iX, iY, iZ1);
+    double val_232 = nowrapNGP(dg, N, iX, iY3, iZ);
+    double val_343 = nowrapNGP(dg, N, iX3, iY4, iZ3);
+    double val_333 = nowrapNGP(dg, N, iX3, iY3, iZ3);
+    double val_225 = nowrapNGP(dg, N, iX, iY, iZ5);
+    double val_235 = nowrapNGP(dg, N, iX, iY3, iZ5);
+    double val_352 = nowrapNGP(dg, N, iX3, iY5, iZ);
+    double val_132 = nowrapNGP(dg, N, iX1, iY3, iZ);
+    double val_523 = nowrapNGP(dg, N, iX5, iY, iZ3);
+    double val_253 = nowrapNGP(dg, N, iX, iY5, iZ3);
+    double val_233 = nowrapNGP(dg, N, iX, iY3, iZ3);
+    double val_303 = nowrapNGP(dg, N, iX3, iY0, iZ3);
+    double val_022 = nowrapNGP(dg, N, iX0, iY, iZ);
+    double val_423 = nowrapNGP(dg, N, iX4, iY, iZ3);
+    double val_213 = nowrapNGP(dg, N, iX, iY1, iZ3);
+    double val_325 = nowrapNGP(dg, N, iX3, iY, iZ5);
+    double val_252 = nowrapNGP(dg, N, iX, iY5, iZ);
+    double val_323 = nowrapNGP(dg, N, iX3, iY, iZ3);
+    double val_342 = nowrapNGP(dg, N, iX3, iY4, iZ);
+    double val_242 = nowrapNGP(dg, N, iX, iY4, iZ);
+    double val_230 = nowrapNGP(dg, N, iX, iY3, iZ0);
+    double val_234 = nowrapNGP(dg, N, iX, iY3, iZ4);
+    double val_243 = nowrapNGP(dg, N, iX, iY4, iZ3);
+    double val_312 = nowrapNGP(dg, N, iX3, iY1, iZ);
+    double val_033 = nowrapNGP(dg, N, iX0, iY3, iZ3);
+    double val_220 = nowrapNGP(dg, N, iX, iY, iZ0);
+    double val_422 = nowrapNGP(dg, N, iX4, iY, iZ);
+    double val_324 = nowrapNGP(dg, N, iX3, iY, iZ4);
+    double val_231 = nowrapNGP(dg, N, iX, iY3, iZ1);
+    double val_133 = nowrapNGP(dg, N, iX1, iY3, iZ3);
+    double val_320 = nowrapNGP(dg, N, iX3, iY, iZ0);
+    double val_224 = nowrapNGP(dg, N, iX, iY, iZ4);
+    double val_432 = nowrapNGP(dg, N, iX4, iY3, iZ);
+    double val_203 = nowrapNGP(dg, N, iX, iY0, iZ3);
+    double val_433 = nowrapNGP(dg, N, iX4, iY3, iZ3);
+    double val_522 = nowrapNGP(dg, N, iX5, iY, iZ);
+    double val_533 = nowrapNGP(dg, N, iX5, iY3, iZ3);
+    double val_334 = nowrapNGP(dg, N, iX3, iY3, iZ4);
+    double val_123 = nowrapNGP(dg, N, iX1, iY, iZ3);
+    double val_321 = nowrapNGP(dg, N, iX3, iY, iZ1);
+    double val_302 = nowrapNGP(dg, N, iX3, iY0, iZ);
+    double val_322 = nowrapNGP(dg, N, iX3, iY, iZ);
+    double val_223 = nowrapNGP(dg, N, iX, iY, iZ3);
+    double val_330 = nowrapNGP(dg, N, iX3, iY3, iZ0);
+    double val_532 = nowrapNGP(dg, N, iX5, iY3, iZ);
+    double val_353 = nowrapNGP(dg, N, iX3, iY5, iZ3);
+    double val_032 = nowrapNGP(dg, N, iX0, iY3, iZ);
+    double val_331 = nowrapNGP(dg, N, iX3, iY3, iZ1);
+    double val_335 = nowrapNGP(dg, N, iX3, iY3, iZ5);
+
+    /* Compute the finite difference along the x-axis */
+    a[0] -= val_422 * ttt;
+    a[0] -= val_423 * ttd;
+    a[0] -= val_522 * dtt;
+    a[0] -= val_523 * dtd;
+    a[0] -= val_432 * tdt;
+    a[0] -= val_433 * tdd;
+    a[0] -= val_532 * ddt;
+    a[0] -= val_533 * ddd;
+    a[0] += val_322 * ttt * 8.0;
+    a[0] += val_323 * ttd * 8.0;
+    a[0] += val_422 * dtt * 8.0;
+    a[0] += val_423 * dtd * 8.0;
+    a[0] += val_332 * tdt * 8.0;
+    a[0] += val_333 * tdd * 8.0;
+    a[0] += val_432 * ddt * 8.0;
+    a[0] += val_433 * ddd * 8.0;
+    a[0] -= val_122 * ttt * 8.0;
+    a[0] -= val_123 * ttd * 8.0;
+    a[0] -= val_222 * dtt * 8.0;
+    a[0] -= val_223 * dtd * 8.0;
+    a[0] -= val_132 * tdt * 8.0;
+    a[0] -= val_133 * tdd * 8.0;
+    a[0] -= val_232 * ddt * 8.0;
+    a[0] -= val_233 * ddd * 8.0;
+    a[0] += val_022 * ttt;
+    a[0] += val_023 * ttd;
+    a[0] += val_122 * dtt;
+    a[0] += val_123 * dtd;
+    a[0] += val_032 * tdt;
+    a[0] += val_033 * tdd;
+    a[0] += val_132 * ddt;
+    a[0] += val_133 * ddd;
+
+    /* Compute the finite difference along the y-axis */
+    a[1] -= val_242 * ttt;
+    a[1] -= val_243 * ttd;
+    a[1] -= val_342 * dtt;
+    a[1] -= val_343 * dtd;
+    a[1] -= val_252 * tdt;
+    a[1] -= val_253 * tdd;
+    a[1] -= val_352 * ddt;
+    a[1] -= val_353 * ddd;
+    a[1] += val_232 * ttt * 8.0;
+    a[1] += val_233 * ttd * 8.0;
+    a[1] += val_332 * dtt * 8.0;
+    a[1] += val_333 * dtd * 8.0;
+    a[1] += val_242 * tdt * 8.0;
+    a[1] += val_243 * tdd * 8.0;
+    a[1] += val_342 * ddt * 8.0;
+    a[1] += val_343 * ddd * 8.0;
+    a[1] -= val_212 * ttt * 8.0;
+    a[1] -= val_213 * ttd * 8.0;
+    a[1] -= val_312 * dtt * 8.0;
+    a[1] -= val_313 * dtd * 8.0;
+    a[1] -= val_222 * tdt * 8.0;
+    a[1] -= val_223 * tdd * 8.0;
+    a[1] -= val_322 * ddt * 8.0;
+    a[1] -= val_323 * ddd * 8.0;
+    a[1] += val_202 * ttt;
+    a[1] += val_203 * ttd;
+    a[1] += val_302 * dtt;
+    a[1] += val_303 * dtd;
+    a[1] += val_212 * tdt;
+    a[1] += val_213 * tdd;
+    a[1] += val_312 * ddt;
+    a[1] += val_313 * ddd;
+
+    /* Compute the finite difference along the z-axis */
+    a[2] -= val_224 * ttt;
+    a[2] -= val_225 * ttd;
+    a[2] -= val_324 * dtt;
+    a[2] -= val_325 * dtd;
+    a[2] -= val_234 * tdt;
+    a[2] -= val_235 * tdd;
+    a[2] -= val_334 * ddt;
+    a[2] -= val_335 * ddd;
+    a[2] += val_223 * ttt * 8.0;
+    a[2] += val_224 * ttd * 8.0;
+    a[2] += val_323 * dtt * 8.0;
+    a[2] += val_324 * dtd * 8.0;
+    a[2] += val_233 * tdt * 8.0;
+    a[2] += val_234 * tdd * 8.0;
+    a[2] += val_333 * ddt * 8.0;
+    a[2] += val_334 * ddd * 8.0;
+    a[2] -= val_221 * ttt * 8.0;
+    a[2] -= val_222 * ttd * 8.0;
+    a[2] -= val_321 * dtt * 8.0;
+    a[2] -= val_322 * dtd * 8.0;
+    a[2] -= val_231 * tdt * 8.0;
+    a[2] -= val_232 * tdd * 8.0;
+    a[2] -= val_331 * ddt * 8.0;
+    a[2] -= val_332 * ddd * 8.0;
+    a[2] += val_220 * ttt;
+    a[2] += val_221 * ttd;
+    a[2] += val_320 * dtt;
+    a[2] += val_321 * dtd;
+    a[2] += val_230 * tdt;
+    a[2] += val_231 * tdd;
+    a[2] += val_330 * ddt;
+    a[2] += val_331 * ddd;
+
     a[0] *= fac_over_12;
-
-    a[1] = 0.0;
-    a[1] -= fastCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
-    a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
-    a[1] += fastCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
     a[1] *= fac_over_12;
-
-    a[2] = 0.0;
-    a[2] -= fastCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
-    a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
-    a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
-    a[2] += fastCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
     a[2] *= fac_over_12;
+
+    // a[0] = 0.0;
+    // a[0] -= fastCIC(dg, N, iX + 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+    // a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    // a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    // a[0] += fastCIC(dg, N, iX - 2, iY, iZ, dx, dy, dz, tx, ty, tz);
+    // a[0] *= fac_over_12;
+    //
+    // a[1] = 0.0;
+    // a[1] -= fastCIC(dg, N, iX, iY + 2, iZ, dx, dy, dz, tx, ty, tz);
+    // a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    // a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz) * 8.;
+    // a[1] += fastCIC(dg, N, iX, iY - 2, iZ, dx, dy, dz, tx, ty, tz);
+    // a[1] *= fac_over_12;
+    //
+    // a[2] = 0.0;
+    // a[2] -= fastCIC(dg, N, iX, iY, iZ + 2, dx, dy, dz, tx, ty, tz);
+    // a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz) * 8.;
+    // a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz) * 8.;
+    // a[2] += fastCIC(dg, N, iX, iY, iZ - 2, dx, dy, dz, tx, ty, tz);
+    // a[2] *= fac_over_12;
 
 }
 
@@ -105,15 +302,15 @@ void accelCIC_2nd(const struct distributed_grid *dg, double *x, double *a) {
     double fac = N / boxlen;
     double fac_over_2 = 0.5 * fac;
 
-    /* Convert to float grid dimensions */
-    double X = x[0] * fac;
-    double Y = x[1] * fac;
-    double Z = x[2] * fac;
+    /* Coordinates are mapped to [0, N] */
+    double X = x[0];
+    double Y = x[1];
+    double Z = x[2];
 
-    /* Integer grid position (floor is necessary to handle negatives) */
-    int iX = floor(X);
-    int iY = floor(Y);
-    int iZ = floor(Z);
+    /* Integer grid position (floor not needed, as wrapping is ensured) */
+    int iX = X;
+    int iY = Y;
+    int iZ = Z;
 
     /* Displacements from grid corner */
     double dx = X - iX;
@@ -123,19 +320,133 @@ void accelCIC_2nd(const struct distributed_grid *dg, double *x, double *a) {
     double ty = 1.0 - dy;
     double tz = 1.0 - dz;
 
-    a[0] = 0.0;
-    a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz);
-    a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz);
+    /* Products of fractional displacements from cell corners */
+    double ttt = tx * ty * tz;
+    double ttd = tx * ty * dz;
+    double dtt = dx * ty * tz;
+    double dtd = dx * ty * dz;
+    double tdt = tx * dy * tz;
+    double tdd = tx * dy * dz;
+    double ddt = dx * dy * tz;
+    double ddd = dx * dy * dz;
+
+    /* Wrap the integer coordinates (not necessary for x) */
+    int iX0 = iX - 1;
+    int iY0 = wrap(iY - 1, N);
+    int iZ0 = wrap(iZ - 1, N);
+    int iX2 = iX + 1;
+    int iY2 = wrap(iY + 1, N);
+    int iZ2 = wrap(iZ + 1, N);
+    int iX3 = iX + 2;
+    int iY3 = wrap(iY + 2, N);
+    int iZ3 = wrap(iZ + 2, N);
+
+    /* Retrieve the values necessary for the finite difference scheme */
+    double val_111 = nowrapNGP(dg, N, iX, iY, iZ);
+    double val_121 = nowrapNGP(dg, N, iX, iY2, iZ);
+    double val_223 = nowrapNGP(dg, N, iX2, iY2, iZ3);
+    double val_110 = nowrapNGP(dg, N, iX, iY, iZ0);
+    double val_022 = nowrapNGP(dg, N, iX0, iY2, iZ2);
+    double val_221 = nowrapNGP(dg, N, iX2, iY2, iZ);
+    double val_222 = nowrapNGP(dg, N, iX2, iY2, iZ2);
+    double val_201 = nowrapNGP(dg, N, iX2, iY0, iZ);
+    double val_123 = nowrapNGP(dg, N, iX, iY2, iZ3);
+    double val_021 = nowrapNGP(dg, N, iX0, iY2, iZ);
+    double val_131 = nowrapNGP(dg, N, iX, iY3, iZ);
+    double val_120 = nowrapNGP(dg, N, iX, iY2, iZ0);
+    double val_232 = nowrapNGP(dg, N, iX2, iY3, iZ2);
+    double val_132 = nowrapNGP(dg, N, iX, iY3, iZ2);
+    double val_312 = nowrapNGP(dg, N, iX3, iY, iZ2);
+    double val_101 = nowrapNGP(dg, N, iX, iY0, iZ);
+    double val_202 = nowrapNGP(dg, N, iX2, iY0, iZ2);
+    double val_220 = nowrapNGP(dg, N, iX2, iY2, iZ0);
+    double val_113 = nowrapNGP(dg, N, iX, iY, iZ3);
+    double val_112 = nowrapNGP(dg, N, iX, iY, iZ2);
+    double val_210 = nowrapNGP(dg, N, iX2, iY, iZ0);
+    double val_122 = nowrapNGP(dg, N, iX, iY2, iZ2);
+    double val_102 = nowrapNGP(dg, N, iX, iY0, iZ2);
+    double val_213 = nowrapNGP(dg, N, iX2, iY, iZ3);
+    double val_231 = nowrapNGP(dg, N, iX2, iY3, iZ);
+    double val_311 = nowrapNGP(dg, N, iX3, iY, iZ);
+    double val_211 = nowrapNGP(dg, N, iX2, iY, iZ);
+    double val_011 = nowrapNGP(dg, N, iX0, iY, iZ);
+    double val_012 = nowrapNGP(dg, N, iX0, iY, iZ2);
+    double val_321 = nowrapNGP(dg, N, iX3, iY2, iZ);
+    double val_212 = nowrapNGP(dg, N, iX2, iY, iZ2);
+    double val_322 = nowrapNGP(dg, N, iX3, iY2, iZ2);
+
+    /* Compute the finite difference along the x-axis */
+    a[0] += val_211 * ttt;
+    a[0] += val_212 * ttd;
+    a[0] += val_311 * dtt;
+    a[0] += val_312 * dtd;
+    a[0] += val_221 * tdt;
+    a[0] += val_222 * tdd;
+    a[0] += val_321 * ddt;
+    a[0] += val_322 * ddd;
+    a[0] -= val_011 * ttt;
+    a[0] -= val_012 * ttd;
+    a[0] -= val_111 * dtt;
+    a[0] -= val_112 * dtd;
+    a[0] -= val_021 * tdt;
+    a[0] -= val_022 * tdd;
+    a[0] -= val_121 * ddt;
+    a[0] -= val_122 * ddd;
+
+    /* Compute the finite difference along the y-axis */
+    a[1] += val_121 * ttt;
+    a[1] += val_122 * ttd;
+    a[1] += val_221 * dtt;
+    a[1] += val_222 * dtd;
+    a[1] += val_131 * tdt;
+    a[1] += val_132 * tdd;
+    a[1] += val_231 * ddt;
+    a[1] += val_232 * ddd;
+    a[1] -= val_101 * ttt;
+    a[1] -= val_102 * ttd;
+    a[1] -= val_201 * dtt;
+    a[1] -= val_202 * dtd;
+    a[1] -= val_111 * tdt;
+    a[1] -= val_112 * tdd;
+    a[1] -= val_211 * ddt;
+    a[1] -= val_212 * ddd;
+
+    /* Compute the finite difference along the z-axis */
+    a[2] += val_112 * ttt;
+    a[2] += val_113 * ttd;
+    a[2] += val_212 * dtt;
+    a[2] += val_213 * dtd;
+    a[2] += val_122 * tdt;
+    a[2] += val_123 * tdd;
+    a[2] += val_222 * ddt;
+    a[2] += val_223 * ddd;
+    a[2] -= val_110 * ttt;
+    a[2] -= val_111 * ttd;
+    a[2] -= val_210 * dtt;
+    a[2] -= val_211 * dtd;
+    a[2] -= val_120 * tdt;
+    a[2] -= val_121 * tdd;
+    a[2] -= val_220 * ddt;
+    a[2] -= val_221 * ddd;
+
     a[0] *= fac_over_2;
-
-    a[1] = 0.0;
-    a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz);
-    a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz);
     a[1] *= fac_over_2;
-
-    a[2] = 0.0;
-    a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz);
-    a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz);
     a[2] *= fac_over_2;
+
+
+    // a[0] = 0.0;
+    // a[0] += fastCIC(dg, N, iX + 1, iY, iZ, dx, dy, dz, tx, ty, tz);
+    // a[0] -= fastCIC(dg, N, iX - 1, iY, iZ, dx, dy, dz, tx, ty, tz);
+    // a[0] *= fac_over_2;
+    //
+    // a[1] = 0.0;
+    // a[1] += fastCIC(dg, N, iX, iY + 1, iZ, dx, dy, dz, tx, ty, tz);
+    // a[1] -= fastCIC(dg, N, iX, iY - 1, iZ, dx, dy, dz, tx, ty, tz);
+    // a[1] *= fac_over_2;
+    //
+    // a[2] = 0.0;
+    // a[2] += fastCIC(dg, N, iX, iY, iZ + 1, dx, dy, dz, tx, ty, tz);
+    // a[2] -= fastCIC(dg, N, iX, iY, iZ - 1, dx, dy, dz, tx, ty, tz);
+    // a[2] *= fac_over_2;
 
 }

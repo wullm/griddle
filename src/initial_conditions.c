@@ -212,9 +212,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->id = (long long int) i * N * N + j * N + k;
 
                 /* Regular grid positions */
-                double x[3] = {i * grid_fac,
-                               j * grid_fac,
-                               k * grid_fac};
+                double x[3] = {i, j, k};
 
                 /* Zel'dovich displacement */
                 double dx[3] = {0,0,0};
@@ -233,9 +231,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 x[2] -=  dx[2] + factor_2lpt * dx2[2];
 
                 /* Convert positions to integers */
-                part->x[0] = pos_to_int_fac * x[0];
-                part->x[1] = pos_to_int_fac * x[1];
-                part->x[2] = pos_to_int_fac * x[2];
+                part->x[0] = grid_fac * pos_to_int_fac * x[0];
+                part->x[1] = grid_fac * pos_to_int_fac * x[1];
+                part->x[2] = grid_fac * pos_to_int_fac * x[2];
 
                 /* Set the velocities */
                 part->v[0] -= vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);

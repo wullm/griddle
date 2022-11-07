@@ -265,11 +265,11 @@ int main(int argc, char *argv[]) {
     /* Prepare FFT plans for the gravity mesh */
     message(rank, "Carefully planning FFTs. This may take awhile.\n");
 #ifdef USE_IN_PLACE_FFTS
-    int fftws_flag_in = FFTW_MPI_TRANSPOSED_IN;
-    int fftws_flag_out = FFTW_MPI_TRANSPOSED_OUT;
+    int fftws_flag_in = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_IN;
+    int fftws_flag_out = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_OUT;
 #else
-    int fftws_flag_in = FFTW_MPI_TRANSPOSED_IN | FFTW_DESTROY_INPUT;
-    int fftws_flag_out = FFTW_MPI_TRANSPOSED_OUT | FFTW_DESTROY_INPUT;
+    int fftws_flag_in = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_IN | FFTW_DESTROY_INPUT;
+    int fftws_flag_out = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_OUT | FFTW_DESTROY_INPUT;
 #endif
 #ifdef SINGLE_PRECISION_FFTW
     FourierPlanType r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
@@ -330,6 +330,11 @@ int main(int argc, char *argv[]) {
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
     const double int_to_pos_fac = 1.0 / pos_to_int_fac;
+
+    /* Position factors on [0, M] where M is the PM size */
+    const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
+    const double int_to_grid_fac = 1.0 / grid_to_int_fac;
+    const double grid_fac = M / boxlen;
 
     /* Start at the beginning */
     double a = a_begin;
@@ -405,10 +410,10 @@ int main(int argc, char *argv[]) {
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
 
-            /* Convert integer positions to floating points */
-            double x[3] = {p->x[0] * int_to_pos_fac,
-                           p->x[1] * int_to_pos_fac,
-                           p->x[2] * int_to_pos_fac};
+            /* Convert integer positions to floating points on [0, M] */
+            double x[3] = {p->x[0] * int_to_grid_fac,
+                           p->x[1] * int_to_grid_fac,
+                           p->x[2] * int_to_grid_fac};
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
@@ -445,14 +450,14 @@ int main(int argc, char *argv[]) {
             }
 
             /* Execute drift */
-            x[0] += p->v[0] * drift_dtau * rel_drift;
-            x[1] += p->v[1] * drift_dtau * rel_drift;
-            x[2] += p->v[2] * drift_dtau * rel_drift;
+            p->x[0] += p->v[0] * drift_dtau * rel_drift * grid_to_int_fac;
+            p->x[1] += p->v[1] * drift_dtau * rel_drift * grid_to_int_fac;
+            p->x[2] += p->v[2] * drift_dtau * rel_drift * grid_to_int_fac;
 
-            /* Convert positions to integers (wrapping automatic by overflow) */
-            p->x[0] = x[0] * pos_to_int_fac;
-            p->x[1] = x[1] * pos_to_int_fac;
-            p->x[2] = x[2] * pos_to_int_fac;
+            // /* Convert positions to integers (wrapping automatic by overflow) */
+            // p->x[0] = x[0] * grid_to_int_fac;
+            // p->x[1] = x[1] * grid_to_int_fac;
+            // p->x[2] = x[2] * grid_to_int_fac;
         }
 
         /* Timer */

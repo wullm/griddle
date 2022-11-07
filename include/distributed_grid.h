@@ -107,6 +107,12 @@ static inline GridFloatType* point_row_major_dg_buffered(int i, int j, int k, co
     return &dg->buffered_box[i*dg->Ny*dg->Nz + j*dg->Nz + k];
 }
 
+static inline GridFloatType* point_row_major_dg_buffered_nobounds(int i, int j, int k, const struct distributed_grid *dg) {
+    /* Map to local slice (no out of bounds handling) */
+    i = i - dg->X0 + dg->buffer_width;
+    return &dg->buffered_box[i*dg->Ny*dg->Nz + j*dg->Nz + k];
+}
+
 static inline GridComplexType* point_row_major_half_dg(int i, int j, int k, const struct distributed_grid *dg) {
     /* Wrap global coordinates */
     i = wrap(i,dg->N);
