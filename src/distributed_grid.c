@@ -168,20 +168,42 @@ int create_local_buffers(struct distributed_grid *dg) {
     /* The first element for the left buffer of the right neighbour */
     long int first_right = (dg->NX - dg->buffer_width) * dg->Ny * dg->Nz;
 
-    /* Send the buffer to the right */
-    MPI_Request request_left;
-    MPI_Irecv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
-             MPI_COMM_WORLD, &request_left);
-    MPI_Ssend(dg->box + first_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
+    /* Send buffers left and right, using non-blocking calls */
+    MPI_Request delivery_left;
+    MPI_Request delivery_right;
+    MPI_Isend(dg->box + first_left, size, MPI_GRID_TYPE, rank_left, 2, MPI_COMM_WORLD, &delivery_left);
+    MPI_Isend(dg->box + first_right, size, MPI_GRID_TYPE, rank_right, 2, MPI_COMM_WORLD, &delivery_right);
 
-    /* Send the buffer to the left */
-    MPI_Request request_right;
-    MPI_Irecv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
-             MPI_COMM_WORLD, &request_right);
-    MPI_Ssend(dg->box + first_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
+    /* Probe and receive buffers from the left and right when ready */
+    int finished_left = 0, finished_right = 0;
+    while (!finished_left || !finished_right) {
+        /* Probe and receive left, blocking only when ready */
+        if (!finished_left) {
+            int ready_left = 0;
+            MPI_Status status_left;
+            MPI_Iprobe(rank_left, 2, MPI_COMM_WORLD, &ready_left, &status_left);
+            if (ready_left) {
+                MPI_Recv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 2,
+                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                finished_left = 1;
+            }
+        }
 
-    MPI_Wait(&request_left, MPI_STATUS_IGNORE);
-    MPI_Wait(&request_right, MPI_STATUS_IGNORE);
+        /* Probe and receive right, blocking only when ready */
+        if (!finished_right) {
+            int ready_right = 0;
+            MPI_Status status_right;
+            MPI_Iprobe(rank_right, 2, MPI_COMM_WORLD, &ready_right, &status_right);
+            if (ready_right) {
+                MPI_Recv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 2,
+                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                finished_right = 1;
+            }
+        }
+    }
+
+    MPI_Wait(&delivery_left, MPI_STATUS_IGNORE);
+    MPI_Wait(&delivery_right, MPI_STATUS_IGNORE);
 
     return 0;
 }
@@ -207,33 +229,54 @@ int add_local_buffers(struct distributed_grid *dg) {
     GridFloatType *recv_buffer_left = fft_alloc_real(size);
     GridFloatType *recv_buffer_right = fft_alloc_real(size);
 
-    /* Send the buffer to the right */
-    MPI_Request request_left;
-    MPI_Irecv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
-              MPI_COMM_WORLD, &request_left);
-    MPI_Ssend(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
+    /* Send buffers left and right, using non-blocking calls */
+    MPI_Request delivery_left;
+    MPI_Request delivery_right;
+    MPI_Isend(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 1, MPI_COMM_WORLD, &delivery_left);
+    MPI_Isend(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 1, MPI_COMM_WORLD, &delivery_right);
 
-    /* Send the buffer to the left */
-    MPI_Request request_right;
-    MPI_Irecv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
-              MPI_COMM_WORLD, &request_right);
-    MPI_Ssend(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
+    /* Probe and receive buffers from the left and right when ready */
+    int finished_left = 0, finished_right = 0;
+    while (!finished_left || !finished_right) {
+        /* Probe and receive left, blocking only when ready */
+        if (!finished_left) {
+            int ready_left = 0;
+            MPI_Status status_left;
+            MPI_Iprobe(rank_left, 1, MPI_COMM_WORLD, &ready_left, &status_left);
+            if (ready_left) {
+                MPI_Recv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 1,
+                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    MPI_Wait(&request_left, MPI_STATUS_IGNORE);
+                /* Add the left buffer to the main grid */
+                long int first_left = 0;
+                for (long int i = 0; i < size; i ++) {
+                    dg->box[first_left + i] += recv_buffer_left[i];
+                }
+                finished_left = 1;
+            }
+        }
 
-    /* Add the left buffer to the main grid */
-    long int first_left = 0;
-    for (long int i = 0; i < size; i ++) {
-        dg->box[first_left + i] += recv_buffer_left[i];
+        /* Probe and receive right, blocking only when ready */
+        if (!finished_right) {
+            int ready_right = 0;
+            MPI_Status status_right;
+            MPI_Iprobe(rank_right, 1, MPI_COMM_WORLD, &ready_right, &status_right);
+            if (ready_right) {
+                MPI_Recv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 1,
+                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                /* Add the right buffer to the main grid */
+                long int first_right = (dg->NX - dg->buffer_width) * dg->Ny * dg->Nz;
+                for (long int i = 0; i < size; i ++) {
+                    dg->box[first_right + i] += recv_buffer_right[i];
+                }
+                finished_right = 1;
+            }
+        }
     }
 
-    MPI_Wait(&request_right, MPI_STATUS_IGNORE);
-
-    /* Add the right buffer to the main grid */
-    long int first_right = (dg->NX - dg->buffer_width) * dg->Ny * dg->Nz;
-    for (long int i = 0; i < size; i ++) {
-        dg->box[first_right + i] += recv_buffer_right[i];
-    }
+    MPI_Wait(&delivery_left, MPI_STATUS_IGNORE);
+    MPI_Wait(&delivery_right, MPI_STATUS_IGNORE);
 
     /* Free the temporary arrays */
     fft_free(recv_buffer_left);
