@@ -24,5 +24,6 @@
 
 void accelCIC(const struct distributed_grid *dg, double *x, double *a);
 void accelCIC_2nd(const struct distributed_grid *dg, double *x, double *a);
+void accelCIC_1st(const struct distributed_grid *dg, double *x, double *a);
 
 #endif
