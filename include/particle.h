@@ -84,20 +84,16 @@ struct particle {
     /* The particle type */
     uint16_t type;
 #endif
-
-    /* Used for communications (only 2 bits used) */
-    int16_t exchange_dir;
 };
 
 static inline MPI_Datatype mpi_particle_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[8] = { MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_FLOATVEL_TYPE,
-                              MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT16_T,
-                              MPI_INT16_T };
-    int lengths[8];
-    MPI_Aint displacements[8];
+    MPI_Datatype types[7] = {MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_FLOATVEL_TYPE,
+                             MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT16_T};
+    int lengths[7];
+    MPI_Aint displacements[7];
     MPI_Aint base_address;
     struct particle temp;
     MPI_Get_address(&temp, &base_address);
@@ -154,23 +150,18 @@ static inline MPI_Datatype mpi_particle_type() {
     displacements[6] = 0;
 #endif
 
-    /* Exchange direction */
-    lengths[7] = 1;
-    MPI_Get_address(&temp.exchange_dir, &displacements[7]);
-    displacements[7] = MPI_Aint_diff(displacements[7], base_address);
-
     /* Create the datatype */
-    MPI_Type_create_struct(8, lengths, displacements, types, &particle_type);
+    MPI_Type_create_struct(7, lengths, displacements, types, &particle_type);
     MPI_Type_commit(&particle_type);
 
     return particle_type;
 }
 
-static inline int particleSort(const void *a, const void *b) {
-    struct particle *pa = (struct particle*) a;
-    struct particle *pb = (struct particle*) b;
-    return pa->exchange_dir >= pb->exchange_dir;
-}
+// static inline int particleSort(const void *a, const void *b) {
+//     struct particle *pa = (struct particle*) a;
+//     struct particle *pb = (struct particle*) b;
+//     return pa->exchange_dir >= pb->exchange_dir;
+// }
 
 #ifdef WITH_PARTTYPE
 static inline int particleTypeSort(const void *a, const void *b) {
