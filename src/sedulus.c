@@ -528,8 +528,8 @@ int main(int argc, char *argv[]) {
     fftwf_destroy_plan(r2c_mpi);
     fftwf_destroy_plan(c2r_mpi);
 #else
-    fftwf_destroy_plan(r2c_mpi);
-    fftwf_destroy_plan(c2r_mpi);
+    fftw_destroy_plan(r2c_mpi);
+    fftw_destroy_plan(c2r_mpi);
 #endif
 
     /* Done with MPI parallelization */
