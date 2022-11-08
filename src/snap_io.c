@@ -229,7 +229,9 @@ int exportSnapshot(struct params *pars, struct units *us,
         /* Unpack the remaining particle data into contiguous arrays */
         double *coords = malloc(3 * local_parts_per_type[t] * sizeof(double));
         double *vels = malloc(3 * local_parts_per_type[t] * sizeof(double));
+#ifdef WITH_PARTICLE_IDS
         long long *ids = malloc(1 * local_parts_per_type[t] * sizeof(long long));
+#endif
 #ifdef WITH_MASSES
         double *masses = malloc(1 * local_parts_per_type[t] * sizeof(double));
 #endif
@@ -262,9 +264,12 @@ int exportSnapshot(struct params *pars, struct units *us,
             vels[i * 3 + 0] /= a;
             vels[i * 3 + 1] /= a;
             vels[i * 3 + 2] /= a;
-            /* Unpack the IDs and masses */
+#ifdef WITH_PARTICLE_IDS
+            /* Unpack the particle IDs */
             ids[i] = p->id;
+#endif
 #ifdef WITH_MASSES
+            /* Unpack the particle masses */
             masses[i] = p->m;
 #endif
         }
@@ -295,11 +300,13 @@ int exportSnapshot(struct params *pars, struct units *us,
         H5Dclose(h_data);
         free(vels);
 
+#ifdef WITH_PARTICLE_IDS
         /* Write particle id data (scalar) */
         h_data = H5Dopen(h_grp, "ParticleIDs", H5P_DEFAULT);
         H5Dwrite(h_data, H5T_NATIVE_LLONG, h_ch_sspace, h_sspace, H5P_DEFAULT, ids);
         H5Dclose(h_data);
         free(ids);
+#endif
 
 #ifdef WITH_MASSES
         /* Write mass data (scalar) */
@@ -691,6 +698,7 @@ int readSnapshot(struct params *pars, struct units *us,
     /* Free the contiguous array */
     free(veloc_data);
 
+#ifdef WITH_PARTICLE_IDS
     /* Open the particleIDs dataset and corresponding dataspace */
     h_dat = H5Dopen(h_grp, "ParticleIDs", H5P_DEFAULT);
     h_space = H5Dget_space(h_dat);
@@ -718,6 +726,7 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Free the contiguous array */
     free(ids_data);
+#endif
 
     /* Close the particle group */
     H5Gclose(h_grp);

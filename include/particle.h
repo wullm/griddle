@@ -28,6 +28,7 @@
 #define SINGLE_PRECISION_VELOCITIES
 #define WITH_ACCELERATIONS
 #define WITH_MASSES
+#define WITH_PARTICLE_IDS
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
@@ -60,8 +61,11 @@ typedef double FloatVelType;
 #endif
 
 struct particle {
-    /* Basic particle data */
+
+#ifdef WITH_PARTICLE_IDS
+    /* Particle ID */
     IntIDType id;
+#endif
 
     /* Position, velocity */
     IntPosType x[3];
@@ -98,10 +102,15 @@ static inline MPI_Datatype mpi_particle_type() {
     struct particle temp;
     MPI_Get_address(&temp, &base_address);
 
+#ifdef WITH_PARTICLE_IDS
     /* ID */
     lengths[0] = 1;
     MPI_Get_address(&temp.id, &displacements[0]);
     displacements[0] = MPI_Aint_diff(displacements[0], base_address);
+#else
+    lengths[0] = 0;
+    displacements[0] = 0;
+#endif
 
     /* Position */
     lengths[1] = 3;

@@ -454,7 +454,7 @@ int main(int argc, char *argv[]) {
             double rel_drift = relativistic_drift(p, &pcs, a);
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
-#ifdef WITH_PARTTYPE
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
             if (p->type == 6) {
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
                 double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];

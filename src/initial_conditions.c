@@ -211,7 +211,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
                 struct particle *part = &parts[(i-X0) * N * N + j * N + k];
+#ifdef WITH_PARTICLE_IDS
                 part->id = (long long int) i * N * N + j * N + k;
+#endif
 
                 /* Regular grid positions */
                 double x[3] = {i, j, k};
@@ -290,7 +292,10 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
     /* Generate neutrinos */
     for (long long i = 0; i < local_neutrino_num; i++) {
         struct particle *part = &parts[local_partnum + i];
-        part->id = local_partnum + i;
+        long int seed_and_id = local_partnum + i;
+#ifdef WITH_PARTICLE_IDS
+        part->id = seed_and_id;
+#endif
 
         /* Neutrino */
 #ifdef WITH_PARTTYPE
@@ -306,7 +311,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
         part->x[2] = pos_to_int_fac * sampleUniform(state) * boxlen;
 
         /* Sample a neutrino species */
-        int species = (int)(part->id % cosmo->N_nu);
+        int species = (int)(seed_and_id % cosmo->N_nu);
         double m_eV = cosmo->M_nu[species];
 #ifdef WITH_MASSES
         part->m = Omega_nu_0[species] * base_part_mass;
@@ -314,8 +319,8 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
 
         /* Sample a deterministic Fermi-Dirac momentum */
         double n[3];
-        double p = neutrino_seed_to_fermi_dirac(part->id) * fac / m_eV;
-        neutrino_seed_to_direction(part->id, n);
+        double p = neutrino_seed_to_fermi_dirac(seed_and_id) * fac / m_eV;
+        neutrino_seed_to_direction(seed_and_id, n);
 
         part->v[0] = p * n[0];
         part->v[1] = p * n[1];
