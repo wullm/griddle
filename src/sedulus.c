@@ -149,6 +149,11 @@ int main(int argc, char *argv[]) {
         printf("Number of particles exceeds UINT32_MAX. Please disable SINGLE_PRECISION_IDS.\n");
         exit(1);
     }
+#else
+    if (N * N * N + N_nu * N_nu * N_nu > UINT64_MAX) {
+        printf("Number of particles exceeds UINT64_MAX. Perhaps add long int ids.\n");
+        exit(1);
+    }
 #endif
 
     /* Each MPI rank stores a portion of the full 3D mesh, as well as copies
@@ -427,10 +432,14 @@ int main(int argc, char *argv[]) {
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
-            if (pars.DerivativeOrder == 2) {
+            if (pars.DerivativeOrder == 1) {
+                accelCIC_1st(&mass, x, acc); /* first order */
+            } else if (pars.DerivativeOrder == 2) {
                 accelCIC_2nd(&mass, x, acc); /* second order */
-            } else {
+            } else if (pars.DerivativeOrder == 4) {
                 accelCIC(&mass, x, acc); /* fourth order */
+            } else {
+                printf("Differentiation scheme with order %d not implemented.\n", pars.DerivativeOrder);
             }
 
 #ifndef WITH_MASSES

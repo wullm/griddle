@@ -171,15 +171,14 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         double ty = 1.0 - dy;
         double tz = 1.0 - dz;
 
-        int iX2 = iX + 1 - X0 + buffer_width;
+        iX += - X0 + buffer_width;
+
+        int iX2 = iX + 1;
         int iY2 = iY + 1;
         int iZ2 = iZ + 1;
 
         if (iY2 >= N) iY2 -= N;
         if (iZ2 >= N) iZ2 -= N;
-
-        iX += - X0 + buffer_width;
-
 
         /* Deposit the mass over the nearest 8 cells */
         box[row_major_index(iX, iY, iZ, N, Nz)] += M * tx * ty * tz;
