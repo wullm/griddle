@@ -72,6 +72,10 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     long long int num_send_left = 0;
     long long int num_send_right = 0;
 
+    /* Pointers to particles that should be sent left or right */
+    struct particle *send_left_ptr = NULL;
+    struct particle *send_right_ptr = NULL;
+
     /* In the first iteration, particles need to be sorted */
     if (iteration == 0) {
         for (long long i = 0; i < *num_localpart; i++) {
@@ -92,10 +96,14 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             }
         }
 
-        /* Allocate temporary arrays for particle sort */
-        struct particle *temp_left = malloc(num_send_left * sizeof(struct particle));
-        struct particle *temp_right = malloc(num_send_right * sizeof(struct particle));
-        struct particle *temp_rest = malloc((*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
+        /* In the first iteration, we allocate memory to fish out particles
+         * that should be sent left or right. In later iterations, the array
+         * is sorted and this is not needed. */
+        send_left_ptr = malloc(num_send_left * sizeof(struct particle));
+        send_right_ptr = malloc(num_send_right * sizeof(struct particle));
+
+        /* Allocate temporary array for the reamining particles */
+        struct particle *temp = malloc((*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
 
         /* Sort the particles into buckets: left, centre, right */
         long int i_left = 0;
@@ -105,26 +113,31 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         for (long long i = 0; i < *num_localpart; i++) {
             struct particle *p = &parts[i];
             if (p->exchange_dir == -1) {
-                memcpy(temp_left + i_left, parts + i, sizeof(struct particle));
+                memcpy(send_left_ptr + i_left, parts + i, sizeof(struct particle));
                 i_left++;
             } else if (p->exchange_dir == 0) {
-                memcpy(temp_rest + i_rest, parts + i, sizeof(struct particle));
+                memcpy(temp + i_rest, parts + i, sizeof(struct particle));
                 i_rest++;
             } else if (p->exchange_dir == 1) {
-                memcpy(temp_right + i_right, parts + i, sizeof(struct particle));
+                memcpy(send_right_ptr + i_right, parts + i, sizeof(struct particle));
                 i_right++;
             }
         }
 
         /* Move the particles where they need to be in the main array */
-        memcpy(parts, temp_left, num_send_left * sizeof(struct particle));
-        memcpy(parts + num_send_left, temp_rest, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
-        memcpy(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(struct particle));
+        // memcpy(parts, temp_left, num_send_left * sizeof(struct particle));
+        // memcpy(parts + num_send_left, temp_rest, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
+        // memcpy(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(struct particle));
+
+        /* Move the remaining particles to the middle of the array */
+        memcpy(parts + num_send_left, temp, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
+
+        /* Erase the space at the beginning and end to be sure */
+        memset(parts, 0, num_send_left * sizeof(struct particle));
+        memset(parts + (*num_localpart - num_send_right), 0, num_send_right * sizeof(struct particle));
 
         /* Free the temporary arrays */
-        free(temp_left);
-        free(temp_rest);
-        free(temp_right);
+        free(temp);
 
         // if (num_send_left + num_send_right > 0) {
         //     qsort(parts, *num_localpart, sizeof(struct particle), particleSort);
@@ -153,10 +166,6 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         /* All particles are already sorted, so we are done */
     }
 
-    /* The index of the first particle to be sent left, respectively right */
-    long long int first_send_left = 0;
-    long long int first_send_right = *num_localpart - num_send_right;
-
     // printf("Sending %lld right, starting from %lld (%d) and %lld left, starting from %lld, and we have %lld foreigns\n", num_send_right, first_send_right, rank, num_send_left, first_send_left, foreign_particles);
 
     /* Arrays and counts of received particles */
@@ -165,12 +174,22 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     int receive_from_left = 0;
     int receive_from_right = 0;
 
+    /* In later iterations, the particles are sorted and do not have to be
+     * fished out. We just point to where the particles begin and end */
+    if (iteration > 0) {
+        long long int first_send_left = 0;
+        long long int first_send_right = *num_localpart - num_send_right;
+
+        send_left_ptr = &parts[first_send_left];
+        send_right_ptr = &parts[first_send_right];
+    }
+
     /* Send particles left and right, using non-blocking calls */
     MPI_Request delivery_left;
     MPI_Request delivery_right;
-    MPI_Isend(&parts[first_send_left], num_send_left, particle_type,
+    MPI_Isend(send_left_ptr, num_send_left, particle_type,
               rank_left, 0, MPI_COMM_WORLD, &delivery_left);
-    MPI_Isend(&parts[first_send_right], num_send_right, particle_type,
+    MPI_Isend(send_right_ptr, num_send_right, particle_type,
               rank_right, 0, MPI_COMM_WORLD, &delivery_right);
 
     /* Probe and receive particles from the left and right when ready */
@@ -245,9 +264,15 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         exit(1);
     }
 
-    /* We now want to operate on the particles array, so delivery must be completed */
-    MPI_Wait(&delivery_left, MPI_STATUS_IGNORE);
-    MPI_Wait(&delivery_right, MPI_STATUS_IGNORE);
+    if (iteration > 0) {
+        /* We now want to operate on the particles array, so delivery must be completed */
+        MPI_Wait(&delivery_left, MPI_STATUS_IGNORE);
+        MPI_Wait(&delivery_right, MPI_STATUS_IGNORE);
+    } else {
+        /* Free the dedicated memory of the particles that were sent away */
+        free(send_left_ptr);
+        free(send_right_ptr);
+    }
 
     /* Make space for particles on the left (use memmove because of overlap) */
     if (receive_from_right > 0 || num_send_left > 0)
