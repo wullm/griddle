@@ -53,6 +53,9 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         return 0;
     }
 
+    /* Data type for MPI communication of particles */
+    MPI_Datatype particle_type = mpi_particle_type();
+
     /* Determine the maximum width of any local slice of the grid (of size Ng^3) */
     long long int max_block_width = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
 
@@ -102,21 +105,21 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         for (long long i = 0; i < *num_localpart; i++) {
             struct particle *p = &parts[i];
             if (p->exchange_dir == -1) {
-                memmove(temp_left + i_left, parts + i, sizeof(struct particle));
+                memcpy(temp_left + i_left, parts + i, sizeof(struct particle));
                 i_left++;
             } else if (p->exchange_dir == 0) {
-                memmove(temp_rest + i_rest, parts + i, sizeof(struct particle));
+                memcpy(temp_rest + i_rest, parts + i, sizeof(struct particle));
                 i_rest++;
             } else if (p->exchange_dir == 1) {
-                memmove(temp_right + i_right, parts + i, sizeof(struct particle));
+                memcpy(temp_right + i_right, parts + i, sizeof(struct particle));
                 i_right++;
             }
         }
 
         /* Move the particles where they need to be in the main array */
-        memmove(parts, temp_left, num_send_left * sizeof(struct particle));
-        memmove(parts + num_send_left, temp_rest, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
-        memmove(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(struct particle));
+        memcpy(parts, temp_left, num_send_left * sizeof(struct particle));
+        memcpy(parts + num_send_left, temp_rest, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
+        memcpy(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(struct particle));
 
         /* Free the temporary arrays */
         free(temp_left);
@@ -177,15 +180,14 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     struct particle *receive_parts_left = malloc(receive_from_left * sizeof(struct particle));
 
     if (rank > 0) {
-        MPI_Recv(receive_parts_left, receive_from_left * sizeof(struct particle),
-                 MPI_CHAR, rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(receive_parts_left, receive_from_left, particle_type,
+                 rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Send(&parts[first_send_right], num_send_right * sizeof(struct particle),
-             MPI_CHAR, rank_right, 0, MPI_COMM_WORLD);
+    MPI_Send(&parts[first_send_right], num_send_right, particle_type,
+             rank_right, 0, MPI_COMM_WORLD);
     if (rank == 0) {
-        MPI_Recv(receive_parts_left, receive_from_left * sizeof(struct particle),
-                 MPI_CHAR, rank_left, 0, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+        MPI_Recv(receive_parts_left, receive_from_left, particle_type,
+                 rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     /** **/
@@ -209,15 +211,14 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     struct particle *receive_parts_right = malloc(receive_from_right * sizeof(struct particle));
 
     if (rank < MPI_Rank_Count - 1) {
-        MPI_Recv(receive_parts_right, receive_from_right * sizeof(struct particle),
-                 MPI_CHAR, rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(receive_parts_right, receive_from_right, particle_type,
+                 rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Send(&parts[first_send_left], num_send_left * sizeof(struct particle),
-             MPI_CHAR, rank_left, 0, MPI_COMM_WORLD);
+    MPI_Send(&parts[first_send_left], num_send_left, particle_type,
+             rank_left, 0, MPI_COMM_WORLD);
     if (rank == MPI_Rank_Count - 1) {
-        MPI_Recv(receive_parts_right, receive_from_right * sizeof(struct particle),
-                 MPI_CHAR, rank_right, 0, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+        MPI_Recv(receive_parts_right, receive_from_right, particle_type,
+                 rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     /* For the received particles, determine whether they should be moved on */
@@ -256,14 +257,14 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         exit(1);
     }
 
-    /* Make space for particles on the left */
+    /* Make space for particles on the left (use memmove because of overlap) */
     memmove(parts + receive_from_right, parts + num_send_left,
             (*num_localpart - num_send_left) * sizeof(struct particle));
     /* Insert the particles received from the right on the left (to pass on) */
-    memmove(parts, receive_parts_right, receive_from_right * sizeof(struct particle));
+    memcpy(parts, receive_parts_right, receive_from_right * sizeof(struct particle));
     /* Insert the particles received from the left on the right (to pass on) */
-    memmove(parts + *num_localpart - num_send_left - num_send_right + receive_from_right,
-            receive_parts_left, receive_from_left * sizeof(struct particle));
+    memcpy(parts + *num_localpart - num_send_left - num_send_right + receive_from_right,
+           receive_parts_left, receive_from_left * sizeof(struct particle));
 
     /* Update the particle numbers */
     *num_localpart = *num_localpart + receive_from_left + receive_from_right - num_send_right - num_send_left;

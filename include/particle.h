@@ -21,6 +21,7 @@
 #define PARTICLE_H
 
 #include <stdint.h>
+#include <mpi.h>
 
 #define SINGLE_PRECISION_IDS
 #define SINGLE_PRECISION_POSITIONS
@@ -30,25 +31,31 @@
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
+#define MPI_PID_TYPE MPI_UINT32_T
 typedef uint32_t IntIDType;
 #else
 #define PID_BITS 64
+#define MPI_PID_TYPE MPI_UINT64_T
 typedef uint64_t IntIDType;
 #endif
 
 #ifdef SINGLE_PRECISION_POSITIONS
 #define POSITION_BITS 32
+#define MPI_INTPOS_TYPE MPI_UINT32_T
 typedef uint32_t IntPosType;
 #else
 #define POSITION_BITS 64
+#define MPI_INTPOS_TYPE MPI_UINT64_T
 typedef uint64_t IntPosType;
 #endif
 
 #ifdef SINGLE_PRECISION_VELOCITIES
 #define VELOCITY_BITS 32
+#define MPI_FLOATVEL_TYPE MPI_FLOAT
 typedef float FloatVelType;
 #else
 #define VELOCITY_BITS 64
+#define MPI_FLOATVEL_TYPE MPI_DOUBLE
 typedef double FloatVelType;
 #endif
 
@@ -60,14 +67,14 @@ struct particle {
     IntPosType x[3];
     FloatVelType v[3];
 
-#ifdef WITH_MASSES
-    /* Particle mass */
-    float m;
-#endif
-
 #ifdef WITH_ACCELERATIONS
     /* Accelerations */
     float a[3];
+#endif
+
+#ifdef WITH_MASSES
+    /* Particle mass */
+    float m;
 #endif
 
 #ifdef WITH_PARTTYPE
@@ -81,6 +88,83 @@ struct particle {
     /* Used for communications (only 2 bits used) */
     int16_t exchange_dir;
 };
+
+static inline MPI_Datatype mpi_particle_type() {
+
+    /* Construct an MPI data type from the constituent fields */
+    MPI_Datatype particle_type;
+    MPI_Datatype types[8] = { MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_FLOATVEL_TYPE,
+                              MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT16_T,
+                              MPI_INT16_T };
+    int lengths[8];
+    MPI_Aint displacements[8];
+    MPI_Aint base_address;
+    struct particle temp;
+    MPI_Get_address(&temp, &base_address);
+
+    /* ID */
+    lengths[0] = 1;
+    MPI_Get_address(&temp.id, &displacements[0]);
+    displacements[0] = MPI_Aint_diff(displacements[0], base_address);
+
+    /* Position */
+    lengths[1] = 3;
+    MPI_Get_address(&temp.x[0], &displacements[1]);
+    displacements[1] = MPI_Aint_diff(displacements[1], base_address);
+
+    /* Velocity */
+    lengths[2] = 3;
+    MPI_Get_address(&temp.v[0], &displacements[2]);
+    displacements[2] = MPI_Aint_diff(displacements[2], base_address);
+
+#ifdef WITH_ACCELERATIONS
+    /* Acceleration */
+    lengths[3] = 3;
+    MPI_Get_address(&temp.a[0], &displacements[3]);
+    displacements[3] = MPI_Aint_diff(displacements[3], base_address);
+#else
+    lengths[3] = 0;
+    displacements[3] = 0;
+#endif
+
+#ifdef WITH_MASSES
+    /* Mass */
+    lengths[4] = 1;
+    MPI_Get_address(&temp.m, &displacements[4]);
+    displacements[4] = MPI_Aint_diff(displacements[4], base_address);
+#else
+    lengths[4] = 0;
+    displacements[4] = 0;
+#endif
+
+#ifdef WITH_PARTTYPE
+    /* Neutrino delta-f weight */
+    lengths[5] = 1;
+    MPI_Get_address(&temp.w, &displacements[5]);
+    displacements[5] = MPI_Aint_diff(displacements[5], base_address);
+
+    /* Particle type */
+    lengths[6] = 1;
+    MPI_Get_address(&temp.type, &displacements[6]);
+    displacements[6] = MPI_Aint_diff(displacements[6], base_address);
+#else
+    lengths[5] = 0;
+    displacements[5] = 0;
+    lengths[6] = 0;
+    displacements[6] = 0;
+#endif
+
+    /* Exchange direction */
+    lengths[7] = 1;
+    MPI_Get_address(&temp.exchange_dir, &displacements[7]);
+    displacements[7] = MPI_Aint_diff(displacements[7], base_address);
+
+    /* Create the datatype */
+    MPI_Type_create_struct(8, lengths, displacements, types, &particle_type);
+    MPI_Type_commit(&particle_type);
+
+    return particle_type;
+}
 
 static inline int particleSort(const void *a, const void *b) {
     struct particle *pa = (struct particle*) a;
