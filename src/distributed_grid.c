@@ -169,26 +169,19 @@ int create_local_buffers(struct distributed_grid *dg) {
     long int first_right = (dg->NX - dg->buffer_width) * dg->Ny * dg->Nz;
 
     /* Send the buffer to the right */
-    if (rank > 0) {
-        MPI_Recv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(dg->box + first_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+    MPI_Request request_left;
+    MPI_Irecv(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
+             MPI_COMM_WORLD, &request_left);
+    MPI_Ssend(dg->box + first_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
 
     /* Send the buffer to the left */
-    if (rank > 0) {
-        MPI_Recv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(dg->box + first_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+    MPI_Request request_right;
+    MPI_Irecv(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
+             MPI_COMM_WORLD, &request_right);
+    MPI_Ssend(dg->box + first_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
+
+    MPI_Wait(&request_left, MPI_STATUS_IGNORE);
+    MPI_Wait(&request_right, MPI_STATUS_IGNORE);
 
     return 0;
 }
@@ -214,34 +207,27 @@ int add_local_buffers(struct distributed_grid *dg) {
     GridFloatType *recv_buffer_left = fft_alloc_real(size);
     GridFloatType *recv_buffer_right = fft_alloc_real(size);
 
-
     /* Send the buffer to the right */
-    if (rank > 0) {
-        MPI_Recv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+    MPI_Request request_left;
+    MPI_Irecv(recv_buffer_left, size, MPI_GRID_TYPE, rank_left, 0,
+              MPI_COMM_WORLD, &request_left);
+    MPI_Ssend(dg->buffer_right, size, MPI_GRID_TYPE, rank_right, 0, MPI_COMM_WORLD);
 
     /* Send the buffer to the left */
-    if (rank > 0) {
-        MPI_Recv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+    MPI_Request request_right;
+    MPI_Irecv(recv_buffer_right, size, MPI_GRID_TYPE, rank_right, 0,
+              MPI_COMM_WORLD, &request_right);
+    MPI_Ssend(dg->buffer_left, size, MPI_GRID_TYPE, rank_left, 0, MPI_COMM_WORLD);
+
+    MPI_Wait(&request_left, MPI_STATUS_IGNORE);
 
     /* Add the left buffer to the main grid */
     long int first_left = 0;
     for (long int i = 0; i < size; i ++) {
         dg->box[first_left + i] += recv_buffer_left[i];
     }
+
+    MPI_Wait(&request_right, MPI_STATUS_IGNORE);
 
     /* Add the right buffer to the main grid */
     long int first_right = (dg->NX - dg->buffer_width) * dg->Ny * dg->Nz;

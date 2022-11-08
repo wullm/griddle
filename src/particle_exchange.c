@@ -164,62 +164,42 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /** **/
 
     /* Communicate the number of particles to be received */
+    MPI_Request request_num_left;
     long long int receive_from_left;
-    if (rank > 0) {
-        MPI_Recv(&receive_from_left, 1, MPI_LONG_LONG, rank_left, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(&num_send_right, 1, MPI_LONG_LONG, rank_right,
+    MPI_Irecv(&receive_from_left, 1, MPI_LONG_LONG, rank_left, 0,
+              MPI_COMM_WORLD, &request_num_left);
+    MPI_Ssend(&num_send_right, 1, MPI_LONG_LONG, rank_right,
              0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(&receive_from_left, 1, MPI_LONG_LONG, rank_left,
-                 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+
+    /* Communicate the number of particles to be received */
+    MPI_Request request_num_right;
+    long long int receive_from_right;
+    MPI_Irecv(&receive_from_right, 1, MPI_LONG_LONG, rank_right, 0,
+              MPI_COMM_WORLD, &request_num_right);
+    MPI_Ssend(&num_send_left, 1, MPI_LONG_LONG, rank_left,
+              0, MPI_COMM_WORLD);
+
+    MPI_Wait(&request_num_left, MPI_STATUS_IGNORE);
+    MPI_Wait(&request_num_right, MPI_STATUS_IGNORE);
 
     /* Allocate memory for particles to be received */
     struct particle *receive_parts_left = malloc(receive_from_left * sizeof(struct particle));
-
-    if (rank > 0) {
-        MPI_Recv(receive_parts_left, receive_from_left, particle_type,
-                 rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(&parts[first_send_right], num_send_right, particle_type,
-             rank_right, 0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(receive_parts_left, receive_from_left, particle_type,
-                 rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-
-    /** **/
-    /* Next, send particles to the left */
-    /** **/
-
-    /* Communicate the number of particles to be received */
-    long long int receive_from_right;
-    if (rank > 0) {
-        MPI_Recv(&receive_from_right, 1, MPI_LONG_LONG, rank_right, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(&num_send_left, 1, MPI_LONG_LONG, rank_left,
-             0, MPI_COMM_WORLD);
-    if (rank == 0) {
-        MPI_Recv(&receive_from_right, 1, MPI_LONG_LONG, rank_right,
-                 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-
-    /* Allocate memory for particles to be received */
     struct particle *receive_parts_right = malloc(receive_from_right * sizeof(struct particle));
 
-    if (rank < MPI_Rank_Count - 1) {
-        MPI_Recv(receive_parts_right, receive_from_right, particle_type,
-                 rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(&parts[first_send_left], num_send_left, particle_type,
-             rank_left, 0, MPI_COMM_WORLD);
-    if (rank == MPI_Rank_Count - 1) {
-        MPI_Recv(receive_parts_right, receive_from_right, particle_type,
-                 rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+    MPI_Request request_left;
+    MPI_Irecv(receive_parts_left, receive_from_left, particle_type,
+              rank_left, 0, MPI_COMM_WORLD, &request_left);
+    MPI_Ssend(&parts[first_send_right], num_send_right, particle_type,
+              rank_right, 0, MPI_COMM_WORLD);
+
+    MPI_Request request_right;
+    MPI_Irecv(receive_parts_right, receive_from_right, particle_type,
+              rank_right, 0, MPI_COMM_WORLD, &request_right);
+    MPI_Ssend(&parts[first_send_left], num_send_left, particle_type,
+              rank_left, 0, MPI_COMM_WORLD);
+
+    MPI_Wait(&request_left, MPI_STATUS_IGNORE);
+    MPI_Wait(&request_right, MPI_STATUS_IGNORE);
 
     /* For the received particles, determine whether they should be moved on */
     long long int remaining_foreign_parts = 0;
