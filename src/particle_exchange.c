@@ -30,8 +30,6 @@
 #include "../include/particle_exchange.h"
 #include "../include/message.h"
 
-#define DIV_CEIL(a, b) (((a) / (b)) + (((a) % (b)) > 0 ? 1 : 0))
-
 /* Exchange particles between MPI ranks (Ng = N_grid != N_particle) */
 int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
                        long long int *num_localpart, long long int max_partnum,
@@ -268,10 +266,8 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         /* We now want to operate on the particles array, so delivery must be completed */
         MPI_Wait(&delivery_left, MPI_STATUS_IGNORE);
         MPI_Wait(&delivery_right, MPI_STATUS_IGNORE);
-    } else {
-        /* Free the dedicated memory of the particles that were sent away */
-        free(send_left_ptr);
-        free(send_right_ptr);
+
+        /* During the first iteration, the sent particles are stored separately */
     }
 
     /* Make space for particles on the left (use memmove because of overlap) */
@@ -299,6 +295,14 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /* Free memory used for receiving particle data */
     free(receive_parts_left);
     free(receive_parts_right);
+
+    if (iteration == 0) {
+        /* We now want to free the memory of the particles that were sent */
+        MPI_Wait(&delivery_left, MPI_STATUS_IGNORE);
+        MPI_Wait(&delivery_right, MPI_STATUS_IGNORE);
+        free(send_left_ptr);
+        free(send_right_ptr);
+    }
 
     /* Communicate the remaining numbers of foreign particles */
     long long int total_foreign_parts;
