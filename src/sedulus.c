@@ -345,11 +345,16 @@ int main(int argc, char *argv[]) {
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
-    const double int_to_pos_fac = 1.0 / pos_to_int_fac;
 
     /* Position factors on [0, M] where M is the PM size */
     const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
     const double int_to_grid_fac = 1.0 / grid_to_int_fac;
+    const double cell_fac = M / boxlen;
+
+    /* Pointer to the real-space potential grid */
+    const GridFloatType *mass_box = mass.buffered_box;
+    const int Mz = mass.Nz;
+    const int MX0 = mass.X0;
 
     /* Start at the beginning */
     double a = a_begin;
@@ -386,8 +391,10 @@ int main(int argc, char *argv[]) {
         double drift_dtau = strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next) -
                             strooklat_interp(&spline_bg_a, ctabs.drift_factors, a);
 
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
         /* Conversion factor for neutrino momenta */
-        const double fac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
+        const double neutrino_qfac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
+#endif
 
         message(rank, "Step %d at z = %g\n", ITER, z);
 
@@ -425,11 +432,11 @@ int main(int argc, char *argv[]) {
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             if (pars.DerivativeOrder == 1) {
-                accelCIC_1st(&mass, x, acc); /* first order */
+                accelCIC_1st(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* first order */
             } else if (pars.DerivativeOrder == 2) {
-                accelCIC_2nd(&mass, x, acc); /* second order */
+                accelCIC_2nd(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* second order */
             } else if (pars.DerivativeOrder == 4) {
-                accelCIC(&mass, x, acc); /* fourth order */
+                accelCIC_4th(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* fourth order */
             } else {
                 printf("Differentiation scheme with order %d not implemented.\n", pars.DerivativeOrder);
             }
@@ -459,7 +466,7 @@ int main(int argc, char *argv[]) {
             if (p->type == 6) {
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
                 double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
-                double q = sqrt(v2) * fac * m_eV;
+                double q = sqrt(v2) * neutrino_qfac * m_eV;
                 double qi = neutrino_seed_to_fermi_dirac(p->id);
                 double f = fermi_dirac_density(q);
                 double fi = fermi_dirac_density(qi);
