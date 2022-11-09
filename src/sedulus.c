@@ -256,7 +256,7 @@ int main(int argc, char *argv[]) {
         struct timepair exchange_timer;
         timer_start(rank, &exchange_timer);
 
-        exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
+        exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
 
         /* Timer */
         timer_stop(rank, &exchange_timer, "Exchanging particles took ");
@@ -411,7 +411,7 @@ int main(int argc, char *argv[]) {
 
         /* Re-compute the gravitational potential */
         compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi);
-        timer_stop(rank, &run_timer, "Computing the potential took ");
+        timer_stop(rank, &run_timer, "Computing the potential in total took ");
 
         if (MPI_Rank_Count > 1) {
             /* Copy buffers and communicate them to the neighbour ranks */
@@ -512,7 +512,7 @@ int main(int argc, char *argv[]) {
 
         if (MPI_Rank_Count > 1) {
             message(rank, "Starting particle exchange.\n");
-            exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0);
+            exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
             timer_stop(rank, &run_timer, "Exchanging particles took ");
         }
 

@@ -26,8 +26,8 @@
 
 int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
                        long long int *num_localpart, long long int max_partnum,
-                       int iteration,
-                       long long int received_left,
-                       long long int received_right);
+                       int exchange_iteration, long long int received_left,
+                       long long int received_right, long long int num_send_left,
+                       long long int num_send_right);
 
 #endif
