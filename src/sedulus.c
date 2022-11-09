@@ -396,28 +396,20 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &run_timer);
 
         /* Initiate mass deposition */
-        if (MPI_Rank_Count == 1) {
-            mass_deposition_single(&mass, particles, local_partnum);
-        } else {
-            mass_deposition(&mass, particles, local_partnum);
-        }
+        mass_deposition(&mass, particles, local_partnum);
         timer_stop(rank, &run_timer, "Computing mass density took ");
 
-        if (MPI_Rank_Count > 1) {
-            /* Merge the buffers with the main grid */
-            add_local_buffers(&mass);
-            timer_stop(rank, &run_timer, "Communicating buffers took ");
-        }
+        /* Merge the buffers with the main grid */
+        add_local_buffers(&mass);
+        timer_stop(rank, &run_timer, "Communicating buffers took ");
 
         /* Re-compute the gravitational potential */
         compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi);
         timer_stop(rank, &run_timer, "Computing the potential in total took ");
 
-        if (MPI_Rank_Count > 1) {
-            /* Copy buffers and communicate them to the neighbour ranks */
-            create_local_buffers(&mass);
-            timer_stop(rank, &run_timer, "Communicating buffers took ");
-        }
+        /* Copy buffers and communicate them to the neighbour ranks */
+        create_local_buffers(&mass);
+        timer_stop(rank, &run_timer, "Communicating buffers took ");
 
         message(rank, "Computing particle kicks and drifts.\n");
 
