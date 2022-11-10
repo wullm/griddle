@@ -144,6 +144,7 @@ int main(int argc, char *argv[]) {
         local_neutrino_num = NX_nu * N_nu * N_nu;
     }
 
+#ifdef WITH_PARTICLE_IDS
 #ifdef SINGLE_PRECISION_IDS
     if (N * N * N + N_nu * N_nu * N_nu > UINT32_MAX) {
         printf("Number of particles exceeds UINT32_MAX. Please disable SINGLE_PRECISION_IDS.\n");
@@ -154,6 +155,7 @@ int main(int argc, char *argv[]) {
         printf("Number of particles exceeds UINT64_MAX. Perhaps add long int ids.\n");
         exit(1);
     }
+#endif
 #endif
 
     /* Each MPI rank stores a portion of the full 3D mesh, as well as copies
