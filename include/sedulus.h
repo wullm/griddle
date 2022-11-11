@@ -41,5 +41,6 @@
 #include "snap_io.h"
 #include "git_version.h"
 #include "relativity.h"
+#include "analysis_fof.h"
 
 #endif

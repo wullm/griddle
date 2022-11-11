@@ -53,6 +53,11 @@ struct params {
     char *SnapshotTimesString;
     char *SnapshotBaseName;
 
+    /* Halo finding parameters */
+    char DoHaloFindingWithSnapshots;
+    double LinkingLength;
+    int MinHaloParticleNum;
+
 };
 
 int readParams(struct params *parser, const char *fname);

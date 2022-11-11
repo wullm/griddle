@@ -323,6 +323,21 @@ int main(int argc, char *argv[]) {
 
     /* Check if there should be an output at the start */
     if (output_list[0] == a_begin) {
+        if (pars.DoHaloFindingWithSnapshots) {
+            /* Timer */
+            struct timepair fof_timer;
+            timer_start(rank, &fof_timer);
+
+            message(rank, "Starting friends-of-friends halo finding.\n");
+
+            analysis_fof(particles, boxlen, M, local_partnum, max_partnum, pars.LinkingLength, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin);
+
+            /* Timer */
+            MPI_Barrier(MPI_COMM_WORLD);
+            timer_stop(rank, &fof_timer, "Doing friends-of-friends took ");
+            message(rank, "\n");
+        }
+
         /* Timer */
         struct timepair snapshot_timer;
         timer_start(rank, &snapshot_timer);
@@ -501,8 +516,24 @@ int main(int argc, char *argv[]) {
                 double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list[j]) -
                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
 
+                if (pars.DoHaloFindingWithSnapshots) {
+                    /* Timer */
+                    struct timepair fof_timer;
+                    timer_start(rank, &fof_timer);
+
+                    message(rank, "\n");
+                    message(rank, "Starting friends-of-friends halo finding.\n");
+
+                    analysis_fof(particles, boxlen, M, local_partnum, max_partnum, pars.LinkingLength, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j]);
+
+                    /* Timer */
+                    MPI_Barrier(MPI_COMM_WORLD);
+                    timer_stop(rank, &fof_timer, "Doing friends-of-friends took ");
+                    message(rank, "\n");
+                }
+
                 message(rank, "Exporting a snapshot at a = %g.\n", output_list[j]);
-                exportSnapshot(&pars, &us, &pcs, particles, j, output_list[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
+                exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
                 timer_stop(rank, &run_timer, "Exporting a snapshot took ");
             }
         }

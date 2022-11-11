@@ -40,6 +40,7 @@ all:
 	$(GCC) src/mesh_grav.c -c -o lib/mesh_grav.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/mass_deposit.c -c -o lib/mass_deposit.o $(INCLUDES) $(CFLAGS)
 	$(GCC) src/snap_io.c -c -o lib/snap_io.o $(INCLUDES) $(CFLAGS)
+	$(GCC) src/analysis_fof.c -c -o lib/analysis_fof.o $(INCLUDES) $(CFLAGS)
 
 	$(GCC) src/sedulus.c -o sedulus $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 

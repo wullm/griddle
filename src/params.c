@@ -60,6 +60,11 @@ int readParams(struct params *pars, const char *fname) {
      ini_gets("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname);
      ini_gets("Snapshots", "BaseName", "", pars->SnapshotBaseName, len, fname);
 
+     /* Halo finding parameters */
+     pars->DoHaloFindingWithSnapshots = ini_getl("HaloFinding", "DoHaloFindingWithSnapshots", 0, fname);
+     pars->LinkingLength = ini_getl("HaloFinding", "LinkingLength", 0.2, fname);
+     pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
+
      return 0;
 }
 
