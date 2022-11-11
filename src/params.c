@@ -62,7 +62,7 @@ int readParams(struct params *pars, const char *fname) {
 
      /* Halo finding parameters */
      pars->DoHaloFindingWithSnapshots = ini_getl("HaloFinding", "DoHaloFindingWithSnapshots", 0, fname);
-     pars->LinkingLength = ini_getl("HaloFinding", "LinkingLength", 0.2, fname);
+     pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
 
      return 0;

@@ -165,8 +165,13 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     timer_start(rank, &fof_timer);
 
     /* The initial domain decomposition into spatial cells */
-    const int N_cells = 128; /* TODO: make a parameter */
+    const int N_cells = boxlen / (4.0 * linking_length);
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
+
+    if (N_cells > 1250) {
+        printf("The number of cells is large. We should switch to larger ints (TODO).\n");
+        exit(1);
+    }
 
     /* The conversion factor from integers to physical lengths */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
