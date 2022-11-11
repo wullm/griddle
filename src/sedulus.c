@@ -330,7 +330,9 @@ int main(int argc, char *argv[]) {
 
             message(rank, "Starting friends-of-friends halo finding.\n");
 
-            analysis_fof(particles, boxlen, M, local_partnum, max_partnum, pars.LinkingLength, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin);
+            const double linking_length = pars.LinkingLength * boxlen / N;
+
+            analysis_fof(particles, boxlen, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin);
 
             /* Timer */
             MPI_Barrier(MPI_COMM_WORLD);
@@ -524,7 +526,9 @@ int main(int argc, char *argv[]) {
                     message(rank, "\n");
                     message(rank, "Starting friends-of-friends halo finding.\n");
 
-                    analysis_fof(particles, boxlen, M, local_partnum, max_partnum, pars.LinkingLength, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j]);
+                    const double linking_length = pars.LinkingLength * boxlen / N;
+
+                    analysis_fof(particles, boxlen, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j]);
 
                     /* Timer */
                     MPI_Barrier(MPI_COMM_WORLD);
