@@ -54,14 +54,14 @@ static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
                               double int_to_pos_fac, double linking_length_2) {
 
     /* Vector distance */
-    const double dx = bx[0] - ax[0];
-    const double dy = bx[1] - ax[1];
-    const double dz = bx[2] - ax[2];
+    const IntPosType dx = bx[0] - ax[0];
+    const IntPosType dy = bx[1] - ax[1];
+    const IntPosType dz = bx[2] - ax[2];
 
     /* Enforce boundary conditions */
-    const double tx = (dx < -dx) ? dx : -dx;
-    const double ty = (dy < -dy) ? dy : -dy;
-    const double tz = (dz < -dz) ? dz : -dz;
+    const IntPosType tx = (dx < -dx) ? dx : -dx;
+    const IntPosType ty = (dy < -dy) ? dy : -dy;
+    const IntPosType tz = (dz < -dz) ? dz : -dz;
 
     /* Convert to physical lengths */
     const double fx = tx * int_to_pos_fac;
@@ -224,7 +224,7 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     struct fof_part_data *edge_parts = malloc(count_near_edge * sizeof(struct fof_part_data));
     int copy_counter = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double rank_float = parts[i].x[0] * int_to_rank_fac;
+        double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
         double dx = rank_float - ((int) rank_float);
         double dx_phys = dx * rank_to_pos_fac;
         if (dx_phys < linking_length) {
@@ -537,7 +537,8 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
         /* Determine the number of particles with foreign roots (that are not roots themselves) */
         int num_foreign_rooted = 0;
         for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-            if (fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
+            /* Skip duplicate domestic particles */
+            if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
                 num_foreign_rooted++;
             }
         }
@@ -546,7 +547,7 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
         copy_counter = 0;
         struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
         for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-            if (fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
+            if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
                 memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
                 copy_counter++;
             }
@@ -554,7 +555,7 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
 
         /* Disable the foreign rooted particles on this rank by turning them into singletons */
         for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-            if (fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
+            if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
                 fof_parts[i].root = fof_parts[i].local_offset;
                 fof_parts[i].global_root = fof_parts[i].global_offset;
             }
@@ -591,9 +592,11 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     for (long long i = num_localpart; i < num_localpart + receive_from_left; i++) {
         /* Skip foreign singletons */
         if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        /* Skip duplicate domestic particles */
+        if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
-        fof_parts[i].root = find_root(fof_parts, &fof_parts[fof_parts[i].global_root - rank_offset]);
         fof_parts[i].local_offset = i;
+        fof_parts[i].root = find_root(fof_parts, &fof_parts[fof_parts[i].global_root - rank_offset]);
     }
 
     /* Reset the group sizes */
@@ -606,6 +609,8 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     for (long int i = 0; i < num_localpart + receive_from_left; i++) {
         /* Skip foreign singletons */
         if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        /* Skip duplicate domestic particles */
+        if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
         fof_parts[i].root = find_root(fof_parts, &fof_parts[i]);
         group_sizes[fof_parts[i].root]++;
@@ -616,6 +621,8 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     for (long int i = 0; i < num_localpart; i++) {
         /* Skip foreign singletons */
         if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        /* Skip duplicate domestic particles */
+        if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
         if (fof_parts[i].local_offset == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
             num_structures++;
@@ -647,6 +654,8 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     for (long int i = 0; i < num_localpart; i++) {
         /* Skip foreign singletons */
         if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        /* Skip duplicate domestic particles */
+        if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
         if (fof_parts[i].local_offset == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
             fof_parts[i].halo_id = halo_count + halo_rank_offsets[rank];
@@ -664,24 +673,30 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     for (long int i = 0; i < num_localpart + receive_from_left; i++) {
         /* Skip foreign singletons */
         if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        /* Skip duplicate domestic particles */
+        if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
         long int h = fof_parts[fof_parts[i].root].halo_id - halo_rank_offsets[rank];
         if (h >= 0) {
 #ifdef WITH_MASSES
-            double mass = parts[i].m;
+            /* TODO: decide what to do about the masses */
+            // double mass = fof_parts[i].m;
+            double mass = 1.0;
 #else
             double mass = 1.0;
 #endif
+
             /* Friends-of-friends mass */
             halos[h].mass_fof += mass;
             /* Centre of mass */
-            halos[h].x_com[0] += (int_to_pos_fac * parts[i].x[0]) * mass;
-            halos[h].x_com[1] += (int_to_pos_fac * parts[i].x[1]) * mass;
-            halos[h].x_com[2] += (int_to_pos_fac * parts[i].x[2]) * mass;
+            halos[h].x_com[0] += (int_to_pos_fac * fof_parts[i].x[0]) * mass;
+            halos[h].x_com[1] += (int_to_pos_fac * fof_parts[i].x[1]) * mass;
+            halos[h].x_com[2] += (int_to_pos_fac * fof_parts[i].x[2]) * mass;
+            /* TODO: decide what to do about the velocities */
             /* Centre of mass velocity (convert to peculiar velocity) */
-            halos[h].v_com[0] += parts[i].v[0] * mass / a_scale_factor;
-            halos[h].v_com[1] += parts[i].v[1] * mass / a_scale_factor;
-            halos[h].v_com[2] += parts[i].v[2] * mass / a_scale_factor;
+            // halos[h].v_com[0] += fof_parts[i].v[0] * mass / a_scale_factor;
+            // halos[h].v_com[1] += fof_parts[i].v[1] * mass / a_scale_factor;
+            // halos[h].v_com[2] += fof_parts[i].v[2] * mass / a_scale_factor;
             /* Total particle number */
             halos[h].npart++;
         }
@@ -694,9 +709,10 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
             halos[i].x_com[0] /= halo_mass;
             halos[i].x_com[1] /= halo_mass;
             halos[i].x_com[2] /= halo_mass;
-            halos[i].v_com[0] /= halo_mass;
-            halos[i].v_com[1] /= halo_mass;
-            halos[i].v_com[2] /= halo_mass;
+            // halos[i].v_com[0] /= halo_mass;
+            // halos[i].v_com[1] /= halo_mass;
+            // halos[i].v_com[2] /= halo_mass;
+            // halos[i].rank_mean /= halos[i].npart;
         }
     }
 
