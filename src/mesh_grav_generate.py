@@ -77,10 +77,10 @@ for i, j, k in zip(X, Y, Z):
         pos = [i, j, k]
         var_name = "".join(["d" if u else "t" for u in pos])
         result = " * ".join([("d" if u else "t") + dim for (u, dim) in zip(pos, dims)])
-        print("double " + var_name + " = " + result + ";")
+        print("const double " + var_name + " = " + result + ";")
 
 # First-order accurate forward difference
-index_fio = [1, 0]
+index_fio = [0, -1]
 coeff_fio = [1.0, -1.0]
 
 # Second-order accurate differentation (modulo a factor 2)
@@ -93,7 +93,12 @@ coeff_fo = [-1.0, 8.0, -8.0, 1.0]
 
 order = 4
 
-if (order == 2):
+if (order == 1):
+    # Generate the second-order accutate functions
+    (ind_x, ind_y, ind_z,
+    pos_x, pos_y, pos_z,
+    coeff_x, coeff_y, coeff_z) = count_fd_stencil(index_fio, coeff_fio)
+elif (order == 2):
     # Generate the second-order accutate functions
     (ind_x, ind_y, ind_z,
     pos_x, pos_y, pos_z,
@@ -115,10 +120,10 @@ N_str = "N"
 eval_strings = []
 for cell in all_cells:
     cell_name = generate_cell_name(cell)
-    eval_strings.append("double " + cell_name + " = " + function_name
-                                  + x_str + (str(minval + cell[0]) if not cell[0] == 0 else "") + ", "
-                                  + y_str + (str(minval + cell[1]) if not cell[1] == 0 else "") + ", "
-                                  + z_str + (str(minval + cell[2]) if not cell[2] == 0 else "") + function_suffix + ";")
+    eval_strings.append("const double " + cell_name + " = " + function_name
+                                        + x_str + (str(minval + cell[0]) if not cell[0] == 0 else "") + ", "
+                                        + y_str + (str(minval + cell[1]) if not cell[1] == 0 else "") + ", "
+                                        + z_str + (str(minval + cell[2]) if not cell[2] == 0 else "") + function_suffix + ";")
 
 # Get rid of duplicates
 eval_strings.sort()
@@ -142,8 +147,8 @@ for i in range(min_index, max_index + 1):
             print("if (iY" + str(i + minval) + " >= " + N_str + ") iY" + str(i + minval) + " -= " + N_str + ";")
             print("if (iZ" + str(i + minval) + " >= " + N_str + ") iZ" + str(i + minval) + " -= " + N_str + ";")
         elif (i < 0):
-            print("if (iY" + str(i + minval) + " < " + str(0) + ") iY" + str(i + minval) + " -= " + N_str + ";")
-            print("if (iZ" + str(i + minval) + " < " + str(0) + ") iZ" + str(i + minval) + " -= " + N_str + ";")
+            print("if (iY" + str(i + minval) + " < " + str(0) + ") iY" + str(i + minval) + " += " + N_str + ";")
+            print("if (iZ" + str(i + minval) + " < " + str(0) + ") iZ" + str(i + minval) + " += " + N_str + ";")
 
 # Print the cell evaluation strings
 print("")
@@ -155,7 +160,7 @@ for es in unique_strings:
 print("")
 print("/* Compute the finite difference along the x-axis */")
 if (order == 1 or order == 2):
-    generate_accumulator("a[0]", ind_x + ind_x, pos_x + pos_x, coeff_x)
+    generate_accumulator("a[0]", ind_x, pos_x, coeff_x)
 elif (order == 4):
     # Print pairs that can double up
     generate_accumulator("a[0]", ind_x[24:] + ind_x[:8], pos_x[24:] + pos_x[:8], coeff_x[24:] + coeff_x[:8])
