@@ -209,153 +209,156 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
 
     timer_stop(rank, &fof_timer, "Copying particle data took ");
 
-    /* Count the number of particles within one linking length from the left edge */
-    int count_near_edge = 0;
-    for (long int i = 0; i < num_localpart; i++) {
-        double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
-        double dx = rank_float - ((int) rank_float);
-        double dx_phys = dx * rank_to_pos_fac;
-        if (dx_phys < linking_length) {
-            count_near_edge++;
-        }
-    }
-
-    /* Fish out particles within one linking length from the left edge */
-    struct fof_part_data *edge_parts = malloc(count_near_edge * sizeof(struct fof_part_data));
-    int copy_counter = 0;
-    for (long int i = 0; i < num_localpart; i++) {
-        double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
-        double dx = rank_float - ((int) rank_float);
-        double dx_phys = dx * rank_to_pos_fac;
-        if (dx_phys < linking_length) {
-            memcpy(edge_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
-            copy_counter++;
-        }
-    }
-
-    timer_stop(rank, &fof_timer, "Copying edge particles took ");
-
     /* The total number of particles to be received from the right */
     int receive_foreign_count = 0;
     int receive_from_right = 0;
 
-    if (rank == MPI_Rank_Count - 1) {
-        /* Communicate the edge particles to the left neighbour */
-        MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
+    if (MPI_Rank_Count > 1) {
 
-        /* Release the delivered particles */
-        free(edge_parts);
-
-        /* In this special case, also count the number of particles within
-         * one linking length from the right edge */
-        int count_near_right_edge = 0;
+        /* Count the number of particles within one linking length from the left edge */
+        int count_near_edge = 0;
         for (long int i = 0; i < num_localpart; i++) {
-            double pos = fof_parts[i].x[0] * int_to_pos_fac;
-            double dx_phys = boxlen - pos;
+            double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
+            double dx = rank_float - ((int) rank_float);
+            double dx_phys = dx * rank_to_pos_fac;
             if (dx_phys < linking_length) {
-                count_near_right_edge++;
+                count_near_edge++;
             }
         }
 
         /* Fish out particles within one linking length from the left edge */
-        edge_parts = malloc(count_near_right_edge * sizeof(struct fof_part_data));
-        copy_counter = 0;
+        struct fof_part_data *edge_parts = malloc(count_near_edge * sizeof(struct fof_part_data));
+        int copy_counter = 0;
         for (long int i = 0; i < num_localpart; i++) {
-            double pos = fof_parts[i].x[0] * int_to_pos_fac;
-            double dx_phys = boxlen - pos;
+            double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
+            double dx = rank_float - ((int) rank_float);
+            double dx_phys = dx * rank_to_pos_fac;
             if (dx_phys < linking_length) {
                 memcpy(edge_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
                 copy_counter++;
             }
         }
 
-        /* Communicate these edge particles to the right neighbour */
-        MPI_Send(edge_parts, count_near_right_edge, fof_type, rank_right, 0, MPI_COMM_WORLD);
+        timer_stop(rank, &fof_timer, "Copying edge particles took ");
 
-        /* Release the delivered particles */
-        free(edge_parts);
-    } else if (rank > 0) {
-        /* Prepare to receive particles from the right */
-        MPI_Status status_right;
-        MPI_Probe(rank_right, 0, MPI_COMM_WORLD, &status_right);
-        MPI_Get_count(&status_right, fof_type, &receive_from_right);
-        receive_foreign_count += receive_from_right;
+        if (rank == MPI_Rank_Count - 1) {
+            /* Communicate the edge particles to the left neighbour */
+            MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
 
-        /* Check that we have enough memory */
-        if (num_localpart + receive_foreign_count > max_partnum) {
-            printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_foreign_count);
-            exit(1);
+            /* Release the delivered particles */
+            free(edge_parts);
+
+            /* In this special case, also count the number of particles within
+             * one linking length from the right edge */
+            int count_near_right_edge = 0;
+            for (long int i = 0; i < num_localpart; i++) {
+                double pos = fof_parts[i].x[0] * int_to_pos_fac;
+                double dx_phys = boxlen - pos;
+                if (dx_phys < linking_length) {
+                    count_near_right_edge++;
+                }
+            }
+
+            /* Fish out particles within one linking length from the left edge */
+            edge_parts = malloc(count_near_right_edge * sizeof(struct fof_part_data));
+            copy_counter = 0;
+            for (long int i = 0; i < num_localpart; i++) {
+                double pos = fof_parts[i].x[0] * int_to_pos_fac;
+                double dx_phys = boxlen - pos;
+                if (dx_phys < linking_length) {
+                    memcpy(edge_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
+                    copy_counter++;
+                }
+            }
+
+            /* Communicate these edge particles to the right neighbour */
+            MPI_Send(edge_parts, count_near_right_edge, fof_type, rank_right, 0, MPI_COMM_WORLD);
+
+            /* Release the delivered particles */
+            free(edge_parts);
+        } else if (rank > 0) {
+            /* Prepare to receive particles from the right */
+            MPI_Status status_right;
+            MPI_Probe(rank_right, 0, MPI_COMM_WORLD, &status_right);
+            MPI_Get_count(&status_right, fof_type, &receive_from_right);
+            receive_foreign_count += receive_from_right;
+
+            /* Check that we have enough memory */
+            if (num_localpart + receive_foreign_count > max_partnum) {
+                printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_foreign_count);
+                exit(1);
+            }
+
+            /* Receive the particle data */
+            struct fof_part_data *receive_parts = malloc(receive_from_right * sizeof(struct fof_part_data));
+            MPI_Recv(receive_parts, receive_from_right, fof_type,
+                     rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            /* Move the received particles to the end of the FOF particle array */
+            memcpy(fof_parts + num_localpart, receive_parts, receive_from_right * sizeof(struct fof_part_data));
+
+            /* Release the received particles */
+            free(receive_parts);
+
+            /* Communicate the edge particles to the left neighbour */
+            MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
+
+            /* Release the delivered particles */
+            free(edge_parts);
         }
 
-        /* Receive the particle data */
-        struct fof_part_data *receive_parts = malloc(receive_from_right * sizeof(struct fof_part_data));
-        MPI_Recv(receive_parts, receive_from_right, fof_type,
-                 rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        /* Finally, receive on rank 0 - in this case from both sides */
+        else if (rank == 0) {
+            /* Prepare to receive particles from the right */
+            MPI_Status status_right;
+            MPI_Probe(rank_right, 0, MPI_COMM_WORLD, &status_right);
+            MPI_Get_count(&status_right, fof_type, &receive_from_right);
+            receive_foreign_count += receive_from_right;
 
-        /* Move the received particles to the end of the FOF particle array */
-        memcpy(fof_parts + num_localpart, receive_parts, receive_from_right * sizeof(struct fof_part_data));
+            /* Check that we have enough memory */
+            if (num_localpart + receive_foreign_count > max_partnum) {
+                printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_foreign_count);
+                exit(1);
+            }
 
-        /* Release the received particles */
-        free(receive_parts);
+            /* Receive the particle data */
+            struct fof_part_data *receive_parts = malloc(receive_from_right * sizeof(struct fof_part_data));
+            MPI_Recv(receive_parts, receive_from_right, fof_type,
+                     rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        /* Communicate the edge particles to the left neighbour */
-        MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
+            /* Move the received particles to the end of the FOF particle array */
+            memcpy(fof_parts + num_localpart, receive_parts, receive_from_right * sizeof(struct fof_part_data));
 
-        /* Release the delivered particles */
-        free(edge_parts);
+            /* Release the received particles */
+            free(receive_parts);
+
+            /* Next, prepare to receive particles from the left */
+            int receive_from_left_0;
+            MPI_Status status_left;
+            MPI_Probe(rank_left, 0, MPI_COMM_WORLD, &status_left);
+            MPI_Get_count(&status_left, fof_type, &receive_from_left_0);
+            receive_foreign_count += receive_from_left_0;
+
+            /* Check that we have enough memory */
+            if (num_localpart + receive_foreign_count > max_partnum) {
+                printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_foreign_count);
+                exit(1);
+            }
+
+            /* Receive the particle data */
+            receive_parts = malloc(receive_from_left_0 * sizeof(struct fof_part_data));
+            MPI_Recv(receive_parts, receive_from_left_0, fof_type,
+                     rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            /* Move the received particles to the end of the FOF particle array */
+            memcpy(fof_parts + num_localpart + receive_from_right, receive_parts, receive_from_left_0 * sizeof(struct fof_part_data));
+
+            /* Release the received particles */
+            free(receive_parts);
+        }
+
+        timer_stop(rank, &fof_timer, "The first communication took ");
     }
-
-    /* Finally, receive on rank 0 - in this case from both sides */
-    else if (rank == 0) {
-        /* Prepare to receive particles from the right */
-        MPI_Status status_right;
-        MPI_Probe(rank_right, 0, MPI_COMM_WORLD, &status_right);
-        MPI_Get_count(&status_right, fof_type, &receive_from_right);
-        receive_foreign_count += receive_from_right;
-
-        /* Check that we have enough memory */
-        if (num_localpart + receive_foreign_count > max_partnum) {
-            printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_foreign_count);
-            exit(1);
-        }
-
-        /* Receive the particle data */
-        struct fof_part_data *receive_parts = malloc(receive_from_right * sizeof(struct fof_part_data));
-        MPI_Recv(receive_parts, receive_from_right, fof_type,
-                 rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        /* Move the received particles to the end of the FOF particle array */
-        memcpy(fof_parts + num_localpart, receive_parts, receive_from_right * sizeof(struct fof_part_data));
-
-        /* Release the received particles */
-        free(receive_parts);
-
-        /* Next, prepare to receive particles from the left */
-        int receive_from_left_0;
-        MPI_Status status_left;
-        MPI_Probe(rank_left, 0, MPI_COMM_WORLD, &status_left);
-        MPI_Get_count(&status_left, fof_type, &receive_from_left_0);
-        receive_foreign_count += receive_from_left_0;
-
-        /* Check that we have enough memory */
-        if (num_localpart + receive_foreign_count > max_partnum) {
-            printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_foreign_count);
-            exit(1);
-        }
-
-        /* Receive the particle data */
-        receive_parts = malloc(receive_from_left_0 * sizeof(struct fof_part_data));
-        MPI_Recv(receive_parts, receive_from_left_0, fof_type,
-                 rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        /* Move the received particles to the end of the FOF particle array */
-        memcpy(fof_parts + num_localpart + receive_from_right, receive_parts, receive_from_left_0 * sizeof(struct fof_part_data));
-
-        /* Release the received particles */
-        free(receive_parts);
-    }
-
-    timer_stop(rank, &fof_timer, "The first communication took ");
 
     /* Set the local offsets for the local and foreign particles */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
@@ -402,22 +405,9 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
         cell_offsets[i] = cell_offsets[i-1] + cell_counts[i-1];
     }
 
-    message(rank, "Linking particles within cells.\n");
+    message(rank, "Linking particles in cells.\n");
 
-    /* In each bucket, loop over particles and determine matches */
     long int total_links = 0;
-    for (int i = 0; i < num_cells; i++) {
-        long int links = 0;
-        long int offset = cell_offsets[i];
-        long int count = cell_counts[i];
-
-        links = link_cells(fof_parts, cell_list, offset, offset, count, count, int_to_pos_fac, linking_length_2);
-
-        total_links += links;
-    }
-
-    timer_stop(rank, &fof_timer, "Linking within cells took ");
-    message(rank, "Linking particles across cells.\n");
 
     /* Now link across cells */
     for (int i = 0; i < N_cells; i++) {
@@ -449,6 +439,10 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
                 long int count6 = cell_counts[row_major_cell(i1, j, k1, N_cells)];
                 long int count7 = cell_counts[row_major_cell(i1, j1, k1, N_cells)];
 
+                /* Cell self-links */
+                total_links += link_cells(fof_parts, cell_list, offset, offset, count, count, int_to_pos_fac, linking_length_2);
+
+                /* Cell-cell neighbour links */
                 total_links += link_cells(fof_parts, cell_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
                 total_links += link_cells(fof_parts, cell_list, offset, offset2, count, count2, int_to_pos_fac, linking_length_2);
                 total_links += link_cells(fof_parts, cell_list, offset, offset3, count, count3, int_to_pos_fac, linking_length_2);
@@ -460,7 +454,7 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
         }
     }
 
-    timer_stop(rank, &fof_timer, "Linking across cells took ");
+    timer_stop(rank, &fof_timer, "Linking particles in cells took ");
     message(rank, "Found %ld links within and across cells on rank %d.\n", total_links, rank);
 
     /* Loop over the roots again to collapse the tree */
@@ -468,10 +462,19 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
         fof_parts[i].root = find_root(fof_parts, &fof_parts[i]);
     }
 
-    /* Compute the global offset of the roots */
+    /* Compute the global offsets of the roots */
+    long int *global_roots = malloc((num_localpart + receive_foreign_count) * sizeof(long int));
     for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
-        fof_parts[i].global_root = fof_parts[fof_parts[i].root].global_offset;
+        global_roots[i] = fof_parts[fof_parts[i].root].global_offset;
     }
+
+    /* Overwrite the roots by the global roots */
+    for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
+        fof_parts[i].root = global_roots[i];
+    }
+
+    /* Free the global root array */
+    free(global_roots);
 
     /* Communicate the particles with foreign roots to the reverse neighbour rank */
     struct fof_part_data *returned_parts = NULL;
@@ -479,104 +482,105 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     /* The total number of particles to be received from the left */
     int receive_from_left = 0;
 
-    if (rank == 0) {
-        /* Determine the number of local particles with foreign roots */
-        int num_foreign_rooted = 0;
-        for (long int i = 0; i < num_localpart; i++) {
-            if (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart) {
-                num_foreign_rooted++;
+    if (MPI_Rank_Count > 1) {
+
+        if (rank == 0) {
+            /* Determine the number of local particles with foreign roots */
+            int num_foreign_rooted = 0;
+            for (long int i = 0; i < num_localpart; i++) {
+                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                    num_foreign_rooted++;
+                }
             }
-        }
 
-        /* Now, fish out all local particles with foreign roots */
-        copy_counter = 0;
-        struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
-        for (long int i = 0; i < num_localpart; i++) {
-            if (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart) {
-                memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
-                copy_counter++;
+            /* Now, fish out all local particles with foreign roots */
+            long int copy_counter = 0;
+            struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
+            for (long int i = 0; i < num_localpart; i++) {
+                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                    memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
+                    copy_counter++;
+                }
             }
-        }
 
-        /* Disable the foreign rooted particles on this rank by turning them into singletons */
-        for (long int i = 0; i < num_localpart; i++) {
-            if (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart) {
-                fof_parts[i].root = fof_parts[i].local_offset;
-                fof_parts[i].global_root = fof_parts[i].global_offset;
+            /* Disable the foreign rooted particles on this rank by turning them into singletons */
+            for (long int i = 0; i < num_localpart; i++) {
+                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                    fof_parts[i].root = fof_parts[i].global_offset;
+                }
             }
-        }
 
-        /* Communicate the foreign particles to the right neighbour */
-        MPI_Send(foreign_root_parts, num_foreign_rooted, fof_type, rank_right, 0, MPI_COMM_WORLD);
-
-        /* Release the delivered particles */
-        free(foreign_root_parts);
-    } else {
-        /* Prepare to receive particles from the left */
-        MPI_Status status_left;
-        MPI_Probe(rank_left, 0, MPI_COMM_WORLD, &status_left);
-        MPI_Get_count(&status_left, fof_type, &receive_from_left);
-
-        /* Receive the particle data */
-        returned_parts = malloc(receive_from_left * sizeof(struct fof_part_data));
-        MPI_Recv(returned_parts, receive_from_left, fof_type,
-                 rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        /* Check that we have enough memory */
-        if (num_localpart + receive_from_left > max_partnum) {
-            printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_from_left);
-            exit(1);
-        }
-
-        /* Move to received particles into the main memory */
-        memcpy(fof_parts + num_localpart, returned_parts, receive_from_left * sizeof(struct fof_part_data));
-
-        /* Release the received particles */
-        free(returned_parts);
-
-        /* Determine the number of particles with foreign roots (that are not roots themselves) */
-        int num_foreign_rooted = 0;
-        for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-            /* Skip duplicate domestic particles */
-            if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
-                num_foreign_rooted++;
-            }
-        }
-
-        /* Now, fish out all local particles with foreign roots */
-        copy_counter = 0;
-        struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
-        for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-            if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
-                memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
-                copy_counter++;
-            }
-        }
-
-        /* Disable the foreign rooted particles on this rank by turning them into singletons */
-        for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-            if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
-                fof_parts[i].root = fof_parts[i].local_offset;
-                fof_parts[i].global_root = fof_parts[i].global_offset;
-            }
-        }
-
-        /* Communicate the foreign particles to the right neighbour */
-        if (rank < MPI_Rank_Count - 1) {
+            /* Communicate the foreign particles to the right neighbour */
             MPI_Send(foreign_root_parts, num_foreign_rooted, fof_type, rank_right, 0, MPI_COMM_WORLD);
+
+            /* Release the delivered particles */
+            free(foreign_root_parts);
+        } else {
+            /* Prepare to receive particles from the left */
+            MPI_Status status_left;
+            MPI_Probe(rank_left, 0, MPI_COMM_WORLD, &status_left);
+            MPI_Get_count(&status_left, fof_type, &receive_from_left);
+
+            /* Receive the particle data */
+            returned_parts = malloc(receive_from_left * sizeof(struct fof_part_data));
+            MPI_Recv(returned_parts, receive_from_left, fof_type,
+                     rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            /* Check that we have enough memory */
+            if (num_localpart + receive_from_left > max_partnum) {
+                printf("Not enough memory to exchange particles on rank %d (%lld < %lld).\n", rank, max_partnum, num_localpart + receive_from_left);
+                exit(1);
+            }
+
+            /* Move to received particles into the main memory */
+            memcpy(fof_parts + num_localpart, returned_parts, receive_from_left * sizeof(struct fof_part_data));
+
+            /* Release the received particles */
+            free(returned_parts);
+
+            /* Determine the number of particles with foreign roots (that are not roots themselves) */
+            int num_foreign_rooted = 0;
+            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+                /* Skip duplicate domestic particles */
+                if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].root != fof_parts[i].global_offset && (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart)) {
+                    num_foreign_rooted++;
+                }
+            }
+
+            /* Now, fish out all local particles with foreign roots */
+            long int copy_counter = 0;
+            struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
+            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+                if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].root != fof_parts[i].global_offset && (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart)) {
+                    memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
+                    copy_counter++;
+                }
+            }
+
+            /* Disable the foreign rooted particles on this rank by turning them into singletons */
+            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+                if (((fof_parts[i].x[0] * int_to_rank_fac) != rank || i < num_localpart) && fof_parts[i].root != fof_parts[i].global_offset && (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart)) {
+                    fof_parts[i].root = fof_parts[i].global_offset;
+                }
+            }
+
+            /* Communicate the foreign particles to the right neighbour */
+            if (rank < MPI_Rank_Count - 1) {
+                MPI_Send(foreign_root_parts, num_foreign_rooted, fof_type, rank_right, 0, MPI_COMM_WORLD);
+            }
+
+            /* Release the delivered particles */
+            free(foreign_root_parts);
         }
 
-        /* Release the delivered particles */
-        free(foreign_root_parts);
+        timer_stop(rank, &fof_timer, "The second communication took ");
+        MPI_Barrier(MPI_COMM_WORLD);
     }
-
-    timer_stop(rank, &fof_timer, "The second communication took ");
-    MPI_Barrier(MPI_COMM_WORLD);
 
     /* Determine the number of foreign roots of local particles */
     int foreign_rooted = 0;
     for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-        if (fof_parts[i].global_root != fof_parts[i].global_offset && (fof_parts[i].global_root < rank_offset || fof_parts[i].global_root >= rank_offset + num_localpart)) {
+        if (fof_parts[i].root != fof_parts[i].global_offset && (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart)) {
             foreign_rooted++;
         }
     }
@@ -588,15 +592,20 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
 
     /* Now that we have no foreign rooted particles, we can attach the trees */
 
+    /* For the local particles, turn the global_roots back into roots */
+    for (long long i = 0; i < num_localpart; i++) {
+        fof_parts[i].root -= rank_offset;
+    }
+
     /* Attach returned particles to the local tree using the proper local offsets */
     for (long long i = num_localpart; i < num_localpart + receive_from_left; i++) {
         /* Skip foreign singletons */
-        if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        if (i >= num_localpart && fof_parts[i].root == fof_parts[i].global_offset) continue;
         /* Skip duplicate domestic particles */
         if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
         fof_parts[i].local_offset = i;
-        fof_parts[i].root = find_root(fof_parts, &fof_parts[fof_parts[i].global_root - rank_offset]);
+        fof_parts[i].root = find_root(fof_parts, &fof_parts[fof_parts[i].root - rank_offset]);
     }
 
     /* Reset the group sizes */
@@ -608,7 +617,7 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     /* Determine group sizes by counting particles with the same root */
     for (long int i = 0; i < num_localpart + receive_from_left; i++) {
         /* Skip foreign singletons */
-        if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        if (i >= num_localpart && fof_parts[i].root == fof_parts[i].global_offset) continue;
         /* Skip duplicate domestic particles */
         if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
@@ -620,7 +629,7 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     long int num_structures = 0;
     for (long int i = 0; i < num_localpart; i++) {
         /* Skip foreign singletons */
-        if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        if (i >= num_localpart && fof_parts[i].root == fof_parts[i].global_offset) continue;
         /* Skip duplicate domestic particles */
         if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
@@ -651,18 +660,19 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
 
     /* Assign root particles to halos */
     long int halo_count = 0;
+    int *halo_ids = malloc(num_localpart * sizeof(int));
     for (long int i = 0; i < num_localpart; i++) {
         /* Skip foreign singletons */
-        if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        if (i >= num_localpart && fof_parts[i].root == fof_parts[i].global_offset) continue;
         /* Skip duplicate domestic particles */
         if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
         if (fof_parts[i].local_offset == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
-            fof_parts[i].halo_id = halo_count + halo_rank_offsets[rank];
+            halo_ids[i] = halo_count + halo_rank_offsets[rank];
             halos[halo_count].global_id = halo_count + halo_rank_offsets[rank];
             halo_count++;
         } else {
-            fof_parts[i].halo_id = -1;
+            halo_ids[i] = -1;
         }
     }
 
@@ -672,11 +682,11 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     /* Accumulate the halo properties */
     for (long int i = 0; i < num_localpart + receive_from_left; i++) {
         /* Skip foreign singletons */
-        if (i >= num_localpart && fof_parts[i].global_root == fof_parts[i].global_offset) continue;
+        if (i >= num_localpart && fof_parts[i].root == fof_parts[i].global_offset) continue;
         /* Skip duplicate domestic particles */
         if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) continue;
 
-        long int h = fof_parts[fof_parts[i].root].halo_id - halo_rank_offsets[rank];
+        long int h = halo_ids[fof_parts[i].root] - halo_rank_offsets[rank];
         if (h >= 0) {
 #ifdef WITH_MASSES
             /* TODO: decide what to do about the masses */
@@ -701,6 +711,9 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
             halos[h].npart++;
         }
     }
+
+    /* We are done with the halo ids */
+    free(halo_ids);
 
     /* Divide by the mass for the centre of mass properties */
     for (long int i = 0; i < num_structures; i++) {
