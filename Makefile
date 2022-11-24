@@ -26,11 +26,11 @@ SOURCES += mass_deposit snap_io analysis_fof
 
 OBJECTS = $(patsubst %, lib/%.o, $(SOURCES))
 
-all: minIni sedulus
-	mkdir -p lib
+all: minIni lib
 	./git_version.sh
-
-sedulus: $(OBJECTS)
+	make sedulus
+	
+sedulus: $(OBJECTS) src/sedulus.c include/git_version.h
 	$(GCC) src/sedulus.c -o sedulus $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 
 $(OBJECTS) : lib/%.o : src/%.c
@@ -43,3 +43,6 @@ clean:
 
 minIni:
 	cd parser && make
+
+lib:
+	mkdir -p lib
