@@ -154,6 +154,9 @@ int generate_ngeniclike_grf(struct distributed_grid *dg, int Seed) {
         }
     }
 
+    /* Free memory */
+    free(seedtable);
+
     /* Right now, the grid is in momentum space */
     dg->momentum_space = 1;
 

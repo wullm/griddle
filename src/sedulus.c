@@ -129,7 +129,6 @@ int main(int argc, char *argv[]) {
     /* Create or read a Gaussian random field */
     long int N = pars.PartGridSize;
     double boxlen = pars.BoxLength;
-    struct distributed_grid lpt_potential;
 
     /* Check what portions of 3D grids get stored locally */
     long int X0, NX;
@@ -189,6 +188,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &ics_timer);
 
         /* Allocate distributed memory arrays (one complex & one real) */
+        struct distributed_grid lpt_potential;
         alloc_local_grid_with_buffers(&lpt_potential, N, boxlen, buffer_width, MPI_COMM_WORLD);
 
         /* Generate LPT potential grid */

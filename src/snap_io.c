@@ -217,6 +217,10 @@ int exportSnapshot(struct params *pars, struct units *us,
         const hsize_t vstart[2] = {start_in_group, 0}; //always with the "x" coordinate
         const hsize_t sstart[1] = {start_in_group};
 
+        /* Free memory */
+        free(partnum_by_rank);
+        free(first_id_by_rank);
+
         /* Choose the corresponding hyperslabs inside the overall spaces */
         H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
         H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
@@ -247,7 +251,11 @@ int exportSnapshot(struct params *pars, struct units *us,
             vels[i * 3 + 2] = p->v[2];
             /* Drift to the right time */
             if (dtau_drift != 0.) {
-                double rel_drift = relativistic_drift(p, pcs, a);
+#ifdef WITH_PARTTYPE
+                const double rel_drift = relativistic_drift(p->v, p->type pcs, a);
+#else
+                const double rel_drift = 1.0;
+#endif
                 coords[i * 3 + 0] += vels[i * 3 + 0] * dtau_drift * rel_drift;
                 coords[i * 3 + 1] += vels[i * 3 + 1] * dtau_drift * rel_drift;
                 coords[i * 3 + 2] += vels[i * 3 + 2] * dtau_drift * rel_drift;

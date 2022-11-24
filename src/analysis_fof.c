@@ -752,6 +752,8 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
     free(cell_counts);
     free(cell_offsets);
     free(cell_list);
+    free(parts_per_rank);
+    free(rank_offsets);
 
     return 0;
 }
