@@ -19,12 +19,17 @@ LIBRARIES = $(INI_PARSER) $(STD_LIBRARIES) $(FFTW_LIBRARIES) $(HDF5_LIBRARIES) $
 CFLAGS = -Wall -Wshadow=global -fopenmp -march=native -O4
 LDFLAGS =
 
+# The main sources list
 SOURCES =
 SOURCES += params units grid_io random fermi_dirac distributed_grid particle_exchange
 SOURCES += fft gaussian_field perturb_data cosmology initial_conditions mesh_grav
 SOURCES += mass_deposit snap_io analysis_fof
 
+# The corresponding objects
 OBJECTS = $(patsubst %, lib/%.o, $(SOURCES))
+
+# The corresponding dependencies
+DEPENDS = $(patsubst %, lib/%.d, $(SOURCES))
 
 all: minIni lib
 	./git_version.sh
@@ -33,11 +38,14 @@ all: minIni lib
 sedulus: $(OBJECTS) src/sedulus.c include/git_version.h
 	$(GCC) src/sedulus.c -o sedulus $(INCLUDES) $(OBJECTS) $(LIBRARIES) $(CFLAGS) $(LDFLAGS)
 
+-include $(DEPENDS)
+
 $(OBJECTS) : lib/%.o : src/%.c
-	$(GCC) $^ -c -o $@ $(INCLUDES) $(CFLAGS)
+	$(GCC) $< -c -MMD -o $@ $(INCLUDES) $(CFLAGS)
 
 clean:
 	rm -f lib/*.o
+	rm -f lib/*.d
 	rm -f parser/*.o
 	rm -f sedulus
 
