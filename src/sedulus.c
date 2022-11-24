@@ -473,18 +473,32 @@ int main(int argc, char *argv[]) {
 #endif
 
             /* Execute kick */
-            p->v[0] += acc[0] * kick_dtau;
-            p->v[1] += acc[1] * kick_dtau;
-            p->v[2] += acc[2] * kick_dtau;
+            double v[3] = {p->v[0] + acc[0] * kick_dtau,
+                           p->v[1] + acc[1] * kick_dtau,
+                           p->v[2] + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
-            double rel_drift = relativistic_drift(p, &pcs, a);
+#ifdef WITH_PARTTYPE
+            const double rel_drift = relativistic_drift(v, p->type, &pcs, a);
+#else
+            const double rel_drift = 1.0;
+#endif
+
+            /* Execute drift */
+            p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
+            p->x[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
+            p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
+
+            /* Update velocities */
+            p->v[0] = v[0];
+            p->v[1] = v[1];
+            p->v[2] = v[2];
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
             if (p->type == 6) {
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
-                double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
+                double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
                 double q = sqrt(v2) * neutrino_qfac * m_eV;
                 double qi = neutrino_seed_to_fermi_dirac(p->id);
                 double f = fermi_dirac_density(q);
@@ -493,11 +507,6 @@ int main(int argc, char *argv[]) {
                 p->w = 1.0 - f / fi;
             }
 #endif
-
-            /* Execute drift */
-            p->x[0] += p->v[0] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[1] += p->v[1] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[2] += p->v[2] * drift_dtau * rel_drift * pos_to_int_fac;
 
             // /* Convert positions to integers (wrapping automatic by overflow) */
             // p->x[0] = x[0] * grid_to_int_fac;
