@@ -30,12 +30,15 @@ struct fof_cell_list {
 };
 
 struct fof_part_data {
+    /* Integer positons of the particle */
     IntPosType x[3];
+    /* The offset (local or global) of the root of the linked particle tree */
     long int root;
+    /* The global offset of the corresponding particle in parts */
     long int global_offset;
+    /* The local offset of the fof_part, which is not necessarily related to the global_offset */
     long int local_offset;
-    long int global_root;
-    long int halo_id;
+    /* We need the ability to disable particles */
 };
 
 struct halo_properties {
@@ -56,10 +59,10 @@ static inline MPI_Datatype mpi_fof_data_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[7] = {MPI_INTPOS_TYPE, MPI_LONG, MPI_LONG,
-                             MPI_LONG, MPI_LONG, MPI_LONG};
-    int lengths[7];
-    MPI_Aint displacements[7];
+    MPI_Datatype types[5] = {MPI_INTPOS_TYPE, MPI_LONG, MPI_LONG,
+                             MPI_LONG};
+    int lengths[5];
+    MPI_Aint displacements[5];
     MPI_Aint base_address;
     struct fof_part_data temp;
     MPI_Get_address(&temp, &base_address);
@@ -87,18 +90,6 @@ static inline MPI_Datatype mpi_fof_data_type() {
     /* Local offset */
     lengths[counter] = 1;
     MPI_Get_address(&temp.local_offset, &displacements[counter]);
-    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
-    counter++;
-
-    /* Global root */
-    lengths[counter] = 1;
-    MPI_Get_address(&temp.global_root, &displacements[counter]);
-    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
-    counter++;
-
-    /* Halo ID */
-    lengths[counter] = 1;
-    MPI_Get_address(&temp.halo_id, &displacements[counter]);
     displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
     counter++;
 
