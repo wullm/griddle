@@ -51,9 +51,10 @@ static inline int cellListSort(const void *a, const void *b) {
     return ca->cell >= cb->cell;
 }
 
-/* Should two particles be linked? */
-static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
-                              double int_to_pos_fac, double linking_length_2) {
+/* Compute the squared physical distance between two integer positions */
+static inline double int_to_phys_dist2(const IntPosType ax[3],
+                                       const IntPosType bx[3],
+                                       double int_to_pos_fac) {
 
     /* Vector distance */
     const IntPosType dx = bx[0] - ax[0];
@@ -70,8 +71,14 @@ static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
     const double fy = ty * int_to_pos_fac;
     const double fz = tz * int_to_pos_fac;
 
-    const double r_2 = fx * fx + fy * fy + fz * fz;
+    return fx * fx + fy * fy + fz * fz;
+}
 
+/* Should two particles be linked? */
+static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
+                              double int_to_pos_fac, double linking_length_2) {
+
+    const double r_2 = int_to_phys_dist2(ax, bx, int_to_pos_fac);
     return r_2 <= linking_length_2;
 }
 
@@ -207,10 +214,12 @@ void copy_edge_parts(struct fof_part_data **dest, struct fof_part_data *fof_part
 }
 
 /* TODO, kick and drift particles to the right time */
-int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
-                 long long int num_localpart, long long int max_partnum,
-                 double linking_length, int halo_min_npart, int output_num,
-                 double a_scale_factor) {
+int analysis_fof(struct particle *parts, double boxlen, long int Np,
+                 long long int Ng, long long int num_localpart,
+                 long long int max_partnum, double linking_length,
+                 int halo_min_npart, int output_num, double a_scale_factor,
+                 const struct units *us, const struct physical_consts *pcs,
+                 const struct cosmology *cosmo) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -723,15 +732,163 @@ int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
 
     timer_stop(rank, &fof_timer, "Computing halo properties took ");
 
+    /* Compute the critical density */
+    const double h = cosmo->h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
+    /* TODO: use the actual particle masses when available */
+    const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
+
+    message(rank, "Now proceeding with a spherical overdensity calculation.\n");
+
+    /* TODO: Communicate all relevant FOF centres to the right ranks and then
+     * reduce the density histograms. For now, we will cut off the SO at the
+     * rank edges. */
+
+    const double min_radius = 1e-1 * MPC_METRES / us->UnitLengthMetres;
+    const double max_radius = 3.0 * MPC_METRES / us->UnitLengthMetres;
+    const double min_radius_2 = min_radius * min_radius;
+    const double max_radius_2 = max_radius * max_radius;
+    const double log_min_radius = log(min_radius);
+    const double log_max_radius = log(max_radius);
+
+    /* Prepare mass-weighted histograms */
+    const int bins = 10;
+    double *mass_hists = calloc(num_structures * bins, sizeof(double));
+
+    /* The edges of the histogram */
+    double *bin_edges = malloc(bins * sizeof(double));
+    const double dlogr = (log_max_radius - log_min_radius) / (bins - 1);
+    for (int i = 0; i < bins; i++) {
+        bin_edges[i] = exp(log_min_radius + i * dlogr);
+    }
+
+
+    /* Loop over local halos */
+    for (long int i = 0; i < num_structures; i++) {
+
+        /* Compute the integer position of the halo COM */
+        IntPosType com[3] = {halos[i].x_com[0] * pos_to_int_fac,
+                             halos[i].x_com[1] * pos_to_int_fac,
+                             halos[i].x_com[2] * pos_to_int_fac};
+
+        /* Determine all cells that overlap with the search radius */
+        int min_x[3] = {(com[0] - max_radius) * int_to_cell_fac,
+                        (com[1] - max_radius) * int_to_cell_fac,
+                        (com[2] - max_radius) * int_to_cell_fac};
+        int max_x[3] = {(com[0] + max_radius) * int_to_cell_fac,
+                        (com[1] + max_radius) * int_to_cell_fac,
+                        (com[2] + max_radius) * int_to_cell_fac};
+
+        /* Loop over cells */
+        for (int x = min_x[0]; x <= max_x[0]; x++) {
+            for (int y = min_x[1]; y <= max_x[1]; y++) {
+                for (int z = min_x[2]; z <= max_x[2]; z++) {
+
+                    /* Handle wrapping */
+                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
+                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
+                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+
+                    /* Find the particle count and offset of the cell */
+                    int cell = row_major_cell(cx, cy, cz, N_cells);
+                    long int local_count = cell_counts[cell];
+                    long int local_offset = cell_offsets[cell];
+
+                    /* Loop over particles in cells */
+                    for (int a = 0; a < local_count; a++) {
+                        const int index_a = cell_list[local_offset + a].offset;
+
+                        /* Only count local particles */
+                        /* TODO: remake the cell list for the received particles */
+                        if (index_a >= num_localpart) continue;
+
+                        const IntPosType *xa = fof_parts[index_a].x;
+                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                        if (r2 < min_radius_2) {
+                            mass_hists[bins * i + 0]++;
+                        } else if (r2 < max_radius_2) {
+                            /* Determine the bin */
+                            int bin = (log(r2) * 0.5 - log_min_radius) / dlogr + 1;
+#ifdef DEBUG_CHECKS
+                            assert((bin >= 0) && (bin < bins));
+#endif
+
+#ifdef WITH_MASSES
+                            /* TODO: decide what to do about the masses */
+                            double mass = part_mass;
+#else
+                            double mass = part_mass;
+#endif
+
+                            mass_hists[bins * i + bin] += mass;
+                        }
+                    } /* End particle loop */
+                }
+            }
+        } /* End cell loop */
+    } /* End halo loop */
+
+    timer_stop(rank, &fof_timer, "Computing particle histograms took ");
+
+    /* Now determine the R200_crit radius for each halo */
+    /* This could be rolled into the previous loop if we had all the
+     * particles ready */
+    const double threshold = 200.0;
+
+    for (long int i = 0; i < num_structures; i++) {
+
+        double enclosed_mass = 0;
+        double enclosed_mass_prev = 0;
+
+        for (int j = 1; j < bins; j++) {
+            double radius = bin_edges[j];
+            double radius3 = radius * radius * radius;
+            double volume = 4.0 / 3.0 * M_PI * radius3;
+
+            double radius_prev = bin_edges[j - 1];
+            double radius_prev3 = radius_prev * radius_prev * radius_prev;
+            double volume_prev = 4.0 / 3.0 * M_PI * radius_prev3;
+
+            enclosed_mass += mass_hists[i * bins + j];
+
+            double density = enclosed_mass / volume;
+            double density_prev = enclosed_mass_prev / volume_prev;
+
+            double Delta = density / rho_crit;
+            double Delta_prev = density_prev / rho_crit;
+
+            if (Delta > threshold) {
+                /* Linearly interpolate to find the SO radius and mass */
+                double R_SO = bin_edges[j - 1] + (threshold - Delta_prev) * (radius - radius_prev) / (Delta - Delta_prev);
+                double M_SO = enclosed_mass_prev + (threshold - Delta_prev) * (enclosed_mass - enclosed_mass_prev) / (Delta - Delta_prev);
+
+                /* Store the data */
+                halos[i].R_SO = R_SO;
+                halos[i].M_SO = M_SO;
+
+                break;
+            }
+
+            enclosed_mass_prev = enclosed_mass;
+        }
+    }
+
+    /* Free the histogram data */
+    free(mass_hists);
+    free(bin_edges);
+
     /* Print the halo properties to a file */
     /* TODO: replace by HDF5 output */
     char fname[50];
     sprintf(fname, "halos_%04d_%03d.txt", output_num, rank);
     FILE *f = fopen(fname, "w");
 
-    fprintf(f, "# i mass npart x[0] x[1] x[2] v[0] v[1] v[2]\n");
+    fprintf(f, "# i M_FOF npart x[0] x[1] x[2] R_SO M_SO\n");
     for (long int i = 0; i < num_structures; i++) {
-        fprintf(f, "%ld %g %d %g %g %g %g %g %g\n", halos[i].global_id, halos[i].mass_fof, halos[i].npart, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].v_com[0], halos[i].v_com[1], halos[i].v_com[2]);
+        fprintf(f, "%ld %g %d %g %g %g %g %g\n", halos[i].global_id, halos[i].mass_fof, halos[i].npart, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].R_SO, halos[i].M_SO);
     }
 
     /* Close the file */

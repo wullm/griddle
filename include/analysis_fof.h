@@ -23,6 +23,8 @@
 #define ANALYSIS_FOF_H
 
 #include "particle.h"
+#include "units.h"
+#include "cosmology.h"
 
 struct fof_cell_list {
     long int offset;
@@ -46,13 +48,17 @@ struct halo_properties {
     double x_com[3];
     double v_com[3];
     double mass_fof;
+    double R_SO;
+    double M_SO;
     int npart;
 };
 
-int analysis_fof(struct particle *parts, double boxlen, long long int Ng,
-                 long long int num_localpart, long long int max_partnum,
-                 double linking_length, int halo_min_npart, int output_num,
-                 double a_scale_factor);
+int analysis_fof(struct particle *parts, double boxlen, long int Np,
+                 long long int Ng, long long int num_localpart,
+                 long long int max_partnum, double linking_length,
+                 int halo_min_npart, int output_num, double a_scale_factor,
+                 const struct units *us, const struct physical_consts *pcs,
+                 const struct cosmology *cosmo);
 
 
 static inline MPI_Datatype mpi_fof_data_type() {

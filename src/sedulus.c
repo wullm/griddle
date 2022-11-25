@@ -332,7 +332,7 @@ int main(int argc, char *argv[]) {
 
             const double linking_length = pars.LinkingLength * boxlen / N;
 
-            analysis_fof(particles, boxlen, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin);
+            analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo);
 
             /* Timer */
             MPI_Barrier(MPI_COMM_WORLD);
@@ -537,7 +537,7 @@ int main(int argc, char *argv[]) {
 
                     const double linking_length = pars.LinkingLength * boxlen / N;
 
-                    analysis_fof(particles, boxlen, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j]);
+                    analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo);
 
                     /* Timer */
                     MPI_Barrier(MPI_COMM_WORLD);
