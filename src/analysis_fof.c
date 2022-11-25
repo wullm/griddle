@@ -774,12 +774,12 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                              halos[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(com[0] - max_radius) * int_to_cell_fac,
-                        (com[1] - max_radius) * int_to_cell_fac,
-                        (com[2] - max_radius) * int_to_cell_fac};
-        int max_x[3] = {(com[0] + max_radius) * int_to_cell_fac,
-                        (com[1] + max_radius) * int_to_cell_fac,
-                        (com[2] + max_radius) * int_to_cell_fac};
+        int min_x[3] = {(com[0] - max_radius * pos_to_int_fac) * int_to_cell_fac,
+                        (com[1] - max_radius * pos_to_int_fac) * int_to_cell_fac,
+                        (com[2] - max_radius * pos_to_int_fac) * int_to_cell_fac};
+        int max_x[3] = {(com[0] + max_radius * pos_to_int_fac) * int_to_cell_fac,
+                        (com[1] + max_radius * pos_to_int_fac) * int_to_cell_fac,
+                        (com[2] + max_radius * pos_to_int_fac) * int_to_cell_fac};
 
         /* Loop over cells */
         for (int x = min_x[0]; x <= max_x[0]; x++) {
