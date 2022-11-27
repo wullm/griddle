@@ -31,30 +31,6 @@ struct fof_cell_list {
     int cell;
 };
 
-struct fof_part_data {
-    /* Integer positons of the particle */
-    IntPosType x[3];
-    /* The offset (local or global) of the root of the linked particle tree */
-    long int root;
-    /* The global offset of the corresponding particle in parts */
-    long int global_offset;
-    /* The local offset of the fof_part, which is not necessarily related to the global_offset */
-    long int local_offset;
-};
-
-struct fof_halo {
-    /* Global ID of the halo */
-    long int global_id;
-    /* Centre of mass of the FOF particles */
-    double x_com[3];
-    /* Total mass of the FOF particles */
-    double mass_fof;
-    /* Number of linked FOF particles */
-    int npart;
-    /* Home rank of the halo */
-    int rank;
-};
-
 static inline int row_major_cell(int i, int j, int k, int N_cells) {
     return i * N_cells * N_cells + j * N_cells + k;
 }
@@ -94,6 +70,33 @@ static inline double int_to_phys_dist2(const IntPosType ax[3],
 
     return fx * fx + fy * fy + fz * fz;
 }
+
+/* If you add/change/remove fields to fof_part_data or fof_halo,
+ * update the corresponding MPI data types below. */
+
+struct fof_part_data {
+    /* Integer positons of the particle */
+    IntPosType x[3];
+    /* The offset (local or global) of the root of the linked particle tree */
+    long int root;
+    /* The global offset of the corresponding particle in parts */
+    long int global_offset;
+    /* The local offset of the fof_part, which is not necessarily related to the global_offset */
+    long int local_offset;
+};
+
+struct fof_halo {
+    /* Global ID of the halo */
+    long int global_id;
+    /* Centre of mass of the FOF particles */
+    double x_com[3];
+    /* Total mass of the FOF particles */
+    double mass_fof;
+    /* Number of linked FOF particles */
+    int npart;
+    /* Home rank of the halo */
+    int rank;
+};
 
 int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int Ng, long long int num_localpart,
