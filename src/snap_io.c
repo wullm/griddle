@@ -541,10 +541,12 @@ int readSnapshot(struct params *pars, struct units *us,
     hid_t h_grp = H5Gopen(h_file, "Header", H5P_DEFAULT);
 
     /* Read the BoxSize attribute */
-    double boxlen = 0.;
+    double boxsize[3] = {0., 0., 0.};
     hid_t h_attr = H5Aopen(h_grp, "BoxSize", H5P_DEFAULT);
-    H5Aread(h_attr, H5T_NATIVE_DOUBLE, &boxlen);
+    H5Aread(h_attr, H5T_NATIVE_DOUBLE, boxsize);
     H5Aclose(h_attr);
+
+    const double boxlen = boxsize[0];
 
     /* Close the header group */
     H5Gclose(h_grp);
