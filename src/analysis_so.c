@@ -510,12 +510,8 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     timer_start(rank, &so_timer);
 
     /* Spherical overdensity search radius */
-    const double min_radius = 1e-1 * MPC_METRES / us->UnitLengthMetres;
     const double max_radius = 10.0 * MPC_METRES / us->UnitLengthMetres;
-    const double min_radius_2 = min_radius * min_radius;
     const double max_radius_2 = max_radius * max_radius;
-    const double log_min_radius = log(min_radius);
-    const double log_max_radius = log(max_radius);
 
     /* Compute the critical density */
     const double h = cosmo->h;
@@ -525,6 +521,9 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
     const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
 #endif
+
+    /* Densitty threshold w.r.t. the critical density (TODO: make parameter) */
+    const double threshold = 200.0;
 
     /* We start holding no foreign FOFs */
     long int num_foreign_fofs = 0;
@@ -665,17 +664,10 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
         halos[i].rank = fofs[i].rank;
     }
 
-    /* Prepare mass-weighted histograms */
-    const int bins = 10;
-    double *mass_hists = calloc(num_local_fofs * bins, sizeof(double));
-
-    /* The edges of the histogram */
-    double *bin_edges = malloc(bins * sizeof(double));
-    const double dlogr = (log_max_radius - log_min_radius) / (bins - 1);
-    for (int i = 0; i < bins; i++) {
-        bin_edges[i] = exp(log_min_radius + i * dlogr);
-    }
-
+    /* Allocate working memory for computing the SO radius */
+    /* Start with a reasonable length, reallocate if more is needed */
+    long int working_space = 10000;
+    struct so_part_data *so_parts = malloc(working_space * sizeof(struct so_part_data));
 
     /* Loop over local halos */
     for (long int i = 0; i < num_local_fofs; i++) {
@@ -693,7 +685,10 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                         (fofs[i].x_com[1] + max_radius) * pos_to_cell_fac,
                         (fofs[i].x_com[2] + max_radius) * pos_to_cell_fac};
 
-        /* Loop over cells */
+        /* Count the number of particles within the search radius */
+        long int nearby_partnum = 0;
+
+        /* Loop over cells to count particles */
         for (int x = min_x[0]; x <= max_x[0]; x++) {
             for (int y = min_x[1]; y <= max_x[1]; y++) {
                 for (int z = min_x[2]; z <= max_x[2]; z++) {
@@ -715,81 +710,121 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                         const IntPosType *xa = parts[index_a].x;
                         const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-#ifdef WITH_MASSES
-                        double mass = parts[index_a].m;
-#else
-                        double mass = part_mass;
-#endif
-
-                        if (r2 < min_radius_2) {
-                            mass_hists[bins * i + 0] += mass;
-                        } else if (r2 < max_radius_2) {
-                            /* Determine the bin */
-                            int bin = (log(r2) * 0.5 - log_min_radius) / dlogr + 1;
-#ifdef DEBUG_CHECKS
-                            assert((bin >= 0) && (bin < bins));
-#endif
-
-                            mass_hists[bins * i + bin] += mass;
+                        if (r2 < max_radius_2) {
+                            nearby_partnum++;
                         }
                     } /* End particle loop */
                 }
             }
         } /* End cell loop */
-    } /* End halo loop */
 
-    /* Timer */
-    timer_stop(rank, &so_timer, "Computing particle histograms took ");
+        /* Allocate more memory if needed */
+        if (nearby_partnum > working_space) {
+            so_parts = realloc(so_parts, nearby_partnum * sizeof(struct so_part_data));
+        }
 
-    /* Now determine the R200_crit radius for each halo */
-    /* This could be rolled into the previous loop if we had all the
-     * particles ready (which we now do!) */
-    const double threshold = 200.0;
+        /* Erase the working memory */
+        bzero(so_parts, nearby_partnum * sizeof(struct so_part_data));
 
-    for (long int i = 0; i < num_local_fofs; i++) {
+        /* Loop over cells to create an array of distances */
+        long int part_counter = 0;
+        for (int x = min_x[0]; x <= max_x[0]; x++) {
+            for (int y = min_x[1]; y <= max_x[1]; y++) {
+                for (int z = min_x[2]; z <= max_x[2]; z++) {
 
-        double enclosed_mass = 0;
-        double enclosed_mass_prev = 0;
+                    /* Handle wrapping */
+                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
+                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
+                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
 
-        for (int j = 1; j < bins; j++) {
-            double radius = bin_edges[j];
-            double radius3 = radius * radius * radius;
-            double volume = 4.0 / 3.0 * M_PI * radius3;
+                    /* Find the particle count and offset of the cell */
+                    int cell = row_major_cell(cx, cy, cz, N_cells);
+                    long int local_count = cell_counts[cell];
+                    long int local_offset = cell_offsets[cell];
 
-            double radius_prev = bin_edges[j - 1];
-            double radius_prev3 = radius_prev * radius_prev * radius_prev;
-            double volume_prev = 4.0 / 3.0 * M_PI * radius_prev3;
+                    /* Loop over particles in cells */
+                    for (int a = 0; a < local_count; a++) {
+                        const int index_a = cell_list[local_offset + a].offset;
 
-            enclosed_mass += mass_hists[i * bins + j];
+                        const IntPosType *xa = parts[index_a].x;
+                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-            double density = enclosed_mass / volume;
-            double density_prev = enclosed_mass_prev / volume_prev;
+                        if (r2 < max_radius_2) {
+                            so_parts[part_counter].m = parts[index_a].m;
+                            so_parts[part_counter].r = sqrtf(r2);
+                            part_counter++;
+                        }
+                    } /* End particle loop */
+                }
+            }
+        } /* End cell loop */
 
-            double Delta = density / rho_crit;
-            double Delta_prev = density_prev / rho_crit;
+        /* Sort particles by radial distance */
+        qsort(so_parts, nearby_partnum, sizeof(struct so_part_data), soPartSort);
 
-            if (Delta > threshold) {
-                /* Linearly interpolate to find the SO radius and mass */
-                double R_SO = bin_edges[j - 1] + (threshold - Delta_prev) * (radius - radius_prev) / (Delta - Delta_prev);
-                double M_SO = enclosed_mass_prev + (threshold - Delta_prev) * (enclosed_mass - enclosed_mass_prev) / (Delta - Delta_prev);
+        /* Compute the enclosed mass and density ratio at each particle */
+        const double inv_fac = 3.0 / (4.0 * M_PI * rho_crit);
+        for (long int j = 1; j < nearby_partnum; j++) {
+            so_parts[j].m += so_parts[j - 1].m;
+            if (so_parts[j].r > 0) {
+                double r3 = so_parts[j].r * so_parts[j].r * so_parts[j].r;
+                so_parts[j].Delta = so_parts[j].m * inv_fac / r3;
+            }
+        }
 
-                /* Store the data */
-                halos[i].R_SO = R_SO;
-                halos[i].M_SO = M_SO;
+        /* Find the first particle that exceeds the threshold */
+        long int first_above = -1;
+        for (long int j = 0; j < nearby_partnum; j++) {
+            /* Skip particles at zero radial distance */
+            if (so_parts[j].r == 0) continue;
 
+            if (so_parts[j].Delta >= threshold) {
+                first_above = j;
                 break;
             }
-
-            enclosed_mass_prev = enclosed_mass;
         }
-    }
+
+        /* If no particle exceeds the threshold, interpolate up to particle 1 */
+        if (first_above == -1) {
+            halos[i].R_SO = sqrt(so_parts[0].m * inv_fac / threshold);
+            halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+        } else {
+            /* Find the first particle after this that drops below the threshold */
+            long int first_below = -1;
+            for (long int j = first_above; j < nearby_partnum; j++) {
+                /* Skip particles at zero radial distance */
+                if (so_parts[j].r == 0) continue;
+
+                if (so_parts[j].Delta < threshold) {
+                    first_below = j;
+                    break;
+                }
+            }
+
+            /* No particle below the threshold, we need to expand the search radius */
+            if (first_below == -1) {
+               printf("Error: No particle below the SO density threshold. Search radius too small.\n");
+               exit(1);
+            }
+
+            /* We have found an interval where the density drops below the threshold */
+            double delta_Delta = so_parts[first_below].Delta - so_parts[first_below - 1].Delta;
+            double delta_r = so_parts[first_below].r - so_parts[first_below - 1].r;
+
+            /* Linearly interpolate to find the SO radius and mass */
+            halos[i].R_SO = so_parts[first_below - 1].r + (threshold - so_parts[first_below - 1].Delta) * delta_r / delta_Delta;
+            halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+        }
+
+    } /* End halo loop */
+
+    /* Free memory for SO part data */
+    free(so_parts);
 
     /* Timer */
     timer_stop(rank, &so_timer, "Computing spherical overdensity radii took ");
 
     /* Now compute other SO properties */
-
-    /* Loop over local halos */
     for (long int i = 0; i < num_local_fofs; i++) {
 
         /* Compute the integer position of the FOF COM */
@@ -887,8 +922,6 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     free(cell_list);
     free(cell_counts);
     free(cell_offsets);
-    free(mass_hists);
-    free(bin_edges);
     free(halos);
 
     return 0;

@@ -32,6 +32,12 @@ struct so_cell_list {
     int cell;
 };
 
+struct so_part_data {
+    float m;
+    float r;
+    float Delta;
+};
+
 struct so_halo {
     /* Global ID of the halo */
     long int global_id;
@@ -50,6 +56,13 @@ struct so_halo {
     /* Home rank of the halo */
     int rank;
 };
+
+static inline int soPartSort(const void *a, const void *b) {
+    struct so_part_data *pa = (struct so_part_data*) a;
+    struct so_part_data *pb = (struct so_part_data*) b;
+
+    return pa->r >= pb->r;
+}
 
 int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                 long int Np, long long int Ng, long long int num_localpart,
