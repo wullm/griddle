@@ -33,46 +33,6 @@
 
 #define DEBUG_CHECKS
 
-static inline int row_major_cell(int i, int j, int k, int N_cells) {
-    return i * N_cells * N_cells + j * N_cells + k;
-}
-
-/* Determine the cell containing a given particle */
-static inline int which_cell(IntPosType x[3], double int_to_cell_fac, int N_cells) {
-    return row_major_cell((int) (int_to_cell_fac * x[0]), (int) (int_to_cell_fac * x[1]), (int) (int_to_cell_fac * x[2]), N_cells);
-}
-
-/* Order particles by their spatial cell index */
-static inline int cellListSort(const void *a, const void *b) {
-    struct fof_cell_list *ca = (struct fof_cell_list*) a;
-    struct fof_cell_list *cb = (struct fof_cell_list*) b;
-
-    return ca->cell >= cb->cell;
-}
-
-/* Compute the squared physical distance between two integer positions */
-static inline double int_to_phys_dist2(const IntPosType ax[3],
-                                       const IntPosType bx[3],
-                                       double int_to_pos_fac) {
-
-    /* Vector distance */
-    const IntPosType dx = bx[0] - ax[0];
-    const IntPosType dy = bx[1] - ax[1];
-    const IntPosType dz = bx[2] - ax[2];
-
-    /* Enforce boundary conditions */
-    const IntPosType tx = (dx < -dx) ? dx : -dx;
-    const IntPosType ty = (dy < -dy) ? dy : -dy;
-    const IntPosType tz = (dz < -dz) ? dz : -dz;
-
-    /* Convert to physical lengths */
-    const double fx = tx * int_to_pos_fac;
-    const double fy = ty * int_to_pos_fac;
-    const double fz = tz * int_to_pos_fac;
-
-    return fx * fx + fy * fy + fz * fz;
-}
-
 /* Communicate copies of local FOFs centres that overlap with ranks at a
  * distance n = (exchange_iteration + 1) from the home rank. Iterates to
  * cover all distances */
@@ -274,9 +234,11 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
 }
 
 
-/* Communicate copies of local particles that overlap with foreign FOF centres */
+/* Communicate copies of local particles that overlap with foreign FOF centres
+ * with home rank a distance n = (exchange_iteration + 1) from this rank,
+ * Iterates to cover all distances */
 int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
-                      struct fof_cell_list *cell_list, long int *cell_counts,
+                      struct so_cell_list *cell_list, long int *cell_counts,
                       long int *cell_offsets, double boxlen, long long int Ng,
                       long long int num_localpart, long long int *num_foreignpart,
                       long long int max_partnum, long int num_foreign_fofs,
@@ -592,14 +554,14 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     long int *cell_offsets = calloc(num_cells, sizeof(long int));
 
     /* Now create a new particle-cell correspondence for sorting */
-    struct fof_cell_list *cell_list = malloc(num_localpart * sizeof(struct fof_cell_list));
+    struct so_cell_list *cell_list = malloc(num_localpart * sizeof(struct so_cell_list));
     for (long long i = 0; i < num_localpart; i++) {
         cell_list[i].cell = which_cell(parts[i].x, int_to_cell_fac, N_cells);
         cell_list[i].offset = i;
     }
 
     /* Sort particles by cell */
-    qsort(cell_list, num_localpart, sizeof(struct fof_cell_list), cellListSort);
+    qsort(cell_list, num_localpart, sizeof(struct so_cell_list), cellListSort);
 
 #ifdef DEBUG_CHECKS
     /* Check the sort */
@@ -647,14 +609,14 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     // printf("%d holds %lld foreign parts for local FOFs\n", rank, num_foreign_parts);
 
     /* Append the foreign particles to the particle-cell correspondence */
-    cell_list = realloc(cell_list, (num_localpart + num_foreign_parts) * sizeof(struct fof_cell_list));
+    cell_list = realloc(cell_list, (num_localpart + num_foreign_parts) * sizeof(struct so_cell_list));
     for (long long i = num_localpart; i < num_localpart + num_foreign_parts; i++) {
         cell_list[i].cell = which_cell(parts[i].x, int_to_cell_fac, N_cells);
         cell_list[i].offset = i;
     }
 
     /* Sort particles by cell */
-    qsort(cell_list, num_localpart + num_foreign_parts, sizeof(struct fof_cell_list), cellListSort);
+    qsort(cell_list, num_localpart + num_foreign_parts, sizeof(struct so_cell_list), cellListSort);
 
 #ifdef DEBUG_CHECKS
     /* Check the sort */
@@ -924,10 +886,6 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     free(mass_hists);
     free(bin_edges);
     free(halos);
-
-    // free(so_parts);
-    // free(parts_per_rank);
-    // free(rank_offsets);
 
     return 0;
 }

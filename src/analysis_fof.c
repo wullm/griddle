@@ -35,46 +35,6 @@
 
 MPI_Datatype fof_type;
 
-static inline int row_major_cell(int i, int j, int k, int N_cells) {
-    return i * N_cells * N_cells + j * N_cells + k;
-}
-
-/* Determine the cell containing a given particle */
-static inline int which_cell(IntPosType x[3], double int_to_cell_fac, int N_cells) {
-    return row_major_cell((int) (int_to_cell_fac * x[0]), (int) (int_to_cell_fac * x[1]), (int) (int_to_cell_fac * x[2]), N_cells);
-}
-
-/* Order particles by their spatial cell index */
-static inline int cellListSort(const void *a, const void *b) {
-    struct fof_cell_list *ca = (struct fof_cell_list*) a;
-    struct fof_cell_list *cb = (struct fof_cell_list*) b;
-
-    return ca->cell >= cb->cell;
-}
-
-/* Compute the squared physical distance between two integer positions */
-static inline double int_to_phys_dist2(const IntPosType ax[3],
-                                       const IntPosType bx[3],
-                                       double int_to_pos_fac) {
-
-    /* Vector distance */
-    const IntPosType dx = bx[0] - ax[0];
-    const IntPosType dy = bx[1] - ax[1];
-    const IntPosType dz = bx[2] - ax[2];
-
-    /* Enforce boundary conditions */
-    const IntPosType tx = (dx < -dx) ? dx : -dx;
-    const IntPosType ty = (dy < -dy) ? dy : -dy;
-    const IntPosType tz = (dz < -dz) ? dz : -dz;
-
-    /* Convert to physical lengths */
-    const double fx = tx * int_to_pos_fac;
-    const double fy = ty * int_to_pos_fac;
-    const double fz = tz * int_to_pos_fac;
-
-    return fx * fx + fy * fy + fz * fz;
-}
-
 /* Should two particles be linked? */
 static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
                               double int_to_pos_fac, double linking_length_2) {
@@ -232,7 +192,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     int rank_right = (rank + 1) % MPI_Rank_Count;
 
     /* Data type for MPI communication of particles */
-    fof_type = mpi_fof_data_type();
+    fof_type = mpi_fof_part_type();
 
     /* Communicate the particle counts across all ranks */
     long long int *parts_per_rank = malloc(MPI_Rank_Count * sizeof(long int));

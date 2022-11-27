@@ -43,12 +43,57 @@ struct fof_part_data {
 };
 
 struct fof_halo {
+    /* Global ID of the halo */
     long int global_id;
+    /* Centre of mass of the FOF particles */
     double x_com[3];
+    /* Total mass of the FOF particles */
     double mass_fof;
+    /* Number of linked FOF particles */
     int npart;
+    /* Home rank of the halo */
     int rank;
 };
+
+static inline int row_major_cell(int i, int j, int k, int N_cells) {
+    return i * N_cells * N_cells + j * N_cells + k;
+}
+
+/* Determine the cell containing a given particle */
+static inline int which_cell(IntPosType x[3], double int_to_cell_fac, int N_cells) {
+    return row_major_cell((int) (int_to_cell_fac * x[0]), (int) (int_to_cell_fac * x[1]), (int) (int_to_cell_fac * x[2]), N_cells);
+}
+
+/* Order particles by their spatial cell index */
+static inline int cellListSort(const void *a, const void *b) {
+    struct fof_cell_list *ca = (struct fof_cell_list*) a;
+    struct fof_cell_list *cb = (struct fof_cell_list*) b;
+
+    return ca->cell >= cb->cell;
+}
+
+/* Compute the squared physical distance between two integer positions */
+static inline double int_to_phys_dist2(const IntPosType ax[3],
+                                       const IntPosType bx[3],
+                                       double int_to_pos_fac) {
+
+    /* Vector distance */
+    const IntPosType dx = bx[0] - ax[0];
+    const IntPosType dy = bx[1] - ax[1];
+    const IntPosType dz = bx[2] - ax[2];
+
+    /* Enforce boundary conditions */
+    const IntPosType tx = (dx < -dx) ? dx : -dx;
+    const IntPosType ty = (dy < -dy) ? dy : -dy;
+    const IntPosType tz = (dz < -dz) ? dz : -dz;
+
+    /* Convert to physical lengths */
+    const double fx = tx * int_to_pos_fac;
+    const double fy = ty * int_to_pos_fac;
+    const double fz = tz * int_to_pos_fac;
+
+    return fx * fx + fy * fy + fz * fz;
+}
 
 int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int Ng, long long int num_localpart,
@@ -57,8 +102,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  const struct units *us, const struct physical_consts *pcs,
                  const struct cosmology *cosmo);
 
-
-static inline MPI_Datatype mpi_fof_data_type() {
+/* The MPI data type of the FOF particle data */
+static inline MPI_Datatype mpi_fof_part_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
@@ -103,6 +148,7 @@ static inline MPI_Datatype mpi_fof_data_type() {
     return particle_type;
 }
 
+/* The MPI data type of the FOF halo data */
 static inline MPI_Datatype mpi_fof_halo_type() {
 
     /* Construct an MPI data type from the constituent fields */

@@ -33,13 +33,21 @@ struct so_cell_list {
 };
 
 struct so_halo {
+    /* Global ID of the halo */
     long int global_id;
+    /* Centre of mass of the SO particles */
     double x_com[3];
+    /* Centre of mass velocity of the SO particles */
     double v_com[3];
-    double mass_tot; // mass of particles = (M_SO up to errors)
-    double M_SO; // mass
-    double R_SO; // radius
-    int npart_tot; // number of particles within SO radius
+    /* Total mass of the SO particles */
+    double mass_tot; // ( = M_SO up to errors)
+    /* Spherical overdensity mass, given by (4/3) pi R_SO^3 Delta rho_crit */
+    double M_SO;
+    /* Spherical overdensity radius */
+    double R_SO;
+    /* Total number of particles within the SO radius */
+    int npart_tot;
+    /* Home rank of the halo */
     int rank;
 };
 
