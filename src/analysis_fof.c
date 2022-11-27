@@ -28,6 +28,7 @@
 #include <sys/time.h>
 
 #include "../include/analysis_fof.h"
+#include "../include/analysis_so.h"
 #include "../include/message.h"
 
 #define DEBUG_CHECKS
@@ -669,8 +670,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     message(rank, "Found %ld structures in total.\n", total_halo_num);
 
     /* Allocate memory for the local halo catalogue */
-    struct halo_properties *halos = malloc(num_structures * sizeof(struct halo_properties));
-    bzero(halos, num_structures * sizeof(struct halo_properties));
+    struct fof_halo *halos = malloc(num_structures * sizeof(struct fof_halo));
+    bzero(halos, num_structures * sizeof(struct fof_halo));
 
     /* Assign root particles to halos */
     long int halo_count = 0;
@@ -732,419 +733,29 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         }
     }
 
-    timer_stop(rank, &fof_timer, "Computing halo properties took ");
-
-    /* Compute the critical density */
-    const double h = cosmo->h;
-    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
-    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
-    const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
-    /* TODO: use the actual particle masses when available */
-    const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
-
-    message(rank, "Now proceeding with a spherical overdensity calculation.\n");
-
-    /* TODO: Communicate all relevant FOF centres to the right ranks and then
-     * reduce the density histograms. For now, we will cut off the SO at the
-     * rank edges. */
-
-    const double min_radius = 1e-1 * MPC_METRES / us->UnitLengthMetres;
-    const double max_radius = 3.0 * MPC_METRES / us->UnitLengthMetres;
-    const double min_radius_2 = min_radius * min_radius;
-    const double max_radius_2 = max_radius * max_radius;
-    const double log_min_radius = log(min_radius);
-    const double log_max_radius = log(max_radius);
-
-    /* The number of foreign particles that overlap with local halos */
-    int SO_receive_foreign_count = 0;
-
-    /* When running with multiple ranks, we need to communicate edge particles */
-    if (MPI_Rank_Count > 1) {
-
-        /* Find FOF halos whose search radius overlaps with a lower numbered rank */
-        int count_overlap_halos = 0;
-        for (long int i = 0; i < num_structures; i++) {
-
-            /* Compute the integer x-position of the halo COM */
-            IntPosType com_x = halos[i].x_com[0] * pos_to_int_fac;
-
-            /* Determine all ranks that overlap with the search radius */
-            int min_x = (com_x - max_radius * pos_to_int_fac) * int_to_rank_fac;
-            int max_x = (com_x + max_radius * pos_to_int_fac) * int_to_rank_fac;
-
-            if (min_x != rank || max_x != rank) {
-                count_overlap_halos++;
-            }
-        }
-
-        /* Fish out FOF halo centres whose search radius overlaps with a lower numbered rank */
-        double *overlap_centres = malloc(count_overlap_halos * 3 * sizeof(double));
-        int copy_counter = 0;
-        for (long int i = 0; i < num_structures; i++) {
-
-            /* Compute the integer x-position of the halo COM */
-            IntPosType com_x = halos[i].x_com[0] * pos_to_int_fac;
-
-            /* Determine all ranks that overlap with the search radius */
-            int min_x = (com_x - max_radius * pos_to_int_fac) * int_to_rank_fac;
-            int max_x = (com_x + max_radius * pos_to_int_fac) * int_to_rank_fac;
-
-            if (min_x != rank || max_x != rank) {
-                overlap_centres[copy_counter * 3 + 0] = halos[i].x_com[0];
-                overlap_centres[copy_counter * 3 + 1] = halos[i].x_com[1];
-                overlap_centres[copy_counter * 3 + 2] = halos[i].x_com[2];
-                copy_counter++;
-            }
-        }
-
-        double *foreign_centres = NULL;
-        int receive_centre_num = 0;
-
-        if (rank == 0) {
-            /* Prepare to receive FOF halo centres */
-            MPI_Status status;
-            MPI_Probe(rank_right, 0, MPI_COMM_WORLD, &status);
-            MPI_Get_count(&status, MPI_DOUBLE, &receive_centre_num);
-
-            /* Allocate memory for the centres */
-            foreign_centres = malloc(receive_centre_num * sizeof(double));
-
-            /* Receive the particle data */
-            MPI_Recv(foreign_centres, receive_centre_num, MPI_DOUBLE, rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        } else if (rank < MPI_Rank_Count - 2) {
-            /* Prepare to receive FOF centres */
-            MPI_Status status;
-            MPI_Probe(rank_right, 0, MPI_COMM_WORLD, &status);
-            MPI_Get_count(&status, MPI_DOUBLE, &receive_centre_num);
-
-            /* Allocate memory for the centres */
-            foreign_centres = malloc(receive_centre_num * sizeof(double));
-
-            /* Receive the particle data */
-            MPI_Recv(foreign_centres, receive_centre_num, MPI_DOUBLE, rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            /* Send centres to the left */
-            MPI_Send(overlap_centres, count_overlap_halos * 3, MPI_DOUBLE, rank_left, 0, MPI_COMM_WORLD);
-        } else {
-            /* Send centres to the left */
-            MPI_Send(overlap_centres, count_overlap_halos * 3, MPI_DOUBLE, rank_left, 0, MPI_COMM_WORLD);
-        }
-
-        /* The number of foreign centres */
-        int foreign_centres_num = receive_centre_num / 3;
-
-        /* Now count particles that overlap with the foreign FOF halo search radii */
-        int count_overlap_parts = 0;
-
-        /* Loop over foreign centres */
-        for (int i = 0; i < foreign_centres_num; i++) {
-
-            /* Compute the integer position of the halo COM */
-            IntPosType com[3] = {foreign_centres[i * 3 + 0] * pos_to_int_fac,
-                                 foreign_centres[i * 3 + 1] * pos_to_int_fac,
-                                 foreign_centres[i * 3 + 2] * pos_to_int_fac};
-
-            /* Determine all cells that overlap with the search radius */
-            int min_x[3] = {(com[0] - max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[1] - max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[2] - max_radius * pos_to_int_fac) * int_to_cell_fac};
-            int max_x[3] = {(com[0] + max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[1] + max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[2] + max_radius * pos_to_int_fac) * int_to_cell_fac};
-
-            /* Loop over cells */
-            for (int x = min_x[0]; x <= max_x[0]; x++) {
-                for (int y = min_x[1]; y <= max_x[1]; y++) {
-                    for (int z = min_x[2]; z <= max_x[2]; z++) {
-
-                        /* Handle wrapping */
-                        int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                        int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                        int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
-
-                        /* Find the particle count and offset of the cell */
-                        int cell = row_major_cell(cx, cy, cz, N_cells);
-                        long int local_count = cell_counts[cell];
-                        long int local_offset = cell_offsets[cell];
-
-                        /* Loop over particles in cells */
-                        for (int a = 0; a < local_count; a++) {
-                            const int index_a = cell_list[local_offset + a].offset;
-
-                            /* Only consider local particles */
-                            if (index_a >= num_localpart) continue;
-
-                            const IntPosType *xa = fof_parts[index_a].x;
-                            const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                            if (r2 < max_radius_2) {
-                                count_overlap_parts++;
-                            }
-                        } /* End particle loop */
-                    }
-                }
-            } /* End cell loop */
-        } /* End halo loop */
-
-        // printf("%d particles overlap with foreign centres on %d\n", count_overlap_parts, rank);
-
-        struct fof_part_data *overlap_parts = malloc(count_overlap_parts * sizeof(struct fof_part_data));
-
-        /* Fish out particles that overlap with the foreign FOF halo search radii */
-        copy_counter = 0;
-        for (int i = 0; i < foreign_centres_num; i++) {
-
-            /* Compute the integer position of the halo COM */
-            IntPosType com[3] = {foreign_centres[i * 3 + 0] * pos_to_int_fac,
-                                 foreign_centres[i * 3 + 1] * pos_to_int_fac,
-                                 foreign_centres[i * 3 + 2] * pos_to_int_fac};
-
-            /* Determine all cells that overlap with the search radius */
-            int min_x[3] = {(com[0] - max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[1] - max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[2] - max_radius * pos_to_int_fac) * int_to_cell_fac};
-            int max_x[3] = {(com[0] + max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[1] + max_radius * pos_to_int_fac) * int_to_cell_fac,
-                            (com[2] + max_radius * pos_to_int_fac) * int_to_cell_fac};
-
-            /* Loop over cells */
-            for (int x = min_x[0]; x <= max_x[0]; x++) {
-                for (int y = min_x[1]; y <= max_x[1]; y++) {
-                    for (int z = min_x[2]; z <= max_x[2]; z++) {
-
-                        /* Handle wrapping */
-                        int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                        int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                        int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
-
-                        /* Find the particle count and offset of the cell */
-                        int cell = row_major_cell(cx, cy, cz, N_cells);
-                        long int local_count = cell_counts[cell];
-                        long int local_offset = cell_offsets[cell];
-
-                        /* Loop over particles in cells */
-                        for (int a = 0; a < local_count; a++) {
-                            const int index_a = cell_list[local_offset + a].offset;
-
-                            /* Only consider local particles */
-                            if (index_a >= num_localpart) continue;
-
-                            const IntPosType *xa = fof_parts[index_a].x;
-                            const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                            if (r2 < max_radius_2) {
-                                memcpy(overlap_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
-                                copy_counter++;
-                            }
-                        } /* End particle loop */
-                    }
-                }
-            } /* End cell loop */
-        } /* End halo loop */
-
-        // printf("%d has %d foreign centres\n", rank, receive_centre_num / 3);
-
-        /* Now communicate those particles back to the right */
-        if (rank == 0) {
-            /* Communicate the edge particles to the left neighbour */
-            MPI_Send(overlap_parts, count_overlap_parts, fof_type, rank_right, 0, MPI_COMM_WORLD);
-        } else if (rank < MPI_Rank_Count - 1) {
-            /* Receive particle data from the left */
-            receive_fof_parts(fof_parts + num_localpart, &SO_receive_foreign_count,
-                              rank_left, num_localpart, max_partnum);
-
-            /* Communicate the edge particles to the left neighbour */
-            MPI_Send(overlap_parts, count_overlap_parts, fof_type, rank_right, 0, MPI_COMM_WORLD);
-        } else {
-            /* Receive particle data from the left */
-            receive_fof_parts(fof_parts + num_localpart, &SO_receive_foreign_count,
-                              rank_left, num_localpart, max_partnum);
-        }
-
-        free(overlap_parts);
-        free(foreign_centres);
-        free(overlap_centres);
-    }
-
-
-    /* Now create a new particle-cell correspondence for sorting */
-    cell_list = realloc(cell_list, (num_localpart + SO_receive_foreign_count) * sizeof(struct fof_cell_list));
-    for (long long i = 0; i < num_localpart + SO_receive_foreign_count; i++) {
-        cell_list[i].cell = which_cell(fof_parts[i].x, int_to_cell_fac, N_cells);
-        cell_list[i].offset = i;
-    }
-
-    /* Sort particles by cell */
-    qsort(cell_list, num_localpart + SO_receive_foreign_count, sizeof(struct fof_cell_list), cellListSort);
-
-    #ifdef DEBUG_CHECKS
-    /* Check the sort */
-    for (long long i = 1; i < num_localpart + SO_receive_foreign_count; i++) {
-        assert(cell_list[i].cell >= cell_list[i - 1].cell);
-    }
-    #endif
-
-    timer_stop(rank, &fof_timer, "Sorting particles took ");
-
-    /* Reset the cell particle counts and offsets */
-    for (int i = 0; i < num_cells; i++) {
-        cell_counts[i] = 0;
-        cell_offsets[i] = 0;
-    }
-
-    /* Count particles in cells */
-    for (long long i = 0; i < num_localpart + SO_receive_foreign_count; i++) {
-        int c = cell_list[i].cell;
-    #ifdef DEBUG_CHECKS
-        assert((c >= 0) && (c < num_cells));
-    #endif
-        cell_counts[c]++;
-    }
-
-    /* Determine the offsets, using the fact that the particles are sorted */
-    cell_offsets[0] = 0;
-    for (int i = 1; i < num_cells; i++) {
-        cell_offsets[i] = cell_offsets[i-1] + cell_counts[i-1];
-    }
-
-    /* Prepare mass-weighted histograms */
-    const int bins = 10;
-    double *mass_hists = calloc(num_structures * bins, sizeof(double));
-
-    /* The edges of the histogram */
-    double *bin_edges = malloc(bins * sizeof(double));
-    const double dlogr = (log_max_radius - log_min_radius) / (bins - 1);
-    for (int i = 0; i < bins; i++) {
-        bin_edges[i] = exp(log_min_radius + i * dlogr);
-    }
-
-
-    /* Loop over local halos */
-    for (long int i = 0; i < num_structures; i++) {
-
-        /* Compute the integer position of the halo COM */
-        IntPosType com[3] = {halos[i].x_com[0] * pos_to_int_fac,
-                             halos[i].x_com[1] * pos_to_int_fac,
-                             halos[i].x_com[2] * pos_to_int_fac};
-
-        /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(com[0] - max_radius * pos_to_int_fac) * int_to_cell_fac,
-                        (com[1] - max_radius * pos_to_int_fac) * int_to_cell_fac,
-                        (com[2] - max_radius * pos_to_int_fac) * int_to_cell_fac};
-        int max_x[3] = {(com[0] + max_radius * pos_to_int_fac) * int_to_cell_fac,
-                        (com[1] + max_radius * pos_to_int_fac) * int_to_cell_fac,
-                        (com[2] + max_radius * pos_to_int_fac) * int_to_cell_fac};
-
-        /* Loop over cells */
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
-
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
-
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
-
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
-
-                        const IntPosType *xa = fof_parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < min_radius_2) {
-                            mass_hists[bins * i + 0]++;
-                        } else if (r2 < max_radius_2) {
-                            /* Determine the bin */
-                            int bin = (log(r2) * 0.5 - log_min_radius) / dlogr + 1;
-#ifdef DEBUG_CHECKS
-                            assert((bin >= 0) && (bin < bins));
-#endif
-
-#ifdef WITH_MASSES
-                            /* TODO: decide what to do about the masses */
-                            double mass = part_mass;
-#else
-                            double mass = part_mass;
-#endif
-
-                            mass_hists[bins * i + bin] += mass;
-                        }
-                    } /* End particle loop */
-                }
-            }
-        } /* End cell loop */
-    } /* End halo loop */
-
-    timer_stop(rank, &fof_timer, "Computing particle histograms took ");
-
-    /* Now determine the R200_crit radius for each halo */
-    /* This could be rolled into the previous loop if we had all the
-     * particles ready */
-    const double threshold = 200.0;
-
-    for (long int i = 0; i < num_structures; i++) {
-
-        double enclosed_mass = 0;
-        double enclosed_mass_prev = 0;
-
-        for (int j = 1; j < bins; j++) {
-            double radius = bin_edges[j];
-            double radius3 = radius * radius * radius;
-            double volume = 4.0 / 3.0 * M_PI * radius3;
-
-            double radius_prev = bin_edges[j - 1];
-            double radius_prev3 = radius_prev * radius_prev * radius_prev;
-            double volume_prev = 4.0 / 3.0 * M_PI * radius_prev3;
-
-            enclosed_mass += mass_hists[i * bins + j];
-
-            double density = enclosed_mass / volume;
-            double density_prev = enclosed_mass_prev / volume_prev;
-
-            double Delta = density / rho_crit;
-            double Delta_prev = density_prev / rho_crit;
-
-            if (Delta > threshold) {
-                /* Linearly interpolate to find the SO radius and mass */
-                double R_SO = bin_edges[j - 1] + (threshold - Delta_prev) * (radius - radius_prev) / (Delta - Delta_prev);
-                double M_SO = enclosed_mass_prev + (threshold - Delta_prev) * (enclosed_mass - enclosed_mass_prev) / (Delta - Delta_prev);
-
-                /* Store the data */
-                halos[i].R_SO = R_SO;
-                halos[i].M_SO = M_SO;
-
-                break;
-            }
-
-            enclosed_mass_prev = enclosed_mass;
-        }
-    }
-
-    /* Free the histogram data */
-    free(mass_hists);
-    free(bin_edges);
-
-    /* Print the halo properties to a file */
+    /* Print the FOF properties to a file */
     /* TODO: replace by HDF5 output */
     char fname[50];
-    sprintf(fname, "halos_%04d_%03d.txt", output_num, rank);
+    sprintf(fname, "halos_FOF_SO_%04d_%03d.txt", output_num, rank);
     FILE *f = fopen(fname, "w");
 
-    fprintf(f, "# i M_FOF npart x[0] x[1] x[2] R_SO M_SO\n");
+    fprintf(f, "# i M_FOF npart_FOF x[0] x[1] x[2]\n");
     for (long int i = 0; i < num_structures; i++) {
-        fprintf(f, "%ld %g %d %g %g %g %g %g\n", halos[i].global_id, halos[i].mass_fof, halos[i].npart, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].R_SO, halos[i].M_SO);
+        fprintf(f, "%ld %g %d %g %g %g\n", halos[i].global_id, halos[i].mass_fof, halos[i].npart, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2]);
     }
 
     /* Close the file */
     fclose(f);
 
-    timer_stop(rank, &fof_timer, "Writing halo property files took ");
+    /* Timer */
+    timer_stop(rank, &fof_timer, "Writing FOF halo properties took ");
+
+    message(rank, "\n");
+    message(rank, "Proceeding with spherical overdensity calculations.\n");
+
+    analysis_so(parts, halos, boxlen, Np, Ng, num_localpart, max_partnum,
+                num_structures, output_num, a_scale_factor,us,pcs, cosmo);
+
 
     /* Free all memory */
     free(fof_parts);

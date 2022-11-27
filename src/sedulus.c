@@ -336,7 +336,7 @@ int main(int argc, char *argv[]) {
 
             /* Timer */
             MPI_Barrier(MPI_COMM_WORLD);
-            timer_stop(rank, &fof_timer, "Doing friends-of-friends took ");
+            timer_stop(rank, &fof_timer, "Finding halos took ");
             message(rank, "\n");
         }
 
@@ -541,7 +541,7 @@ int main(int argc, char *argv[]) {
 
                     /* Timer */
                     MPI_Barrier(MPI_COMM_WORLD);
-                    timer_stop(rank, &fof_timer, "Doing friends-of-friends took ");
+                    timer_stop(rank, &fof_timer, "Finding halos took ");
                     message(rank, "\n");
                 }
 

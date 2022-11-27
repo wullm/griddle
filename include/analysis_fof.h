@@ -40,17 +40,14 @@ struct fof_part_data {
     long int global_offset;
     /* The local offset of the fof_part, which is not necessarily related to the global_offset */
     long int local_offset;
-    /* We need the ability to disable particles */
 };
 
-struct halo_properties {
+struct fof_halo {
     long int global_id;
     double x_com[3];
-    double v_com[3];
     double mass_fof;
-    double R_SO;
-    double M_SO;
     int npart;
+    int rank;
 };
 
 int analysis_fof(struct particle *parts, double boxlen, long int Np,
@@ -96,6 +93,57 @@ static inline MPI_Datatype mpi_fof_data_type() {
     /* Local offset */
     lengths[counter] = 1;
     MPI_Get_address(&temp.local_offset, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Create the datatype */
+    MPI_Type_create_struct(counter, lengths, displacements, types, &particle_type);
+    MPI_Type_commit(&particle_type);
+
+    return particle_type;
+}
+
+static inline MPI_Datatype mpi_fof_halo_type() {
+
+    /* Construct an MPI data type from the constituent fields */
+    MPI_Datatype particle_type;
+    MPI_Datatype types[5] = {MPI_LONG, MPI_DOUBLE, MPI_DOUBLE,
+                             MPI_INT, MPI_INT};
+    int lengths[5];
+    MPI_Aint displacements[5];
+    MPI_Aint base_address;
+    struct fof_halo temp;
+    MPI_Get_address(&temp, &base_address);
+
+    int counter = 0;
+
+    /* ID */
+    lengths[counter] = 1;
+    MPI_Get_address(&temp.global_id, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Position */
+    lengths[counter] = 3;
+    MPI_Get_address(&temp.x_com, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Mass */
+    lengths[counter] = 1;
+    MPI_Get_address(&temp.mass_fof, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Particle number */
+    lengths[counter] = 1;
+    MPI_Get_address(&temp.npart, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* MPI Home Rank */
+    lengths[counter] = 1;
+    MPI_Get_address(&temp.rank, &displacements[counter]);
     displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
     counter++;
 
