@@ -786,7 +786,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
         /* If no particle exceeds the threshold, interpolate up to particle 1 */
         if (first_above == -1) {
-            halos[i].R_SO = sqrt(so_parts[0].m * inv_fac / threshold);
+            halos[i].R_SO = sqrt(so_parts[0].m * inv_fac / (threshold * so_parts[0].r));
             halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
         } else {
             /* Find the first particle after this that drops below the threshold */
