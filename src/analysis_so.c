@@ -811,9 +811,18 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
             double delta_Delta = so_parts[first_below].Delta - so_parts[first_below - 1].Delta;
             double delta_r = so_parts[first_below].r - so_parts[first_below - 1].r;
 
-            /* Linearly interpolate to find the SO radius and mass */
-            halos[i].R_SO = so_parts[first_below - 1].r + (threshold - so_parts[first_below - 1].Delta) * delta_r / delta_Delta;
-            halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+            /* If there is no gradient, then use midpoint (TODO: not ideal) */
+            if (delta_Delta == 0) {
+                halos[i].R_SO = so_parts[first_below - 1].r + 0.5 * delta_r;
+                halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+                printf("Warning: have two particles with no density gradient r = (%g %g) Delta = (%g %g)\n", so_parts[first_below - 1].r, so_parts[first_below].r, so_parts[first_below - 1].Delta, so_parts[first_below].Delta);
+            } else {
+                /* Linearly interpolate to find the SO radius and mass */
+                halos[i].R_SO = so_parts[first_below - 1].r + (threshold - so_parts[first_below - 1].Delta) * delta_r / delta_Delta;
+                halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+            }
+
+
         }
 
     } /* End halo loop */
