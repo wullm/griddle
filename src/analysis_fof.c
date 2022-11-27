@@ -709,7 +709,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     /* Print the FOF properties to a file */
     /* TODO: replace by HDF5 output */
     char fname[50];
-    sprintf(fname, "halos_FOF_SO_%04d_%03d.txt", output_num, rank);
+    sprintf(fname, "halos_FOF_%04d_%03d.txt", output_num, rank);
     FILE *f = fopen(fname, "w");
 
     fprintf(f, "# i M_FOF npart_FOF x[0] x[1] x[2]\n");
