@@ -763,7 +763,8 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
         qsort(so_parts, nearby_partnum, sizeof(struct so_part_data), soPartSort);
 
         /* Compute the enclosed mass and density ratio at each particle */
-        const double inv_fac = 3.0 / (4.0 * M_PI * rho_crit);
+        const double dens_fac = (4.0 / 3.0) * M_PI * rho_crit;
+        const double inv_fac = 1.0 / dens_fac;
         for (long int j = 1; j < nearby_partnum; j++) {
             so_parts[j].m += so_parts[j - 1].m;
             if (so_parts[j].r > 0) {
@@ -787,7 +788,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
         /* If no particle exceeds the threshold, interpolate up to particle 1 */
         if (first_above == -1) {
             halos[i].R_SO = sqrt(so_parts[0].m * inv_fac / (threshold * so_parts[0].r));
-            halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+            halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * dens_fac * threshold;
         } else {
             /* Find the first particle after this that drops below the threshold */
             long int first_below = -1;
@@ -814,12 +815,12 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
             /* If there is no gradient, then use midpoint (TODO: not ideal) */
             if (delta_Delta == 0) {
                 halos[i].R_SO = so_parts[first_below - 1].r + 0.5 * delta_r;
-                halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+                halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * dens_fac * threshold;
                 printf("Warning: have two particles with no density gradient r = (%g %g) Delta = (%g %g)\n", so_parts[first_below - 1].r, so_parts[first_below].r, so_parts[first_below - 1].Delta, so_parts[first_below].Delta);
             } else {
                 /* Linearly interpolate to find the SO radius and mass */
                 halos[i].R_SO = so_parts[first_below - 1].r + (threshold - so_parts[first_below - 1].Delta) * delta_r / delta_Delta;
-                halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * rho_crit * threshold;
+                halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * dens_fac * threshold;
             }
 
 
