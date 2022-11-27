@@ -27,19 +27,19 @@
 #include "../include/fft_kernels.h"
 #include "../include/message.h"
 
-static inline long int row_major_index(int i, int j, int k, int N, int Nz) {
+static inline long int row_major_index(int i, int j, int k, long int N, long int Nz) {
     return i*N*Nz + j*Nz + k;
 }
 
-static inline long int row_major_half_transposed(int i, int j, int k, int N, int Nz_half) {
+static inline long int row_major_half_transposed(int i, int j, int k, long int N, long int Nz_half) {
     return j*Nz_half*N + i*Nz_half + k;
 }
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum) {
 
-    const long long int N = dgrid->N;
-    const int Nz = dgrid->Nz;
+    const long int N = dgrid->N;
+    const long int Nz = dgrid->Nz;
     const int X0 = dgrid->X0;
     const int buffer_width = dgrid->buffer_width;
     const double boxlen = dgrid->boxlen;
@@ -145,8 +145,8 @@ int compute_potential(struct distributed_grid *dgrid,
      * runs over [X0, X0 + NX]. After the FFT, the complex is array is transposed
      * and the local slice is NY * N * (N/2 + 1), with the y-index running over
      * [Y0, Y0 + NY]. Note that the complex array has half the size. */
-    const int N = dgrid->N;
-    const int Nz_half = N/2 + 1;
+    const long int N = dgrid->N;
+    const long int Nz_half = N/2 + 1;
 
     /* Get the local portion of the transposed array */
     long int NX, X0, NY, Y0;

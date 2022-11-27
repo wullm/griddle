@@ -372,8 +372,8 @@ int main(int argc, char *argv[]) {
 
     /* Pointer to the real-space potential grid */
     const GridFloatType *mass_box = mass.buffered_box;
-    const int Mz = mass.Nz;
-    const int MX0 = mass.X0;
+    const long int Mz = mass.Nz;
+    const long int MX0 = mass.X0;
 
     /* Start at the beginning */
     double a = a_begin;

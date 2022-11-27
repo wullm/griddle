@@ -29,9 +29,9 @@ static inline double fastNGP(const struct distributed_grid *dg, int N, int i,
 }
 
 /* Direct cloud in cell interpolation */
-static inline double fastCIC(const struct distributed_grid *dg, int N, int i,
-                             int j, int k, double dx, double dy, double dz,
-                             double tx, double ty, double tz) {
+static inline double fastCIC(const struct distributed_grid *dg, long int N,
+                             int i, int j, int k, double dx, double dy,
+                             double dz, double tx, double ty, double tz) {
 
     return fastNGP(dg, N, i, j, k) * tx * ty * tz
          + fastNGP(dg, N, i, j, k+1) * tx * ty * dz
@@ -64,8 +64,8 @@ void accelCIC(const struct distributed_grid *dg, const double x[3], double a[3])
 /* Uses a fourth-order accurate central difference scheme */
 /* Note: code generated with mesh_grav_generate.py. Do not change by hand */
 void accelCIC_4th(const GridFloatType *box, const double x[3], double a[3],
-                  const int N, const int X0, const int buffer_width,
-                  const int Nz, const double cell_fac) {
+                  const long int N, const int X0, const int buffer_width,
+                  const long int Nz, const double cell_fac) {
 
     /* Multiplication factor for the finite difference scheme */
     const double fac_over_12 = cell_fac / 12;
@@ -250,8 +250,8 @@ void accelCIC_4th(const GridFloatType *box, const double x[3], double a[3],
 /* Uses a second-order accurate central difference scheme */
 /* Note: code generated with mesh_grav_generate.py. Do not change by hand */
 void accelCIC_2nd(const GridFloatType *box, const double x[3], double a[3],
-                  const int N, const int X0, const int buffer_width,
-                  const int Nz, const double cell_fac) {
+                  const long int N, const int X0, const int buffer_width,
+                  const long int Nz, const double cell_fac) {
 
     /* Multiplication factor for the finite difference scheme */
     const double fac_over_2 = 0.5 * cell_fac;
@@ -378,8 +378,8 @@ void accelCIC_2nd(const GridFloatType *box, const double x[3], double a[3],
 /* Uses a first-order accurate backward difference scheme */
 /* Note: code generated with mesh_grav_generate.py. Do not change by hand */
 void accelCIC_1st(const GridFloatType *box, const double x[3], double a[3],
-                  const int N, const int X0, const int buffer_width,
-                  const int Nz, const double cell_fac) {
+                  const long int N, const int X0, const int buffer_width,
+                  const long int Nz, const double cell_fac) {
 
     /* Coordinates are mapped to [0, N] */
     const double X = x[0];

@@ -22,7 +22,7 @@
 
 #include "../include/distributed_grid.h"
 
-static inline long int row_major_index(int i, int j, int k, int N, int Nz) {
+static inline long int row_major_index(int i, int j, int k, long int N, long int Nz) {
     return i*N*Nz + j*Nz + k;
 }
 
@@ -31,13 +31,13 @@ void accelCIC(const struct distributed_grid *dg, const double x[3], double a[3])
 
 /* Implementations of differentiation using different order schemes */
 void accelCIC_4th(const GridFloatType *box, const double x[3], double a[3],
-                  const int N, const int X0, const int buffer_width,
-                  const int Nz, const double cell_fac);
+                  const long int N, const int X0, const int buffer_width,
+                  const long int Nz, const double cell_fac);
 void accelCIC_2nd(const GridFloatType *box, const double x[3], double a[3],
-                  const int N, const int X0, const int buffer_width,
-                  const int Nz, const double cell_fac);
+                  const long int N, const int X0, const int buffer_width,
+                  const long int Nz, const double cell_fac);
 void accelCIC_1st(const GridFloatType *box, const double x[3], double a[3],
-                  const int N, const int X0, const int buffer_width,
-                  const int Nz, const double cell_fac);
+                  const long int N, const int X0, const int buffer_width,
+                  const long int Nz, const double cell_fac);
 
 #endif

@@ -33,14 +33,14 @@
 struct distributed_grid {
 
     /* Global attributes (equal on all MPI ranks) */
-    int N;
+    long int N;
     double boxlen;
     MPI_Comm comm;
     char momentum_space; //track whether we are in momentum space
 
-    int Nx; // for the full real-space grid
-    int Ny; // for the full real-space grid
-    int Nz; // for the full real-space grid
+    long int Nx; // for the full real-space grid
+    long int Ny; // for the full real-space grid
+    long int Nz; // for the full real-space grid
 
     /* Local attributes */
     long int NX;
