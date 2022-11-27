@@ -220,8 +220,13 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
     free(receive_fofs_left);
     free(receive_fofs_right);
 
+    /* Communicate the remaining numbers of foreign particles */
+    long long int local_sent = count_overlap_left + count_overlap_right;
+    long long int total_sent;
+    MPI_Allreduce(&local_sent, &total_sent, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+
     /* Iterate? */
-    if (count_overlap_left > 0 || count_overlap_right > 0) {
+    if (total_sent > 0) {
 
         /* This should always happen within MPI_Rank_Count / 2 iterations */
         assert(exchange_iteration < MPI_Rank_Count + 1);
