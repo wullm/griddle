@@ -714,20 +714,19 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                         const IntPosType *xa = parts[index_a].x;
                         const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
+#ifdef WITH_MASSES
+                        double mass = parts[index_a].mass;
+#else
+                        double mass = part_mass;
+#endif
+
                         if (r2 < min_radius_2) {
-                            mass_hists[bins * i + 0]++;
+                            mass_hists[bins * i + 0] += mass;
                         } else if (r2 < max_radius_2) {
                             /* Determine the bin */
                             int bin = (log(r2) * 0.5 - log_min_radius) / dlogr + 1;
 #ifdef DEBUG_CHECKS
                             assert((bin >= 0) && (bin < bins));
-#endif
-
-#ifdef WITH_MASSES
-                            /* TODO: decide what to do about the masses */
-                            double mass = part_mass;
-#else
-                            double mass = part_mass;
 #endif
 
                             mass_hists[bins * i + bin] += mass;
@@ -744,7 +743,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     /* Now determine the R200_crit radius for each halo */
     /* This could be rolled into the previous loop if we had all the
      * particles ready (which we now do!) */
-    const double threshold = 20.0;
+    const double threshold = 200.0;
 
     for (long int i = 0; i < num_local_fofs; i++) {
 
