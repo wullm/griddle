@@ -480,18 +480,18 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
          * although not in the most efficient way.
          */
         if (rank == 0) {
-            /* Determine the number of local particles with foreign roots */
+            /* Determine the number of particles with foreign roots */
             int num_foreign_rooted = 0;
-            for (long int i = 0; i < num_localpart; i++) {
+            for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
                 if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
                     num_foreign_rooted++;
                 }
             }
 
-            /* Now, fish out all local particles with foreign roots */
+            /* Now, fish out all particles with foreign roots */
             long int copy_counter = 0;
             struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
-            for (long int i = 0; i < num_localpart; i++) {
+            for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
                 if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
                     memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
                     copy_counter++;
@@ -500,7 +500,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
             /* Disable the remaining copies of the foreign rooted particles on
              * this rank that now live on another rank */
-            for (long int i = 0; i < num_localpart; i++) {
+            for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
                 if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
                     fof_parts[i].root = -1;
                 }
@@ -513,20 +513,14 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             free(foreign_root_parts);
         } else {
             /* Receive particles from the left */
-            receive_fof_parts(fof_parts + num_localpart, &receive_from_left,
-                              rank_left, num_localpart, max_partnum);
+            receive_fof_parts(fof_parts + num_localpart + receive_foreign_count,
+                              &receive_from_left, rank_left, num_localpart,
+                              max_partnum);
 
-            /* Disable possibly received copies of local particles */
-            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
-                if (i >= num_localpart && (fof_parts[i].x[0] * int_to_rank_fac) == rank) {
-                    fof_parts[i].root = -1;
-                }
-            }
-
-            /* After receiving (possibly still foreign rooted) particles! */
-            /* Determine the number of particles with foreign roots (that are not roots themselves) */
+            /* After receiving (possibly still foreign rooted) particles,
+             * determine the number of particles with foreign roots */
             int num_foreign_rooted = 0;
-            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+            for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
                 /* Skip disabled particles */
                 if (fof_parts[i].root == -1) continue;
 
@@ -535,10 +529,10 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 }
             }
 
-            /* Now, fish out all local particles with foreign roots */
+            /* Now, fish out particles with foreign roots */
             long int copy_counter = 0;
             struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
-            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+            for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
                 /* Skip disabled particles */
                 if (fof_parts[i].root == -1) continue;
 
@@ -550,7 +544,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
             /* Disable the remaining copies of the foreign rooted particles on
              * this rank that now live on another rank */
-            for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+            for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
                 if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
                     fof_parts[i].root = -1;
                 }
@@ -571,7 +565,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
 #ifdef DEBUG_CHECKS
     /* Check that we have no foreign rooted particles */
-    for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+    for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
@@ -583,31 +577,54 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
        that are linked to something are located on the "home rank" of the root
        particle of that group. Now we can attach the trees. */
 
-    /* For the local particles, turn the global_roots back into roots */
-    for (long long i = 0; i < num_localpart; i++) {
+    /* Turn the global_roots back into roots. This is safe because no particle
+     * has a foreign root. */
+    for (long long i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
-        if (fof_parts[i].root == -1) continue;
+        if (fof_parts[i].root == -1) continue; // don't remove
 
         fof_parts[i].root -= rank_offset;
     }
 
-    /* Attach received particles to the local tree using the proper local offsets */
-    for (long long i = num_localpart; i < num_localpart + receive_from_left; i++) {
+    /* Reset the local offsets for the newly received particles */
+    for (long long i = num_localpart + receive_foreign_count; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+        fof_parts[i].local_offset = i;
+    }
+
+    /* Attach the trees of the received copies of local particles to the trees
+     * of their local copies */
+    for (long int i = num_localpart; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        long int global_root = fof_parts[i].root;
-        long int local_root = global_root - rank_offset;
+        /* Is this a copy of a local particle? */
+        if (fof_parts[i].global_offset >= rank_offset && fof_parts[i].global_offset < rank_offset + num_localpart) {
+            long int local_copy = fof_parts[i].global_offset - rank_offset;
+            union_roots(fof_parts, &fof_parts[i], &fof_parts[local_copy]);
+        }
+    }
 
-        fof_parts[i].local_offset = i;
-        fof_parts[i].root = find_root(fof_parts, &fof_parts[local_root]);
+    /* Disable the received copies of local particles, so there are no duplicates */
+    for (long int i = num_localpart; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+        /* Is this a copy of a local particle? */
+        if (fof_parts[i].global_offset >= rank_offset && fof_parts[i].global_offset < rank_offset + num_localpart) {
+            fof_parts[i].root = -1;
+        }
+    }
+
+    /* Attach received particles to the local tree using the proper local offsets */
+    for (long long i = num_localpart; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+        /* Skip disabled particles */
+        if (fof_parts[i].root == -1) continue;
+
+        union_roots(fof_parts, &fof_parts[i], &fof_parts[fof_parts[i].root]);
     }
 
     /* Allocate memory for the group sizes */
     int *group_sizes = calloc(num_localpart, sizeof(int));
 
     /* Determine group sizes by counting particles with the same root */
-    for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+    for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
@@ -666,7 +683,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     free(group_sizes);
 
     /* Accumulate the halo properties */
-    for (long int i = 0; i < num_localpart + receive_from_left; i++) {
+    for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
