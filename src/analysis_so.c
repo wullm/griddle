@@ -524,7 +524,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     long int num_foreign_fofs = 0;
 
     /* Allocate additional memory for holding some foreign FOFs */
-    long int fof_buffer = 1000;
+    long int fof_buffer = 10000; //TODO: make parameter
     long int num_max_fofs = num_local_fofs + fof_buffer;
     fofs = realloc(fofs, num_max_fofs * sizeof(struct fof_halo));
 
@@ -535,7 +535,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     message(rank, "It took %d iterations to exchange all FOFs\n", exchange_iterations);
 
     /* The initial domain decomposition into spatial cells */
-    const int N_cells = boxlen / max_radius;
+    const int N_cells = boxlen / (0.25 * max_radius);
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
     const double pos_to_cell_fac = N_cells / boxlen;
 

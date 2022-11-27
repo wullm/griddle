@@ -46,6 +46,11 @@ static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
 
 /* Find the root of the set of a given particle */
 long int find_root(struct fof_part_data *fof_parts, struct fof_part_data *part) {
+
+#ifdef DEBUG_CHECKS
+    assert(part->root >= 0);
+#endif
+
     if (part->local_offset == part->root)
         return part->local_offset;
     part->root = find_root(fof_parts, &fof_parts[part->root]);
@@ -54,6 +59,11 @@ long int find_root(struct fof_part_data *fof_parts, struct fof_part_data *part) 
 
 /* Perform the union operation on the sets containing two given particles */
 void union_roots(struct fof_part_data *fof_parts, struct fof_part_data *a, struct fof_part_data *b) {
+
+#ifdef DEBUG_CHECKS
+    assert(a->root >= 0);
+    assert(b->root >= 0);
+#endif
 
     long int root_a = find_root(fof_parts, a);
     long int root_b = find_root(fof_parts, b);
@@ -575,6 +585,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* For the local particles, turn the global_roots back into roots */
     for (long long i = 0; i < num_localpart; i++) {
+        /* Skip disabled particles */
+        if (fof_parts[i].root == -1) continue;
+
         fof_parts[i].root -= rank_offset;
     }
 
@@ -583,8 +596,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        int global_root = fof_parts[i].root;
-        int local_root = global_root - rank_offset;
+        long int global_root = fof_parts[i].root;
+        long int local_root = global_root - rank_offset;
 
         fof_parts[i].local_offset = i;
         fof_parts[i].root = find_root(fof_parts, &fof_parts[local_root]);
