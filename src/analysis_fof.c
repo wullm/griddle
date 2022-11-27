@@ -404,39 +404,28 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 long int offset = cell_offsets[row_major_cell(i, j, k, N_cells)];
                 long int count = cell_counts[row_major_cell(i, j, k, N_cells)];
 
-                int i1 = i + 1;
-                if (i1 >= N_cells) i1 -= N_cells;
-                int j1 = j + 1;
-                if (j1 >= N_cells) j1 -= N_cells;
-                int k1 = k + 1;
-                if (k1 >= N_cells) k1 -= N_cells;
+                for (int u = -1; u <= 1; u++) {
+                    for (int v = -1; v <= 1; v++) {
+                        for (int w = -1; w <= 1; w++) {
+                            int i1 = i + u;
+                            int j1 = j + v;
+                            int k1 = k + w;
 
-                long int offset1 = cell_offsets[row_major_cell(i1, j, k, N_cells)];
-                long int offset2 = cell_offsets[row_major_cell(i, j1, k, N_cells)];
-                long int offset3 = cell_offsets[row_major_cell(i, j, k1, N_cells)];
-                long int offset4 = cell_offsets[row_major_cell(i1, j1, k, N_cells)];
-                long int offset5 = cell_offsets[row_major_cell(i, j1, k1, N_cells)];
-                long int offset6 = cell_offsets[row_major_cell(i1, j, k1, N_cells)];
-                long int offset7 = cell_offsets[row_major_cell(i1, j1, k1, N_cells)];
-                long int count1 = cell_counts[row_major_cell(i1, j, k, N_cells)];
-                long int count2 = cell_counts[row_major_cell(i, j1, k, N_cells)];
-                long int count3 = cell_counts[row_major_cell(i, j, k1, N_cells)];
-                long int count4 = cell_counts[row_major_cell(i1, j1, k, N_cells)];
-                long int count5 = cell_counts[row_major_cell(i, j1, k1, N_cells)];
-                long int count6 = cell_counts[row_major_cell(i1, j, k1, N_cells)];
-                long int count7 = cell_counts[row_major_cell(i1, j1, k1, N_cells)];
+                            if (i1 >= N_cells) i1 -= N_cells;
+                            if (j1 >= N_cells) j1 -= N_cells;
+                            if (k1 >= N_cells) k1 -= N_cells;
+                            if (i1 < 0) i1 += N_cells;
+                            if (j1 < 0) j1 += N_cells;
+                            if (k1 < 0) k1 += N_cells;
 
-                /* Cell self-links */
-                total_links += link_cells(fof_parts, cell_list, offset, offset, count, count, int_to_pos_fac, linking_length_2);
+                            long int offset1 = cell_offsets[row_major_cell(i1, j1, k1, N_cells)];
+                            long int count1 = cell_counts[row_major_cell(i1, j1, k1, N_cells)];
 
-                /* Cell-cell neighbour links */
-                total_links += link_cells(fof_parts, cell_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
-                total_links += link_cells(fof_parts, cell_list, offset, offset2, count, count2, int_to_pos_fac, linking_length_2);
-                total_links += link_cells(fof_parts, cell_list, offset, offset3, count, count3, int_to_pos_fac, linking_length_2);
-                total_links += link_cells(fof_parts, cell_list, offset, offset4, count, count4, int_to_pos_fac, linking_length_2);
-                total_links += link_cells(fof_parts, cell_list, offset, offset5, count, count5, int_to_pos_fac, linking_length_2);
-                total_links += link_cells(fof_parts, cell_list, offset, offset6, count, count6, int_to_pos_fac, linking_length_2);
-                total_links += link_cells(fof_parts, cell_list, offset, offset7, count, count7, int_to_pos_fac, linking_length_2);
+                            /* Link cells */
+                            total_links += link_cells(fof_parts, cell_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
+                        }
+                    }
+                }
             }
         }
     }
