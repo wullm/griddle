@@ -43,7 +43,7 @@ sedulus: $(OBJECTS) src/sedulus.c include/git_version.h
 -include $(DEPENDS)
 
 $(OBJECTS) : lib/%.o : src/%.c
-	$(GCC) $< -c -o $@ $(INCLUDES) $(CFLAGS)
+	$(GCC) $< -c -MMD -o $@ $(INCLUDES) $(CFLAGS)
 
 clean:
 	rm -f lib/*.o
