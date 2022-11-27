@@ -521,9 +521,10 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     const double h = cosmo->h;
     const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
     const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+#ifndef WITH_MASSES
     const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
-    /* TODO: use the actual particle masses when available */
     const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
+#endif
 
     /* We start holding no foreign FOFs */
     long int num_foreign_fofs = 0;
@@ -715,7 +716,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                         const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
 #ifdef WITH_MASSES
-                        double mass = parts[index_a].mass;
+                        double mass = parts[index_a].m;
 #else
                         double mass = part_mass;
 #endif
@@ -831,8 +832,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
                         if (r2 < R_SO_2) {
 #ifdef WITH_MASSES
-                            /* TODO: decide what to do about the masses */
-                            double mass = part_mass;
+                            double mass = parts[index_a].m;
 #else
                             double mass = part_mass;
 #endif
