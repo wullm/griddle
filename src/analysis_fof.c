@@ -404,6 +404,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 long int offset = cell_offsets[row_major_cell(i, j, k, N_cells)];
                 long int count = cell_counts[row_major_cell(i, j, k, N_cells)];
 
+                /* Loop over the 27 neighbour cells (including itself) */
                 for (int u = -1; u <= 1; u++) {
                     for (int v = -1; v <= 1; v++) {
                         for (int w = -1; w <= 1; w++) {
@@ -411,6 +412,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                             int j1 = j + v;
                             int k1 = k + w;
 
+                            /* Account for periodic boundary conditions */
                             if (i1 >= N_cells) i1 -= N_cells;
                             if (j1 >= N_cells) j1 -= N_cells;
                             if (k1 >= N_cells) k1 -= N_cells;
@@ -567,16 +569,12 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
        particle of that group. Now we can attach the trees. */
 
     /* Turn the global_roots back into roots. This is safe because no particle
-     * has a foreign root. */
+     * has a foreign root. Additionally, update the local offsets.  */
     for (long long i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue; // don't remove
 
         fof_parts[i].root -= rank_offset;
-    }
-
-    /* Reset the local offsets for the newly received particles */
-    for (long long i = num_localpart + receive_foreign_count; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         fof_parts[i].local_offset = i;
     }
 
@@ -588,15 +586,11 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         /* Is this a copy of a local particle? */
         if (fof_parts[i].global_offset >= rank_offset && fof_parts[i].global_offset < rank_offset + num_localpart) {
+            /* Attach the trees */
             long int local_copy = fof_parts[i].global_offset - rank_offset;
             union_roots(fof_parts, &fof_parts[i], &fof_parts[local_copy]);
-        }
-    }
 
-    /* Disable the received copies of local particles, so there are no duplicates */
-    for (long int i = num_localpart; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
-        /* Is this a copy of a local particle? */
-        if (fof_parts[i].global_offset >= rank_offset && fof_parts[i].global_offset < rank_offset + num_localpart) {
+            /* Now disable the particle */
             fof_parts[i].root = -1;
         }
     }
