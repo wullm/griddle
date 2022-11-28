@@ -381,10 +381,10 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
 
                         if (r2 < max_radius_2) {
                             if (foreign_fofs[i].rank == rank_left) {
-                                memcpy(send_left + copy_left_counter, parts + i, sizeof(struct particle));
+                                memcpy(send_left + copy_left_counter, parts + index_a, sizeof(struct particle));
                                 copy_left_counter++;
                             } else {
-                                memcpy(send_right + copy_right_counter, parts + i, sizeof(struct particle));
+                                memcpy(send_right + copy_right_counter, parts + index_a, sizeof(struct particle));
                                 copy_right_counter++;
                             }
                         }
