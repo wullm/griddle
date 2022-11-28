@@ -85,12 +85,13 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
         /* Account for wrapping */
         int dist_min = rank - min_rank;
         if (dist_min < -MPI_Rank_Half) dist_min += MPI_Rank_Count;
-        else if (dist_min < 0) dist_min = -dist_min;
         else if (dist_min > MPI_Rank_Half) dist_min -= MPI_Rank_Count;
         int dist_max = max_rank - rank;
         if (dist_max < -MPI_Rank_Half) dist_max += MPI_Rank_Count;
-        else if (dist_max < 0) dist_max = -dist_max;
         else if (dist_max > MPI_Rank_Half) dist_max -= MPI_Rank_Count;
+
+        if (dist_min < 0) dist_min = -dist_min;
+        if (dist_max < 0) dist_max = -dist_max;
 
         if (n <= dist_min) {
             count_overlap_left++;
@@ -122,12 +123,13 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
         /* Account for wrapping */
         int dist_min = rank - min_rank;
         if (dist_min < -MPI_Rank_Half) dist_min += MPI_Rank_Count;
-        else if (dist_min < 0) dist_min = -dist_min;
         else if (dist_min > MPI_Rank_Half) dist_min -= MPI_Rank_Count;
         int dist_max = max_rank - rank;
         if (dist_max < -MPI_Rank_Half) dist_max += MPI_Rank_Count;
-        else if (dist_max < 0) dist_max = -dist_max;
         else if (dist_max > MPI_Rank_Half) dist_max -= MPI_Rank_Count;
+
+        if (dist_min < 0) dist_min = -dist_min;
+        if (dist_max < 0) dist_max = -dist_max;
 
         if (n <= dist_min) {
             memcpy(send_left + copy_left_counter, fofs + i, sizeof(struct fof_halo));
@@ -917,9 +919,9 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     sprintf(fname, "halos_SO_%04d_%03d.txt", output_num, rank);
     FILE *f = fopen(fname, "w");
 
-    fprintf(f, "# i M_FOF npart_FOF M_tot M_SO R_SO npart_SO x[0] x[1] x[2] v[0] v[1] v[2] \n");
+    fprintf(f, "# i M_FOF npart_FOF M_tot M_SO R_SO npart_SO x[0] x[1] x[2] v[0] v[1] v[2] x_fof[0] x_fof[1] x_fof[2] \n");
     for (long int i = 0; i < num_local_fofs; i++) {
-        fprintf(f, "%ld %g %d %g %g %g %d %g %g %g %g %g %g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, halos[i].mass_tot, halos[i].M_SO, halos[i].R_SO, halos[i].npart_tot, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].v_com[0], halos[i].v_com[1], halos[i].v_com[2]);
+        fprintf(f, "%ld %g %d %g %g %g %d %g %g %g %g %g %g %g %g %g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, halos[i].mass_tot, halos[i].M_SO, halos[i].R_SO, halos[i].npart_tot, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].v_com[0], halos[i].v_com[1], halos[i].v_com[2], fofs[i].x_com[0], fofs[i].x_com[1], fofs[i].x_com[2]);
     }
 
     /* Close the file */
