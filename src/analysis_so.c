@@ -443,7 +443,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
         if (i == 0) {
             memcpy(send_right + unique_send_right, parts + indices_send_right[i], sizeof(struct particle));
             unique_send_right++;
-        } else if (unique_send_right[i] > unique_send_right[i - 1]) {
+        } else if (indices_send_right[i] > indices_send_right[i - 1]) {
             memcpy(send_right + unique_send_right, parts + indices_send_right[i], sizeof(struct particle));
             unique_send_right++;
         }
