@@ -33,6 +33,12 @@
 
 #define DEBUG_CHECKS
 
+static inline int sortLong(const void *a, const void *b) {
+    long int *la = (long int*) a;
+    long int *lb = (long int*) b;
+    return (*la) >= (*lb);
+}
+
 /* Communicate copies of local FOFs centres that overlap with ranks at a
  * distance n = (exchange_iteration + 1) from the home rank. Iterates to
  * cover all distances */
@@ -335,9 +341,11 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
 
     // printf("%d: %ld left %ld right\n", rank, send_left_counter, send_right_counter);
 
-    /* Allocate memory for particles that should be sent */
-    struct particle *send_left = malloc(send_left_counter * sizeof(struct particle));
-    struct particle *send_right = malloc(send_right_counter * sizeof(struct particle));
+    /* The same particle could overlap with multiple halos and be counted
+     * multiple times. To prevent sending over more than one copy, we first
+     * create a list of indices. */
+    long int *indices_send_left = malloc(send_left_counter * sizeof(long int));
+    long int *indices_send_right = malloc(send_right_counter * sizeof(long int));
 
     /* Fish out local particles that overlap with foreign FOFs at distance n */
     long int copy_left_counter = 0;
@@ -383,10 +391,10 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
 
                         if (r2 < max_radius_2) {
                             if (foreign_fofs[i].rank == rank_left) {
-                                memcpy(send_left + copy_left_counter, parts + index_a, sizeof(struct particle));
+                                indices_send_left[copy_left_counter] = index_a;
                                 copy_left_counter++;
                             } else {
-                                memcpy(send_right + copy_right_counter, parts + index_a, sizeof(struct particle));
+                                indices_send_right[copy_right_counter] = index_a;
                                 copy_right_counter++;
                             }
                         }
@@ -401,6 +409,50 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     assert(copy_right_counter == send_right_counter);
 #endif
 
+#ifdef DEBUG_CHECKS
+    if (rank_left == rank_right) {
+        /* If the left and right neighbour ranks are the same, all particles
+         * should default to left only */
+        assert(send_right_counter == 0);
+    }
+#endif
+
+    /* Sort the lists of indices */
+    qsort(indices_send_left, send_left_counter, sizeof(long int), sortLong);
+    qsort(indices_send_right, send_right_counter, sizeof(long int), sortLong);
+
+    /* Allocate memory for particles that should be sent */
+    struct particle *send_left = malloc(send_left_counter * sizeof(struct particle));
+    struct particle *send_right = malloc(send_right_counter * sizeof(struct particle));
+
+    /* Copy over unique particles to be sent left */
+    long int unique_send_left = 0;
+    for (long int i = 0; i < send_left_counter; i++) {
+        if (i == 0) {
+            memcpy(send_left + unique_send_left, parts + indices_send_left[i], sizeof(struct particle));
+            unique_send_left++;
+        } else if (indices_send_left[i] > indices_send_left[i - 1]) {
+            memcpy(send_left + unique_send_left, parts + indices_send_left[i], sizeof(struct particle));
+            unique_send_left++;
+        }
+    }
+
+    /* Copy over unique particles to be sent right */
+    long int unique_send_right = 0;
+    for (long int i = 0; i < send_right_counter; i++) {
+        if (i == 0) {
+            memcpy(send_right + unique_send_right, parts + indices_send_right[i], sizeof(struct particle));
+            unique_send_right++;
+        } else if (indices_send_left[i] > indices_send_left[i - 1]) {
+            memcpy(send_right + unique_send_right, parts + indices_send_right[i], sizeof(struct particle));
+            unique_send_right++;
+        }
+    }
+
+    /* Free the index arrays */
+    free(indices_send_left);
+    free(indices_send_right);
+
     /* Arrays and counts of received particles */
     struct particle *receive_parts_right = NULL;
     struct particle *receive_parts_left = NULL;
@@ -410,9 +462,9 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     /* Send particles left and right, using non-blocking calls */
     MPI_Request delivery_left;
     MPI_Request delivery_right;
-    MPI_Isend(send_left, send_left_counter, particle_type,
+    MPI_Isend(send_left, unique_send_left, particle_type,
               rank_left, 0, MPI_COMM_WORLD, &delivery_left);
-    MPI_Isend(send_right, send_right_counter, particle_type,
+    MPI_Isend(send_right, unique_send_right, particle_type,
               rank_right, 0, MPI_COMM_WORLD, &delivery_right);
 
     /* Probe and receive particles from the left and right when ready */
