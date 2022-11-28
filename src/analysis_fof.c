@@ -676,7 +676,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        long int h = halo_ids[fof_parts[i].root] - halo_rank_offsets[rank];
+        long int root = fof_parts[i].root;
+
+        long int h = halo_ids[root] - halo_rank_offsets[rank];
         if (h >= 0) {
 #ifdef WITH_MASSES
             /* TODO: decide what to do about the masses */
@@ -688,10 +690,21 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
             /* Friends-of-friends mass */
             halos[h].mass_fof += mass;
-            /* Centre of mass */
-            halos[h].x_com[0] += (int_to_pos_fac * fof_parts[i].x[0]) * mass;
-            halos[h].x_com[1] += (int_to_pos_fac * fof_parts[i].x[1]) * mass;
-            halos[h].x_com[2] += (int_to_pos_fac * fof_parts[i].x[2]) * mass;
+
+            /* Compute the offset from the root particle */
+            const IntPosType dx = fof_parts[i].x[0] - fof_parts[root].x[0];
+            const IntPosType dy = fof_parts[i].x[1] - fof_parts[root].x[1];
+            const IntPosType dz = fof_parts[i].x[2] - fof_parts[root].x[2];
+
+            /* Enforce boundary conditions and convert to physical lengths */
+            const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+            const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+            const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+            /* Centre of mass (use offset from root for periodic boundary conditions) */
+            halos[h].x_com[0] += (int_to_pos_fac * fof_parts[root].x[0] + fx) * mass;
+            halos[h].x_com[1] += (int_to_pos_fac * fof_parts[root].x[1] + fy) * mass;
+            halos[h].x_com[2] += (int_to_pos_fac * fof_parts[root].x[2] + fz) * mass;
             /* Total particle number */
             halos[h].npart++;
             /* The home rank of the halo */
