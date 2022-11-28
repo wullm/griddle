@@ -545,7 +545,145 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     return exchange_iteration;
 }
 
+/* Generate a reduced snapshot containing a fraction of the particles
+ * in each SO halos (possibly with duplicates) */
+int generate_snipshot(struct particle *parts, struct fof_halo *fofs,
+                      struct so_halo *halos, double boxlen, long int Np,
+                      long long int Ng, long long int num_localpart,
+                      long long int num_foreignpart, long int num_local_fofs,
+                      int output_num, double a_scale_factor, int N_cells,
+                      double reduce_factor, int min_part_export_per_halo,
+                      struct so_cell_list *cell_list, long int *cell_counts,
+                      long int *cell_offsets, double max_radius,
+                      const struct units *us, const struct physical_consts *pcs,
+                      const struct cosmology *cosmo) {
 
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* The conversion factor from integers to physical lengths */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+    const double int_to_pos_fac = 1.0 / pos_to_int_fac;
+    const double pos_to_cell_fac = N_cells / boxlen;
+
+    /* Compute the critical density */
+#ifndef WITH_MASSES
+    const double h = cosmo->h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
+    const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
+#endif
+
+    /* Print the halo properties to a file */
+    /* TODO: replace by HDF5 output */
+    char fname[50];
+    sprintf(fname, "halos_parts_%04d_%03d.txt", output_num, rank);
+    FILE *f = fopen(fname, "w");
+
+    fprintf(f, "# id halo x[0] x[1] x[2] v[0] v[1] v[2] m w type \n");
+
+    /* Now compute other SO properties */
+    for (long int i = 0; i < num_local_fofs; i++) {
+
+        /* Compute the integer position of the FOF COM */
+        IntPosType com[3] = {fofs[i].x_com[0] * pos_to_int_fac,
+                             fofs[i].x_com[1] * pos_to_int_fac,
+                             fofs[i].x_com[2] * pos_to_int_fac};
+
+        /* Determine all cells that overlap with the search radius */
+        int min_x[3] = {(fofs[i].x_com[0] - max_radius) * pos_to_cell_fac,
+                        (fofs[i].x_com[1] - max_radius) * pos_to_cell_fac,
+                        (fofs[i].x_com[2] - max_radius) * pos_to_cell_fac};
+        int max_x[3] = {(fofs[i].x_com[0] + max_radius) * pos_to_cell_fac,
+                        (fofs[i].x_com[1] + max_radius) * pos_to_cell_fac,
+                        (fofs[i].x_com[2] + max_radius) * pos_to_cell_fac};
+
+        /* The square of the SO radius */
+        double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
+
+        /* Determine the selection probability */
+        double p_select;
+        if (halos[i].npart_tot == 0) {
+            continue; // no particles to expect here
+        } else if (reduce_factor * halos[i].npart_tot < min_part_export_per_halo * 2) {
+            p_select = 2.0 * min_part_export_per_halo / halos[i].npart_tot;
+        } else {
+            p_select = reduce_factor;
+        }
+
+        /* Loop over cells */
+        for (int x = min_x[0]; x <= max_x[0]; x++) {
+            for (int y = min_x[1]; y <= max_x[1]; y++) {
+                for (int z = min_x[2]; z <= max_x[2]; z++) {
+
+                    /* Handle wrapping */
+                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
+                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
+                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+
+                    /* Find the particle count and offset of the cell */
+                    int cell = row_major_cell(cx, cy, cz, N_cells);
+                    long int local_count = cell_counts[cell];
+                    long int local_offset = cell_offsets[cell];
+
+                    /* Loop over particles in cells */
+                    for (int a = 0; a < local_count; a++) {
+                        const int index_a = cell_list[local_offset + a].offset;
+
+                        const IntPosType *xa = parts[index_a].x;
+                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                        if (r2 < R_SO_2) {
+                            /* Randomly decide whether to select */
+                            double p = rand() / ((double) RAND_MAX);
+
+                            if (p < p_select) {
+#ifdef WITH_PARTICLE_IDS
+#ifdef SINGLE_PRECISION_IDS
+                                fprintf(f, "%d ", parts[index_a].id);
+#else
+                                fprintf(f, "%ld ", parts[index_a].id);
+#endif
+#else
+                                fprintf(f, "%ld ", index_a);
+#endif
+                                fprintf(f, "%ld ", halos[i].global_id);
+                                fprintf(f, "%g ", parts[index_a].x[0] * int_to_pos_fac);
+                                fprintf(f, "%g ", parts[index_a].x[1] * int_to_pos_fac);
+                                fprintf(f, "%g ", parts[index_a].x[2] * int_to_pos_fac);
+                                fprintf(f, "%g ", parts[index_a].v[0]);
+                                fprintf(f, "%g ", parts[index_a].v[1]);
+                                fprintf(f, "%g ", parts[index_a].v[2]);
+#ifdef WITH_MASSES
+                                fprintf(f, "%g ", parts[index_a].m);
+#else
+                                fprintf(f, "%g ", part_mass);
+#endif
+
+#ifdef WITH_PARTTYPE
+                                fprintf(f, "%g ", parts[index_a].w);
+                                fprintf(f, "%d ", parts[index_a].type);
+#else
+                                fprintf(f, "%g ", 1.0);
+                                fprintf(f, "%d ", 1);
+#endif
+                                fprintf(f, "\n");
+                            }
+                        }
+                    } /* End particle loop */
+                }
+            }
+        } /* End cell loop */
+    } /* End halo loop */
+
+    /* Close the file */
+    fclose(f);
+
+    return 0;
+}
 
 int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                 long int Np, long long int Ng, long long int num_localpart,
@@ -951,7 +1089,6 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                             halos[i].v_com[0] += parts[index_a].v[0] * mass;
                             halos[i].v_com[1] += parts[index_a].v[1] * mass;
                             halos[i].v_com[2] += parts[index_a].v[2] * mass;
-                            halos[i].v_com[2] += parts[index_a].v[2] * mass;
                             halos[i].mass_tot += mass;
                             halos[i].npart_tot++;
                         }
@@ -991,6 +1128,20 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
     /* Timer */
     timer_stop(rank, &so_timer, "Writing SO halo properties took ");
+
+    /* Export x% of particles in halos, but aim for a minimum of y */
+    /* TODO: make parameter */
+    double reduce_factor = 0.01;
+    int min_part_export_per_halo = 5;
+
+    generate_snipshot(parts, fofs, halos, boxlen, Np, Ng, num_localpart,
+                      num_foreign_parts, num_local_fofs, output_num,
+                      a_scale_factor, N_cells, reduce_factor,
+                      min_part_export_per_halo, cell_list, cell_counts,
+                      cell_offsets, max_radius, us, pcs, cosmo);
+
+    /* Timer */
+    timer_stop(rank, &so_timer, "Generating a halo particle snipshot took ");
 
     /* Free all memory */
     free(cell_list);
