@@ -258,12 +258,12 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[1] = grid_fac * pos_to_int_fac * x[1];
                 part->x[2] = grid_fac * pos_to_int_fac * x[2];
 
-                if (part->x[2] > part->x[1]) {
-                    IntPosType swap = part->x[2];
-
-                    part->x[2] = part->x[1];
-                    part->x[1] = swap;
-                }
+                // if (part->x[2] > part->x[1]) {
+                //     IntPosType swap = part->x[2];
+                //
+                //     part->x[2] = part->x[1];
+                //     part->x[1] = swap;
+                // }
 
                 /* Set the velocities */
                 part->v[0] -= vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
@@ -272,7 +272,11 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 #ifdef WITH_MASSES
                 part->m = part_mass;
 #endif
-                pcount++;
+
+                /* Only count the particle if it lands in the lower triangle */
+                if (part->x[2] <= part->x[1]) {
+                    pcount++;
+                }
             }
         }
     }
