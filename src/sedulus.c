@@ -223,7 +223,8 @@ int main(int argc, char *argv[]) {
 
         /* Generate a particle lattice */
         generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
-                                  particles, &cosmo, &us, &pcs, X0, NX, z_start);
+                                  particles, &cosmo, &us, &pcs, X0, NX, z_start,
+                                  &local_partnum);
 
         /* We are done with the LPT potentials */
         free_local_grid(&lpt_potential);
@@ -429,6 +430,15 @@ int main(int argc, char *argv[]) {
         add_local_buffers(&mass);
         timer_stop(rank, &run_timer, "Communicating buffers took ");
 
+        /* Make the mass grid yz-symmetric */
+        for (int i = mass.X0 - mass.buffer_width; i < mass.X0 + mass.NX + mass.buffer_width; i++) {
+            for (int j = 0; j < mass.N; j++) {
+                for (int k = j; k < mass.N; k++) {
+                    *point_row_major_dg_buffered(i, j, k, &mass) = *point_row_major_dg_buffered(i, k, j, &mass);
+                }
+            }
+        }
+
         /* Re-compute the gravitational potential */
         compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi);
         timer_stop(rank, &run_timer, "Computing the potential in total took ");
@@ -507,6 +517,14 @@ int main(int argc, char *argv[]) {
                 p->w = 1.0 - f / fi;
             }
 #endif
+
+            /* Account for the alternative boundary condition */
+            if (p->x[2] > p->x[1]) {
+                IntPosType swap = p->x[2];
+
+                p->x[2] = p->x[1];
+                p->x[1] = swap;
+            }
 
             // /* Convert positions to integers (wrapping automatic by overflow) */
             // p->x[0] = x[0] * grid_to_int_fac;

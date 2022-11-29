@@ -47,6 +47,21 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
         fix_and_pairing(dgrid, fix_modes, invert_modes);
     }
 
+    /* Execute the Fourier transform and normalize */
+    fft_c2r_dg(dgrid);
+
+    /* Make the grid yz-symmetric */
+    for (int i = dgrid->X0; i < dgrid->X0 + dgrid->NX; i++) {
+        for (int j = 0; j < dgrid->N; j++) {
+            for (int k = j; k < dgrid->N; k++) {
+                *point_row_major_dg_buffered(i, j, k, dgrid) = *point_row_major_dg_buffered(i, k, j, dgrid);
+            }
+        }
+    }
+
+    /* Execute the Fourier transform and normalize */
+    fft_r2c_dg(dgrid);
+
     /* Apply the primordial power spectrum without transfer functions */
     fft_apply_kernel_dg(dgrid, dgrid, kernel_power_no_transfer, cosmo);
 
@@ -168,7 +183,8 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              long long X0, long long NX, double z_start) {
+                              long long X0, long long NX, double z_start,
+                              long long int *local_partnum) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -207,12 +223,13 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
 
     /* Generate a particle lattice */
+    long int pcount = 0;
     for (int i = X0; i < X0+NX; i++) {
         for (int j = 0; j < N; j++) {
-            for (int k = 0; k < N; k++) {
-                struct particle *part = &parts[(i-X0) * N * N + j * N + k];
+            for (int k = 0; k < j; k++) { // only the lower triangle in the yz-plane
+                struct particle *part = &parts[pcount];
 #ifdef WITH_PARTICLE_IDS
-                part->id = (long long int) i * N * N + j * N + k;
+                part->id = pcount;
 #endif
 
                 /* Regular grid positions */
@@ -241,6 +258,13 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[1] = grid_fac * pos_to_int_fac * x[1];
                 part->x[2] = grid_fac * pos_to_int_fac * x[2];
 
+                if (part->x[2] > part->x[1]) {
+                    IntPosType swap = part->x[2];
+
+                    part->x[2] = part->x[1];
+                    part->x[1] = swap;
+                }
+
                 /* Set the velocities */
                 part->v[0] -= vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
                 part->v[1] -= vel_fact * (dx[1] + factor_vel_2lpt * dx2[1]);
@@ -248,9 +272,13 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 #ifdef WITH_MASSES
                 part->m = part_mass;
 #endif
+                pcount++;
             }
         }
     }
+
+    /* Update the local particle number */
+    *local_partnum = pcount;
 
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);
