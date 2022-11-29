@@ -54,13 +54,10 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
     MPI_Rank_Half = MPI_Rank_Count / 2;
 
     /* The MPI ranks are placed along a periodic ring */
-
     /* This is the nth iteration, we are communicating (n+1) ranks away */
     int n = exchange_iteration + 1;
     int rank_left = (rank < n) ? MPI_Rank_Count + rank - n : rank - n;
     int rank_right = (rank + n) % MPI_Rank_Count;
-
-    // message(rank, "Starting FOF exchange iteration n = %d (local = %ld, foreign = %ld, max = %ld)\n", n, num_local_fofs, *num_foreign_fofs, num_max_fofs);
 
     /* Data type for MPI communication of FOF halos */
     MPI_Datatype fof_type = mpi_fof_halo_type();
@@ -246,6 +243,52 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
     return exchange_iteration;
 }
 
+/* Find cells that overlap with the search radius from a given centre of mass */
+int find_overlapping_cells(const double com[3], double search_radius,
+                           double pos_to_cell_fac, int N_cells,
+                           int **cells, int *num_overlap) {
+
+    /* Determine the cells of the corners of the circumscribing cube */
+    int min_x[3] = {(com[0] - search_radius) * pos_to_cell_fac,
+                    (com[1] - search_radius) * pos_to_cell_fac,
+                    (com[2] - search_radius) * pos_to_cell_fac};
+    int max_x[3] = {(com[0] + search_radius) * pos_to_cell_fac,
+                    (com[1] + search_radius) * pos_to_cell_fac,
+                    (com[2] + search_radius) * pos_to_cell_fac};
+
+    /* The search radius spans this many cells in each dimension */
+    int dx = max_x[0] - min_x[0] + 1;
+    int dy = max_x[1] - min_x[1] + 1;
+    int dz = max_x[2] - min_x[2] + 1;
+
+    /* Allocate memory for the cell indices */
+    *num_overlap = dx * dy * dz;
+    *cells = realloc(*cells, dx * dy * dz * sizeof(int));
+
+    /* Loop over cells */
+    int i = 0;
+    for (int x = min_x[0]; x <= max_x[0]; x++) {
+        for (int y = min_x[1]; y <= max_x[1]; y++) {
+            for (int z = min_x[2]; z <= max_x[2]; z++) {
+
+                /* Handle wrapping */
+                int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
+                int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
+                int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+
+                /* Find the particle count and offset of the cell */
+                (*cells)[i] = row_major_cell(cx, cy, cz, N_cells);
+                i++;
+            }
+        }
+    }
+
+#ifdef DEBUG_CHECKS
+    assert(i == (dx * dy * dz));
+#endif
+
+    return 0;
+}
 
 /* Communicate copies of local particles that overlap with foreign FOF centres
  * with home rank a distance n = (exchange_iteration + 1) from this rank,
@@ -265,13 +308,10 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     MPI_Rank_Half = MPI_Rank_Count / 2;
 
     /* The MPI ranks are placed along a periodic ring */
-
     /* This is the nth iteration, we are communicating (n+1) ranks away */
     int n = exchange_iteration + 1;
     int rank_left = (rank < n) ? MPI_Rank_Count + rank - n : rank - n;
     int rank_right = (rank + n) % MPI_Rank_Count;
-
-    // message(rank, "Starting SO particle exchange iteration n = %d\n", n);
 
     /* Data type for MPI communication of particles */
     MPI_Datatype particle_type = mpi_particle_type();
@@ -284,11 +324,15 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     /* The search radius squared */
     const double max_radius_2 = search_radius * search_radius;
 
+    /* Memory for holding the indices of overlapping cells */
+    int *cells = malloc(0);
+    int num_overlap;
+
     /* Find local particles that overlap with foreign FOFs at distance n */
     long int send_left_counter = 0;
     long int send_right_counter = 0;
     for (long int i = 0; i < num_foreign_fofs; i++) {
-        /* Skip halos that are not at distance n */
+        /* Skip halos whose home rank is not at distance n */
         if (foreign_fofs[i].rank != rank_left && foreign_fofs[i].rank != rank_right) continue;
 
         /* Compute the integer position of the FOF COM */
@@ -297,49 +341,33 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                              foreign_fofs[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(foreign_fofs[i].x_com[0] - search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[1] - search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[2] - search_radius) * pos_to_cell_fac};
-        int max_x[3] = {(foreign_fofs[i].x_com[0] + search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[1] + search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[2] + search_radius) * pos_to_cell_fac};
+        find_overlapping_cells(foreign_fofs[i].x_com, search_radius,
+                               pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
 
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
 
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
-
-                        const IntPosType *xa = parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < max_radius_2) {
-                            if (foreign_fofs[i].rank == rank_left) {
-                                send_left_counter++;
-                            } else {
-                                send_right_counter++;
-                            }
-                        }
-                    } /* End particle loop */
+                if (r2 < max_radius_2) {
+                    if (foreign_fofs[i].rank == rank_left) {
+                        send_left_counter++;
+                    } else {
+                        send_right_counter++;
+                    }
                 }
-            }
+            } /* End particle loop */
         } /* End cell loop */
     } /* End halo loop */
-
-    // printf("%d: %ld left %ld right\n", rank, send_left_counter, send_right_counter);
 
     /* The same particle could overlap with multiple halos and be counted
      * multiple times. To prevent sending over more than one copy, we first
@@ -351,7 +379,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     long int copy_left_counter = 0;
     long int copy_right_counter = 0;
     for (long int i = 0; i < num_foreign_fofs; i++) {
-        /* Skip halos that are not at distance n */
+        /* Skip halos whose home rank is not at distance n */
         if (foreign_fofs[i].rank != rank_left && foreign_fofs[i].rank != rank_right) continue;
 
         /* Compute the integer position of the FOF COM */
@@ -360,49 +388,38 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                              foreign_fofs[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(foreign_fofs[i].x_com[0] - search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[1] - search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[2] - search_radius) * pos_to_cell_fac};
-        int max_x[3] = {(foreign_fofs[i].x_com[0] + search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[1] + search_radius) * pos_to_cell_fac,
-                        (foreign_fofs[i].x_com[2] + search_radius) * pos_to_cell_fac};
+        find_overlapping_cells(foreign_fofs[i].x_com, search_radius,
+                               pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
 
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
 
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
-
-                        const IntPosType *xa = parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < max_radius_2) {
-                            if (foreign_fofs[i].rank == rank_left) {
-                                indices_send_left[copy_left_counter] = index_a;
-                                copy_left_counter++;
-                            } else {
-                                indices_send_right[copy_right_counter] = index_a;
-                                copy_right_counter++;
-                            }
-                        }
-                    } /* End particle loop */
+                if (r2 < max_radius_2) {
+                    if (foreign_fofs[i].rank == rank_left) {
+                        indices_send_left[copy_left_counter] = index_a;
+                        copy_left_counter++;
+                    } else {
+                        indices_send_right[copy_right_counter] = index_a;
+                        copy_right_counter++;
+                    }
                 }
-            }
+            } /* End particle loop */
         } /* End cell loop */
     } /* End halo loop */
+
+    /* Free the cell indices */
+    free(cells);
 
 #ifdef DEBUG_CHECKS
     assert(copy_left_counter == send_left_counter);
@@ -529,7 +546,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     free(receive_parts_right);
 
     /* Iterate? */
-    if (exchange_iteration <= max_iterations) {
+    if (exchange_iteration < max_iterations) {
 
         /* This should always happen within MPI_Rank_Count / 2 iterations */
         assert(exchange_iteration < MPI_Rank_Half + 1);
@@ -585,6 +602,10 @@ int generate_snipshot(struct particle *parts, struct fof_halo *fofs,
 
     fprintf(f, "# id halo x[0] x[1] x[2] v[0] v[1] v[2] m w type \n");
 
+    /* Memory for holding the indices of overlapping cells */
+    int *cells = malloc(0);
+    int num_overlap;
+
     /* Now compute other SO properties */
     for (long int i = 0; i < num_local_fofs; i++) {
 
@@ -592,14 +613,6 @@ int generate_snipshot(struct particle *parts, struct fof_halo *fofs,
         IntPosType com[3] = {fofs[i].x_com[0] * pos_to_int_fac,
                              fofs[i].x_com[1] * pos_to_int_fac,
                              fofs[i].x_com[2] * pos_to_int_fac};
-
-        /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(fofs[i].x_com[0] - max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[1] - max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[2] - max_radius) * pos_to_cell_fac};
-        int max_x[3] = {(fofs[i].x_com[0] + max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[1] + max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[2] + max_radius) * pos_to_cell_fac};
 
         /* The square of the SO radius */
         double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
@@ -614,70 +627,67 @@ int generate_snipshot(struct particle *parts, struct fof_halo *fofs,
             p_select = reduce_factor;
         }
 
+        /* Determine all cells that overlap with the search radius */
+        find_overlapping_cells(fofs[i].x_com, max_radius,
+                               pos_to_cell_fac, N_cells, &cells, &num_overlap);
+
         /* Loop over cells */
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
 
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
 
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
+                if (r2 < R_SO_2) {
+                    /* Randomly decide whether to select */
+                    double p = rand() / ((double) RAND_MAX);
 
-                        const IntPosType *xa = parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < R_SO_2) {
-                            /* Randomly decide whether to select */
-                            double p = rand() / ((double) RAND_MAX);
-
-                            if (p < p_select) {
+                    if (p < p_select) {
 #ifdef WITH_PARTICLE_IDS
 #ifdef SINGLE_PRECISION_IDS
-                                fprintf(f, "%d ", parts[index_a].id);
+                        fprintf(f, "%d ", parts[index_a].id);
 #else
-                                fprintf(f, "%ld ", parts[index_a].id);
+                        fprintf(f, "%ld ", parts[index_a].id);
 #endif
 #else
-                                fprintf(f, "%ld ", index_a);
+                        fprintf(f, "%ld ", index_a);
 #endif
-                                fprintf(f, "%ld ", halos[i].global_id);
-                                fprintf(f, "%g ", parts[index_a].x[0] * int_to_pos_fac);
-                                fprintf(f, "%g ", parts[index_a].x[1] * int_to_pos_fac);
-                                fprintf(f, "%g ", parts[index_a].x[2] * int_to_pos_fac);
-                                fprintf(f, "%g ", parts[index_a].v[0]);
-                                fprintf(f, "%g ", parts[index_a].v[1]);
-                                fprintf(f, "%g ", parts[index_a].v[2]);
+                        fprintf(f, "%ld ", halos[i].global_id);
+                        fprintf(f, "%g ", parts[index_a].x[0] * int_to_pos_fac);
+                        fprintf(f, "%g ", parts[index_a].x[1] * int_to_pos_fac);
+                        fprintf(f, "%g ", parts[index_a].x[2] * int_to_pos_fac);
+                        fprintf(f, "%g ", parts[index_a].v[0]);
+                        fprintf(f, "%g ", parts[index_a].v[1]);
+                        fprintf(f, "%g ", parts[index_a].v[2]);
 #ifdef WITH_MASSES
-                                fprintf(f, "%g ", parts[index_a].m);
+                        fprintf(f, "%g ", parts[index_a].m);
 #else
-                                fprintf(f, "%g ", part_mass);
+                        fprintf(f, "%g ", part_mass);
 #endif
 
 #ifdef WITH_PARTTYPE
-                                fprintf(f, "%g ", parts[index_a].w);
-                                fprintf(f, "%d ", parts[index_a].type);
+                        fprintf(f, "%g ", parts[index_a].w);
+                        fprintf(f, "%d ", parts[index_a].type);
 #else
-                                fprintf(f, "%g ", 1.0);
-                                fprintf(f, "%d ", 1);
+                        fprintf(f, "%g ", 1.0);
+                        fprintf(f, "%d ", 1);
 #endif
-                                fprintf(f, "\n");
-                            }
-                        }
-                    } /* End particle loop */
+                        fprintf(f, "\n");
+                    }
                 }
-            }
+            }  /* End particle loop */
         } /* End cell loop */
     } /* End halo loop */
+
+    /* Free the cell indices */
+    free(cells);
 
     /* Close the file */
     fclose(f);
@@ -803,7 +813,6 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
     /* Timer */
     timer_stop(rank, &so_timer, "Exchanging particles took ");
-    // printf("%d holds %lld foreign parts for local FOFs\n", rank, num_foreign_parts);
 
     /* Append the foreign particles to the particle-cell correspondence */
     cell_list = realloc(cell_list, (num_localpart + num_foreign_parts) * sizeof(struct so_cell_list));
@@ -861,6 +870,10 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     long int working_space = 10000;
     struct so_part_data *so_parts = malloc(working_space * sizeof(struct so_part_data));
 
+    /* Memory for holding the indices of overlapping cells */
+    int *cells = malloc(0);
+    int num_overlap;
+
     /* Loop over local halos */
     for (long int i = 0; i < num_local_fofs; i++) {
 
@@ -870,44 +883,30 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
                              fofs[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(fofs[i].x_com[0] - max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[1] - max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[2] - max_radius) * pos_to_cell_fac};
-        int max_x[3] = {(fofs[i].x_com[0] + max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[1] + max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[2] + max_radius) * pos_to_cell_fac};
+        find_overlapping_cells(fofs[i].x_com, max_radius, pos_to_cell_fac,
+                               N_cells, &cells, &num_overlap);
 
         /* Count the number of particles within the search radius */
         long int nearby_partnum = 0;
 
-        /* Loop over cells to count particles */
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
+        /* Loop over cells */
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
 
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
 
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
-
-                        const IntPosType *xa = parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < max_radius_2) {
-                            nearby_partnum++;
-                        }
-                    } /* End particle loop */
+                if (r2 < max_radius_2) {
+                    nearby_partnum++;
                 }
-            }
+            } /* End particle loop */
         } /* End cell loop */
 
         /* Allocate more memory if needed */
@@ -920,35 +919,25 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
         /* Loop over cells to create an array of distances */
         long int part_counter = 0;
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
 
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
 
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
-
-                        const IntPosType *xa = parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < max_radius_2) {
-                            so_parts[part_counter].m = parts[index_a].m;
-                            so_parts[part_counter].r = sqrtf(r2);
-                            part_counter++;
-                        }
-                    } /* End particle loop */
+                if (r2 < max_radius_2) {
+                    so_parts[part_counter].m = parts[index_a].m;
+                    so_parts[part_counter].r = sqrtf(r2);
+                    part_counter++;
                 }
-            }
+            } /* End particle loop */
         } /* End cell loop */
 
         /* Sort particles by radial distance */
@@ -1018,85 +1007,60 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
         }
 
+        /* The square of the SO radius */
+        double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
+
+        /* Loop over cells to compute other SO properties */
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
+
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
+
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                if (r2 < R_SO_2) {
+#ifdef WITH_MASSES
+                    double mass = parts[index_a].m;
+#else
+                    double mass = part_mass;
+#endif
+                    /* Compute the offset from the FOF CoM */
+                    const IntPosType dx = parts[index_a].x[0] - com[0];
+                    const IntPosType dy = parts[index_a].x[1] - com[1];
+                    const IntPosType dz = parts[index_a].x[2] - com[2];
+
+                    /* Enforce boundary conditions and convert to physical lengths */
+                    const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+                    const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+                    const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+                    halos[i].x_com[0] += (int_to_pos_fac * com[0] + fx) * mass;
+                    halos[i].x_com[1] += (int_to_pos_fac * com[1] + fy) * mass;
+                    halos[i].x_com[2] += (int_to_pos_fac * com[2] + fz) * mass;
+                    halos[i].v_com[0] += parts[index_a].v[0] * mass;
+                    halos[i].v_com[1] += parts[index_a].v[1] * mass;
+                    halos[i].v_com[2] += parts[index_a].v[2] * mass;
+                    halos[i].mass_tot += mass;
+                    halos[i].npart_tot++;
+                }
+            } /* End particle loop */
+        } /* End cell loop */
     } /* End halo loop */
 
     /* Free memory for SO part data */
     free(so_parts);
 
     /* Timer */
-    timer_stop(rank, &so_timer, "Computing spherical overdensity radii took ");
+    timer_stop(rank, &so_timer, "Computing spherical overdensity properties took ");
 
-    /* Now compute other SO properties */
-    for (long int i = 0; i < num_local_fofs; i++) {
-
-        /* Compute the integer position of the FOF COM */
-        IntPosType com[3] = {fofs[i].x_com[0] * pos_to_int_fac,
-                             fofs[i].x_com[1] * pos_to_int_fac,
-                             fofs[i].x_com[2] * pos_to_int_fac};
-
-        /* Determine all cells that overlap with the search radius */
-        int min_x[3] = {(fofs[i].x_com[0] - max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[1] - max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[2] - max_radius) * pos_to_cell_fac};
-        int max_x[3] = {(fofs[i].x_com[0] + max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[1] + max_radius) * pos_to_cell_fac,
-                        (fofs[i].x_com[2] + max_radius) * pos_to_cell_fac};
-
-        /* The square of the SO radius */
-        double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
-
-        /* Loop over cells */
-        for (int x = min_x[0]; x <= max_x[0]; x++) {
-            for (int y = min_x[1]; y <= max_x[1]; y++) {
-                for (int z = min_x[2]; z <= max_x[2]; z++) {
-
-                    /* Handle wrapping */
-                    int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                    int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                    int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
-
-                    /* Find the particle count and offset of the cell */
-                    int cell = row_major_cell(cx, cy, cz, N_cells);
-                    long int local_count = cell_counts[cell];
-                    long int local_offset = cell_offsets[cell];
-
-                    /* Loop over particles in cells */
-                    for (int a = 0; a < local_count; a++) {
-                        const int index_a = cell_list[local_offset + a].offset;
-
-                        const IntPosType *xa = parts[index_a].x;
-                        const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-
-                        if (r2 < R_SO_2) {
-#ifdef WITH_MASSES
-                            double mass = parts[index_a].m;
-#else
-                            double mass = part_mass;
-#endif
-                            /* Compute the offset from the FOF CoM */
-                            const IntPosType dx = parts[index_a].x[0] - com[0];
-                            const IntPosType dy = parts[index_a].x[1] - com[1];
-                            const IntPosType dz = parts[index_a].x[2] - com[2];
-
-                            /* Enforce boundary conditions and convert to physical lengths */
-                            const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
-                            const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
-                            const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
-
-                            halos[i].x_com[0] += (int_to_pos_fac * com[0] + fx) * mass;
-                            halos[i].x_com[1] += (int_to_pos_fac * com[1] + fy) * mass;
-                            halos[i].x_com[2] += (int_to_pos_fac * com[2] + fz) * mass;
-                            halos[i].v_com[0] += parts[index_a].v[0] * mass;
-                            halos[i].v_com[1] += parts[index_a].v[1] * mass;
-                            halos[i].v_com[2] += parts[index_a].v[2] * mass;
-                            halos[i].mass_tot += mass;
-                            halos[i].npart_tot++;
-                        }
-                    } /* End particle loop */
-                }
-            }
-        } /* End cell loop */
-    } /* End halo loop */
+    /* Free the cell indices */
+    free(cells);
 
     /* Divide by the mass for the centre of mass properties */
     for (long int i = 0; i < num_local_fofs; i++) {
