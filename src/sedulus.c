@@ -430,6 +430,15 @@ int main(int argc, char *argv[]) {
         add_local_buffers(&mass);
         timer_stop(rank, &run_timer, "Communicating buffers took ");
 
+        /* Add the contributions leaking into the upper triangle to the lower triangle */
+        for (int i = mass.X0 - mass.buffer_width; i < mass.X0 + mass.NX + mass.buffer_width; i++) {
+            for (int j = 0; j < mass.N; j++) {
+                for (int k = 0; k < j; k++) {
+                    *point_row_major_dg_buffered(i, j, k, &mass) += *point_row_major_dg_buffered(i, k, j, &mass);
+                }
+            }
+        }
+
         /* Make the mass grid yz-symmetric */
         for (int i = mass.X0 - mass.buffer_width; i < mass.X0 + mass.NX + mass.buffer_width; i++) {
             for (int j = 0; j < mass.N; j++) {
