@@ -524,6 +524,11 @@ int main(int argc, char *argv[]) {
 
                 p->x[2] = p->x[1];
                 p->x[1] = swap;
+
+                FloatVelType vswap = p->v[2];
+
+                p->v[2] = p->v[1];
+                p->v[1] = vswap;
             }
 
             // /* Convert positions to integers (wrapping automatic by overflow) */
