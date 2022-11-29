@@ -39,7 +39,7 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     int index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
 
     /* Generate a complex Hermitian Gaussian random field */
-    generate_complex_grf(dgrid, seed);
+    generate_ngeniclike_grf(dgrid, 101);
     enforce_hermiticity(dgrid);
 
     /* Apply fixing and/or inverting of the modes for variance reduction? */
@@ -226,7 +226,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     long int pcount = 0;
     for (int i = X0; i < X0+NX; i++) {
         for (int j = 0; j < N; j++) {
-            for (int k = 0; k < j; k++) { // only the lower triangle in the yz-plane
+            for (int k = 0; k < N; k++) {
                 struct particle *part = &parts[pcount];
 #ifdef WITH_PARTICLE_IDS
                 part->id = pcount;
