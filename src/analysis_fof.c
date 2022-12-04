@@ -470,7 +470,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Determine the number of particles with foreign roots */
             int num_foreign_rooted = 0;
             for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
-                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     num_foreign_rooted++;
                 }
             }
