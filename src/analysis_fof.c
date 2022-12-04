@@ -131,10 +131,11 @@ void receive_fof_parts(struct fof_part_data *dest, int *num_received,
 * type = 0: left edge of the rank
 * type = 1: right edge of the domain */
 double edge_distance(IntPosType x, double boxlen, double int_to_rank_fac,
-                     double rank_to_pos_fac, double int_to_pos_fac, int type) {
+                     double int_to_pos_fac, int type) {
 
     if (type == 0) {
         /* Distance from left edge of rank */
+        double rank_to_pos_fac = int_to_pos_fac / int_to_rank_fac;
         double rank_float = x * int_to_rank_fac;
         double dx = rank_float - ((int) rank_float);
         return dx * rank_to_pos_fac;
@@ -150,13 +151,13 @@ double edge_distance(IntPosType x, double boxlen, double int_to_rank_fac,
  * type = 1: right edge of the domain */
 void copy_edge_parts(struct fof_part_data **dest, struct fof_part_data *fof_parts,
                      int *num_copied, long long int num_localpart, int type,
-                     double int_to_rank_fac, double rank_to_pos_fac,
-                     double int_to_pos_fac, double boxlen, double linking_length) {
+                     double int_to_rank_fac, double int_to_pos_fac,
+                     double boxlen, double linking_length) {
 
     /* Count the number of particles within one linking length from the left edge */
     int count_near_edge = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, rank_to_pos_fac, int_to_pos_fac, type);
+        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, int_to_pos_fac, type);
         if (dx < linking_length) {
             count_near_edge++;
         }
@@ -169,7 +170,7 @@ void copy_edge_parts(struct fof_part_data **dest, struct fof_part_data *fof_part
     /* Fish out particles within one linking length from the left edge */
     int copy_counter = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, rank_to_pos_fac, int_to_pos_fac, type);
+        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, int_to_pos_fac, type);
         if (dx < linking_length) {
             memcpy(*dest + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
             copy_counter++;
@@ -234,7 +235,6 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     const long long int max_block_width = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
     const double int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
     const double int_to_rank_fac = 1.0 / int_block_width;
-    const double rank_to_pos_fac = int_to_pos_fac / int_to_rank_fac;
 
     /* The cells must be larger than the linking length */
     if (boxlen / N_cells <= 2 * linking_length) {
@@ -300,8 +300,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Fish out particles within one linking length from the left edge */
             copy_edge_parts(&edge_parts, fof_parts, &count_near_edge,
                             num_localpart, /* left */ 0, int_to_rank_fac,
-                            rank_to_pos_fac, int_to_pos_fac, boxlen,
-                            linking_length);
+                            int_to_pos_fac, boxlen, linking_length);
 
             /* Communicate the edge particles to the left neighbour */
             MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
@@ -315,8 +314,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Fish out particles within one linking length from the left edge */
             copy_edge_parts(&edge_parts, fof_parts, &count_near_edge,
                             num_localpart, /* left */ 0, int_to_rank_fac,
-                            rank_to_pos_fac, int_to_pos_fac, boxlen,
-                            linking_length);
+                            int_to_pos_fac, boxlen, linking_length);
 
             /* Communicate the edge particles to the left neighbour */
             MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
@@ -327,8 +325,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Fish out particles within one linking length from the right edge */
             copy_edge_parts(&edge_parts, fof_parts, &count_near_edge,
                             num_localpart, /* right */ 1, int_to_rank_fac,
-                            rank_to_pos_fac, int_to_pos_fac, boxlen,
-                            linking_length);
+                            int_to_pos_fac, boxlen, linking_length);
 
             /* Communicate these edge particles to the right neighbour */
             MPI_Send(edge_parts, count_near_edge, fof_type, rank_right, 0, MPI_COMM_WORLD);
