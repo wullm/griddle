@@ -127,6 +127,23 @@ void receive_fof_parts(struct fof_part_data *dest, int *num_received,
     MPI_Recv(dest, *num_received, fof_type, from_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 }
 
+/* Compute the distance from a particle to a given edge:
+* type = 0: left edge of the rank
+* type = 1: right edge of the domain */
+double edge_distance(IntPosType x, double boxlen, double int_to_rank_fac,
+                     double rank_to_pos_fac, double int_to_pos_fac, int type) {
+
+    if (type == 0) {
+        /* Distance from left edge of rank */
+        double rank_float = x * int_to_rank_fac;
+        double dx = rank_float - ((int) rank_float);
+        return dx * rank_to_pos_fac;
+    } else {
+        /* Distance from right edge of domain */
+        double pos = x * int_to_pos_fac;
+        return boxlen - pos;
+    }
+}
 
 /* Copy particles within a linking length from an edge. There are two types:
  * type = 0: left edge of the rank
@@ -139,20 +156,8 @@ void copy_edge_parts(struct fof_part_data **dest, struct fof_part_data *fof_part
     /* Count the number of particles within one linking length from the left edge */
     int count_near_edge = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double dx_phys;
-
-        if (type == 0) {
-            /* Distance from left edge of rank */
-            double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
-            double dx = rank_float - ((int) rank_float);
-            dx_phys = dx * rank_to_pos_fac;
-        } else {
-            /* Distance from right edge of domain */
-            double pos = fof_parts[i].x[0] * int_to_pos_fac;
-            dx_phys = boxlen - pos;
-        }
-
-        if (dx_phys < linking_length) {
+        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, rank_to_pos_fac, int_to_pos_fac, type);
+        if (dx < linking_length) {
             count_near_edge++;
         }
     }
@@ -164,20 +169,8 @@ void copy_edge_parts(struct fof_part_data **dest, struct fof_part_data *fof_part
     /* Fish out particles within one linking length from the left edge */
     int copy_counter = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double dx_phys;
-
-        if (type == 0) {
-            /* Distance from left edge of rank */
-            double rank_float = fof_parts[i].x[0] * int_to_rank_fac;
-            double dx = rank_float - ((int) rank_float);
-            dx_phys = dx * rank_to_pos_fac;
-        } else {
-            /* Distance from right edge of domain */
-            double pos = fof_parts[i].x[0] * int_to_pos_fac;
-            dx_phys = boxlen - pos;
-        }
-
-        if (dx_phys < linking_length) {
+        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, rank_to_pos_fac, int_to_pos_fac, type);
+        if (dx < linking_length) {
             memcpy(*dest + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
             copy_counter++;
         }
