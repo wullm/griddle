@@ -599,6 +599,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         union_roots(fof_parts, &fof_parts[i], &fof_parts[fof_parts[i].root]);
     }
 
+    /* Linking is now complete. Proceed with finding group sizes and computing
+     * FOF halo properties of sufficiently large groups */
+
     /* Allocate memory for the group sizes */
     int *group_sizes = calloc(num_localpart, sizeof(int));
 
@@ -611,7 +614,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         group_sizes[fof_parts[i].root]++;
     }
 
-    /* Count the number of structures by tracing the ultimate roots */
+    /* Count the number of structures (with sufficient size) via the roots */
     long int num_structures = 0;
     for (long int i = 0; i < num_localpart; i++) {
         /* Skip disabled particles */
@@ -667,8 +670,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         if (fof_parts[i].root == -1) continue;
 
         long int root = fof_parts[i].root;
-
         long int h = halo_ids[root] - halo_rank_offsets[rank];
+
         if (h >= 0) {
 #ifdef WITH_MASSES
             /* TODO: decide what to do about the masses */
