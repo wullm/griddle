@@ -43,6 +43,12 @@ static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
     return r_2 <= linking_length_2;
 }
 
+/* Does this global offset correspond to a local particle? */
+static inline int is_local(long int global_offset, long int rank_offset,
+                           long int num_localpart) {
+
+    return (global_offset >= rank_offset && global_offset < rank_offset + num_localpart);
+}
 
 /* Find the root of the set of a given particle */
 long int find_root(struct fof_part_data *fof_parts, struct fof_part_data *part) {
@@ -454,7 +460,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
          * particle that belongs to a rank with a higher number. Two cases:
          *
          * Rank 0          sends particles to the right
-         * Rank 1...N-1    receive from the left and send to the right
+         * Rank 1...N-1    receives from the left, then sends to the right
          *
          * This will automatically account for structures that link across
          * multiple ranks and deliver particles from rank 0 to rank N-1,
@@ -473,7 +479,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             long int copy_counter = 0;
             struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
             for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
-                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
                     copy_counter++;
                 }
@@ -482,7 +488,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Disable the remaining copies of the foreign rooted particles on
              * this rank that now live on another rank */
             for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
-                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     fof_parts[i].root = -1;
                 }
             }
@@ -505,7 +511,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 /* Skip disabled particles */
                 if (fof_parts[i].root == -1) continue;
 
-                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     num_foreign_rooted++;
                 }
             }
@@ -517,7 +523,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 /* Skip disabled particles */
                 if (fof_parts[i].root == -1) continue;
 
-                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
                     copy_counter++;
                 }
@@ -526,7 +532,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Disable the remaining copies of the foreign rooted particles on
              * this rank that now live on another rank */
             for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
-                if (fof_parts[i].root < rank_offset || fof_parts[i].root >= rank_offset + num_localpart) {
+                if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     fof_parts[i].root = -1;
                 }
             }
@@ -550,7 +556,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        assert(fof_parts[i].root >= rank_offset && fof_parts[i].root < rank_offset + num_localpart);
+        assert(is_local(fof_parts[i].root, rank_offset, num_localpart));
     }
 #endif
 
@@ -575,7 +581,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         if (fof_parts[i].root == -1) continue;
 
         /* Is this a copy of a local particle? */
-        if (fof_parts[i].global_offset >= rank_offset && fof_parts[i].global_offset < rank_offset + num_localpart) {
+        if (is_local(fof_parts[i].global_offset, rank_offset, num_localpart)) {
             /* Attach the trees */
             long int local_copy = fof_parts[i].global_offset - rank_offset;
             union_roots(fof_parts, &fof_parts[i], &fof_parts[local_copy]);
