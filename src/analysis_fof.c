@@ -738,7 +738,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     message(rank, "\n");
     message(rank, "Proceeding with spherical overdensity calculations.\n");
 
-    analysis_so(parts, halos, boxlen, Np, Ng, num_localpart, max_partnum,
+    analysis_so(parts, &halos, boxlen, Np, Ng, num_localpart, max_partnum,
                 num_structures, output_num, a_scale_factor,us,pcs, cosmo);
 
 
@@ -749,6 +749,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     free(cell_list);
     free(parts_per_rank);
     free(rank_offsets);
+    free(halos);
 
     return 0;
 }

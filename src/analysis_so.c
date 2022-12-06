@@ -695,7 +695,7 @@ int generate_snipshot(struct particle *parts, struct fof_halo *fofs,
     return 0;
 }
 
-int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
+int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long int Np, long long int Ng, long long int num_localpart,
                 long long int max_partnum, long int num_local_fofs,
                 int output_num, double a_scale_factor, const struct units *us,
@@ -733,10 +733,10 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     /* Allocate additional memory for holding some foreign FOFs */
     long int fof_buffer = 10000; //TODO: make parameter
     long int num_max_fofs = num_local_fofs + fof_buffer;
-    fofs = realloc(fofs, num_max_fofs * sizeof(struct fof_halo));
+    *fofs = realloc(*fofs, num_max_fofs * sizeof(struct fof_halo));
 
     /* Exchange copies of FOF centres */
-    int exchange_iterations = exchange_fof(fofs, boxlen, Ng, num_local_fofs, &num_foreign_fofs, num_max_fofs, max_radius, /* iteration = */ 0);
+    int exchange_iterations = exchange_fof(*fofs, boxlen, Ng, num_local_fofs, &num_foreign_fofs, num_max_fofs, max_radius, /* iteration = */ 0);
 
     timer_stop(rank, &so_timer, "Exchanging FOFs took ");
     message(rank, "It took %d iterations to exchange all FOFs\n", exchange_iterations);
@@ -805,7 +805,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     long long int num_foreign_parts = 0;
 
     /* Next, exchange copies of particles */
-    exchange_so_parts(parts, fofs + num_local_fofs, cell_list, cell_counts,
+    exchange_so_parts(parts, *fofs + num_local_fofs, cell_list, cell_counts,
                       cell_offsets, boxlen, Ng, num_localpart,
                       &num_foreign_parts, max_partnum, num_foreign_fofs,
                       N_cells, max_radius, /* iter = */ 0,
@@ -861,8 +861,8 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
     /* The FOF and SO halos are in one-to-one correspondence */
     for (long int i = 0; i < num_local_fofs; i++) {
-        halos[i].global_id = fofs[i].global_id;
-        halos[i].rank = fofs[i].rank;
+        halos[i].global_id = (*fofs)[i].global_id;
+        halos[i].rank = (*fofs)[i].rank;
     }
 
     /* Allocate working memory for computing the SO radius */
@@ -878,12 +878,12 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     for (long int i = 0; i < num_local_fofs; i++) {
 
         /* Compute the integer position of the FOF COM */
-        IntPosType com[3] = {fofs[i].x_com[0] * pos_to_int_fac,
-                             fofs[i].x_com[1] * pos_to_int_fac,
-                             fofs[i].x_com[2] * pos_to_int_fac};
+        IntPosType com[3] = {(*fofs)[i].x_com[0] * pos_to_int_fac,
+                             (*fofs)[i].x_com[1] * pos_to_int_fac,
+                             (*fofs)[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells(fofs[i].x_com, max_radius, pos_to_cell_fac,
+        find_overlapping_cells((*fofs)[i].x_com, max_radius, pos_to_cell_fac,
                                N_cells, &cells, &num_overlap);
 
         /* Count the number of particles within the search radius */
@@ -1084,7 +1084,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
 
     fprintf(f, "# i M_FOF npart_FOF M_tot M_SO R_SO npart_SO x[0] x[1] x[2] v[0] v[1] v[2] x_fof[0] x_fof[1] x_fof[2] \n");
     for (long int i = 0; i < num_local_fofs; i++) {
-        fprintf(f, "%ld %g %d %g %g %g %d %g %g %g %g %g %g %g %g %g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, halos[i].mass_tot, halos[i].M_SO, halos[i].R_SO, halos[i].npart_tot, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].v_com[0], halos[i].v_com[1], halos[i].v_com[2], fofs[i].x_com[0], fofs[i].x_com[1], fofs[i].x_com[2]);
+        fprintf(f, "%ld %g %d %g %g %g %d %g %g %g %g %g %g %g %g %g\n", (*fofs)[i].global_id, (*fofs)[i].mass_fof, (*fofs)[i].npart, halos[i].mass_tot, halos[i].M_SO, halos[i].R_SO, halos[i].npart_tot, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].v_com[0], halos[i].v_com[1], halos[i].v_com[2], (*fofs)[i].x_com[0], (*fofs)[i].x_com[1], (*fofs)[i].x_com[2]);
     }
 
     /* Close the file */
@@ -1098,7 +1098,7 @@ int analysis_so(struct particle *parts, struct fof_halo *fofs, double boxlen,
     double reduce_factor = 0.01;
     int min_part_export_per_halo = 5;
 
-    generate_snipshot(parts, fofs, halos, boxlen, Np, Ng, num_localpart,
+    generate_snipshot(parts, *fofs, halos, boxlen, Np, Ng, num_localpart,
                       num_foreign_parts, num_local_fofs, output_num,
                       a_scale_factor, N_cells, reduce_factor,
                       min_part_export_per_halo, cell_list, cell_counts,
