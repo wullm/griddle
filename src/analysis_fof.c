@@ -642,8 +642,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     message(rank, "Found %ld structures in total.\n", total_halo_num);
 
     /* Allocate memory for the local halo catalogue */
-    struct fof_halo *halos = malloc(num_structures * sizeof(struct fof_halo));
-    bzero(halos, num_structures * sizeof(struct fof_halo));
+    struct fof_halo *fofs = malloc(num_structures * sizeof(struct fof_halo));
+    bzero(fofs, num_structures * sizeof(struct fof_halo));
 
     /* Assign root particles to halos */
     long int halo_count = 0;
@@ -654,7 +654,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         if (fof_parts[i].local_offset == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
             halo_ids[i] = halo_count + halo_rank_offsets[rank];
-            halos[halo_count].global_id = halo_count + halo_rank_offsets[rank];
+            fofs[halo_count].global_id = halo_count + halo_rank_offsets[rank];
             halo_count++;
         } else {
             halo_ids[i] = -1;
@@ -682,7 +682,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 #endif
 
             /* Friends-of-friends mass */
-            halos[h].mass_fof += mass;
+            fofs[h].mass_fof += mass;
 
             /* Compute the offset from the root particle */
             const IntPosType dx = fof_parts[i].x[0] - fof_parts[root].x[0];
@@ -695,13 +695,13 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
             /* Centre of mass (use offset from root for periodic boundary conditions) */
-            halos[h].x_com[0] += (int_to_pos_fac * fof_parts[root].x[0] + fx) * mass;
-            halos[h].x_com[1] += (int_to_pos_fac * fof_parts[root].x[1] + fy) * mass;
-            halos[h].x_com[2] += (int_to_pos_fac * fof_parts[root].x[2] + fz) * mass;
+            fofs[h].x_com[0] += (int_to_pos_fac * fof_parts[root].x[0] + fx) * mass;
+            fofs[h].x_com[1] += (int_to_pos_fac * fof_parts[root].x[1] + fy) * mass;
+            fofs[h].x_com[2] += (int_to_pos_fac * fof_parts[root].x[2] + fz) * mass;
             /* Total particle number */
-            halos[h].npart++;
+            fofs[h].npart++;
             /* The home rank of the halo */
-            halos[h].rank = rank;
+            fofs[h].rank = rank;
         }
     }
 
@@ -716,11 +716,11 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Divide by the mass for the centre of mass properties */
     for (long int i = 0; i < num_structures; i++) {
-        double halo_mass = halos[i].mass_fof;
+        double halo_mass = fofs[i].mass_fof;
         if (halo_mass > 0) {
-            halos[i].x_com[0] /= halo_mass;
-            halos[i].x_com[1] /= halo_mass;
-            halos[i].x_com[2] /= halo_mass;
+            fofs[i].x_com[0] /= halo_mass;
+            fofs[i].x_com[1] /= halo_mass;
+            fofs[i].x_com[2] /= halo_mass;
         }
     }
 
@@ -732,7 +732,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     fprintf(f, "# i M_FOF npart_FOF x[0] x[1] x[2]\n");
     for (long int i = 0; i < num_structures; i++) {
-        fprintf(f, "%ld %g %d %g %g %g\n", halos[i].global_id, halos[i].mass_fof, halos[i].npart, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2]);
+        fprintf(f, "%ld %g %d %g %g %g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, fofs[i].x_com[0], fofs[i].x_com[1], fofs[i].x_com[2]);
     }
 
     /* Close the file */
@@ -744,13 +744,13 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     message(rank, "\n");
     message(rank, "Proceeding with spherical overdensity calculations.\n");
 
-    analysis_so(parts, &halos, boxlen, Np, Ng, num_localpart, max_partnum,
+    analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
                 num_structures, output_num, a_scale_factor,us,pcs, cosmo);
 
     /* Free the remaining memory */
     free(parts_per_rank);
     free(rank_offsets);
-    free(halos);
+    free(fofs);
 
     return 0;
 }
