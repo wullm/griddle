@@ -708,6 +708,12 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     /* We are done with the halo ids */
     free(halo_ids);
 
+    /* We are done with the FOF particle data and cell structures */
+    free(fof_parts);
+    free(cell_counts);
+    free(cell_offsets);
+    free(cell_list);
+
     /* Divide by the mass for the centre of mass properties */
     for (long int i = 0; i < num_structures; i++) {
         double halo_mass = halos[i].mass_fof;
@@ -741,12 +747,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     analysis_so(parts, &halos, boxlen, Np, Ng, num_localpart, max_partnum,
                 num_structures, output_num, a_scale_factor,us,pcs, cosmo);
 
-
-    /* Free all memory */
-    free(fof_parts);
-    free(cell_counts);
-    free(cell_offsets);
-    free(cell_list);
+    /* Free the remaining memory */
     free(parts_per_rank);
     free(rank_offsets);
     free(halos);
