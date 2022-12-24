@@ -664,6 +664,43 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     /* We are done with the group sizes */
     free(group_sizes);
 
+    /* For each group, find the particle closest to the centre of the box. */
+    long int *centre_particles = calloc(num_structures, sizeof(long int));
+    double *centre_distances_2 = calloc(num_structures, sizeof(double));
+    for (long int i = 0; i < num_structures; i++) {
+        centre_distances_2[i] = 0.75 * boxlen * boxlen; // maximum value
+    }
+
+    const IntPosType int_half_boxlen = pow(2.0, POSITION_BITS - 1);
+    for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+        /* Skip disabled particles */
+        if (fof_parts[i].root == -1) continue;
+
+        long int root = fof_parts[i].root;
+        long int h = halo_ids[root] - halo_rank_offsets[rank];
+
+        if (h >= 0) {
+            /* Compute the distance to the centre */
+            const IntPosType dx = fof_parts[i].x[0] - int_half_boxlen;
+            const IntPosType dy = fof_parts[i].x[1] - int_half_boxlen;
+            const IntPosType dz = fof_parts[i].x[2] - int_half_boxlen;
+
+            /* Enforce boundary conditions and convert to physical lengths */
+            const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+            const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+            const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+            const double f2 = fx * fx + fy * fy + fz * fz;
+
+            if (f2 < centre_distances_2[h]) {
+                centre_particles[h] = i;
+                centre_distances_2[h] = f2;
+            }
+        }
+    }
+
+    free(centre_distances_2);
+
     /* Accumulate the halo properties */
     for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
@@ -671,6 +708,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         long int root = fof_parts[i].root;
         long int h = halo_ids[root] - halo_rank_offsets[rank];
+        long int centre_particle = centre_particles[h];
 
         if (h >= 0) {
 #ifdef WITH_MASSES
@@ -684,35 +722,26 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Friends-of-friends mass */
             fofs[h].mass_fof += mass;
 
-            /* Compute the offset from the root particle */
-            const IntPosType dx = fof_parts[i].x[0] - fof_parts[root].x[0];
-            const IntPosType dy = fof_parts[i].x[1] - fof_parts[root].x[1];
-            const IntPosType dz = fof_parts[i].x[2] - fof_parts[root].x[2];
+            /* Compute the offset from the most central particle */
+            const IntPosType dx = fof_parts[i].x[0] - fof_parts[centre_particle].x[0];
+            const IntPosType dy = fof_parts[i].x[1] - fof_parts[centre_particle].x[1];
+            const IntPosType dz = fof_parts[i].x[2] - fof_parts[centre_particle].x[2];
 
             /* Enforce boundary conditions and convert to physical lengths */
             const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
             const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
             const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
-            /* Centre of mass (use offset from root for periodic boundary conditions) */
-            fofs[h].x_com[0] += (int_to_pos_fac * fof_parts[root].x[0] + fx) * mass;
-            fofs[h].x_com[1] += (int_to_pos_fac * fof_parts[root].x[1] + fy) * mass;
-            fofs[h].x_com[2] += (int_to_pos_fac * fof_parts[root].x[2] + fz) * mass;
+            /* Centre of mass (use relative position for periodic boundary conditions) */
+            fofs[h].x_com[0] += fx * mass;
+            fofs[h].x_com[1] += fy * mass;
+            fofs[h].x_com[2] += fz * mass;
             /* Total particle number */
             fofs[h].npart++;
             /* The home rank of the halo */
             fofs[h].rank = rank;
         }
     }
-
-    /* We are done with the halo ids */
-    free(halo_ids);
-
-    /* We are done with the FOF particle data and cell structures */
-    free(fof_parts);
-    free(cell_counts);
-    free(cell_offsets);
-    free(cell_list);
 
     /* Divide by the mass for the centre of mass properties */
     for (long int i = 0; i < num_structures; i++) {
@@ -722,7 +751,21 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             fofs[i].x_com[1] /= halo_mass;
             fofs[i].x_com[2] /= halo_mass;
         }
+
+        /* Add the position of the most central particle to get the absolute CoM */
+        long int centre_particle = centre_particles[i];
+        fofs[i].x_com[0] += int_to_pos_fac * fof_parts[centre_particle].x[0];
+        fofs[i].x_com[1] += int_to_pos_fac * fof_parts[centre_particle].x[1];
+        fofs[i].x_com[2] += int_to_pos_fac * fof_parts[centre_particle].x[2];
     }
+
+    /* We are done with the FOF particle data and cell structures */
+    free(halo_ids);
+    free(centre_particles);
+    free(fof_parts);
+    free(cell_counts);
+    free(cell_offsets);
+    free(cell_list);
 
     /* Print the FOF properties to a file */
     /* TODO: replace by HDF5 output */
@@ -732,7 +775,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     fprintf(f, "# i M_FOF npart_FOF x[0] x[1] x[2]\n");
     for (long int i = 0; i < num_structures; i++) {
-        fprintf(f, "%ld %g %d %g %g %g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, fofs[i].x_com[0], fofs[i].x_com[1], fofs[i].x_com[2]);
+        fprintf(f, "%ld %g %d %.10g %.10g %.10g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, fofs[i].x_com[0], fofs[i].x_com[1], fofs[i].x_com[2]);
     }
 
     /* Close the file */
