@@ -887,7 +887,122 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         find_overlapping_cells((*fofs)[i].x_com, max_radius, pos_to_cell_fac,
                                N_cells, &cells, &num_overlap);
 
-        /* Count the number of particles within the search radius */
+        /* First perform a shrinking sphere algorithm to determine the centre */
+        /* TODO: make parameters */
+        const double rfac = 0.95;
+        const double mfac = 0.01;
+
+        /* The initial search radius */
+        double r_ini = (*fofs)[i].radius_fof * 1.01;
+        double m_ini = 0.;
+        int npart_ini = 0;
+
+        if (r_ini >= max_radius) {
+            printf("Error: Maximum search radius too small.\n");
+            exit(1);
+        }
+
+        /* Loop over cells */
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
+
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
+
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                if (r2 < r_ini * r_ini) {
+#ifdef WITH_MASSES
+                    double mass = parts[index_a].m;
+#else
+                    double mass = part_mass;
+#endif
+                    m_ini += mass;
+                    npart_ini++;
+                }
+            } /* End particle loop */
+        } /* End cell loop */
+
+        /* Initialise the shrinking sphere algorithm */
+        double r = r_ini;
+        double m = m_ini;
+        int npart = npart_ini;
+
+        /* While there is enough mass in the sphere, re-compute the CoM */
+        while (m > mfac * m_ini && npart > pars->MinHaloParticleNum) {
+            /* Compute the new centre of mass */
+            double sphere_com[3] = {0., 0., 0.};
+            double sphere_mass = 0.;
+            int sphere_npart = 0;
+
+            /* Loop over cells */
+            for (int c = 0; c < num_overlap; c++) {
+                /* Find the particle count and offset of the cell */
+                int cell = cells[c];
+                long int local_count = cell_counts[cell];
+                long int local_offset = cell_offsets[cell];
+
+                /* Loop over particles in cells */
+                for (int a = 0; a < local_count; a++) {
+                    const int index_a = cell_list[local_offset + a].offset;
+
+                    const IntPosType *xa = parts[index_a].x;
+                    const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                    if (r2 < r * r) {
+#ifdef WITH_MASSES
+                        double mass = parts[index_a].m;
+#else
+                        double mass = part_mass;
+#endif
+
+                        /* Compute the offset from the current CoM */
+                        const IntPosType dx = parts[index_a].x[0] - com[0];
+                        const IntPosType dy = parts[index_a].x[1] - com[1];
+                        const IntPosType dz = parts[index_a].x[2] - com[2];
+
+                        /* Enforce boundary conditions and convert to physical lengths */
+                        const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+                        const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+                        const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+                        sphere_com[0] += fx * mass;
+                        sphere_com[1] += fy * mass;
+                        sphere_com[2] += fz * mass;
+                        sphere_mass += mass;
+                        sphere_npart++;
+                    }
+                } /* End particle loop */
+            } /* End cell loop */
+
+            /* Divide by the total mass to get the CoM */
+            if (sphere_mass > 0.) {
+                sphere_com[0] /= sphere_mass;
+                sphere_com[1] /= sphere_mass;
+                sphere_com[2] /= sphere_mass;
+            }
+
+            /* Update the integer CoM */
+            com[0] += sphere_com[0] * pos_to_int_fac;
+            com[1] += sphere_com[1] * pos_to_int_fac;
+            com[2] += sphere_com[2] * pos_to_int_fac;
+
+            /* Determine all cells that overlap with the search radius */
+            find_overlapping_cells((*fofs)[i].x_com, max_radius, pos_to_cell_fac,
+                                   N_cells, &cells, &num_overlap);
+
+            /* Iterate the shrinking sphere algorithm */
+            m = sphere_mass;
+            npart = sphere_npart;
+            r *= rfac;
+        }
+
+        /* Count the number of particles */
         long int nearby_partnum = 0;
 
         /* Loop over cells */
