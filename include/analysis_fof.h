@@ -24,6 +24,7 @@
 
 #include "particle.h"
 #include "units.h"
+#include "params.h"
 #include "cosmology.h"
 
 struct fof_cell_list {
@@ -103,7 +104,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
-                 const struct cosmology *cosmo);
+                 const struct cosmology *cosmo, struct params *pars, double a);
 
 /* The MPI data type of the FOF particle data */
 static inline MPI_Datatype mpi_fof_part_type() {

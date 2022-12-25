@@ -55,8 +55,10 @@ struct params {
 
     /* Halo finding parameters */
     char DoHaloFindingWithSnapshots;
+    char DoSphericalOverdensities;
     double LinkingLength;
     int MinHaloParticleNum;
+    char *CatalogueBaseName;
 
 };
 

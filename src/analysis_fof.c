@@ -29,6 +29,7 @@
 
 #include "../include/analysis_fof.h"
 #include "../include/analysis_so.h"
+#include "../include/catalogue_io.h"
 #include "../include/message.h"
 
 #define DEBUG_CHECKS
@@ -190,7 +191,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
-                 const struct cosmology *cosmo) {
+                 const struct cosmology *cosmo, struct params *pars, double a) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -767,28 +768,19 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     free(cell_offsets);
     free(cell_list);
 
-    /* Print the FOF properties to a file */
-    /* TODO: replace by HDF5 output */
-    char fname[50];
-    sprintf(fname, "halos_FOF_%04d_%03d.txt", output_num, rank);
-    FILE *f = fopen(fname, "w");
-
-    fprintf(f, "# i M_FOF npart_FOF x[0] x[1] x[2]\n");
-    for (long int i = 0; i < num_structures; i++) {
-        fprintf(f, "%ld %g %d %.10g %.10g %.10g\n", fofs[i].global_id, fofs[i].mass_fof, fofs[i].npart, fofs[i].x_com[0], fofs[i].x_com[1], fofs[i].x_com[2]);
-    }
-
-    /* Close the file */
-    fclose(f);
+    /* Export the FOF properties to an HDF5 file */
+    exportCatalogue(pars, us, pcs, output_num, a, total_halo_num, num_structures, fofs);
 
     /* Timer */
     timer_stop(rank, &fof_timer, "Writing FOF halo properties took ");
-
     message(rank, "\n");
-    message(rank, "Proceeding with spherical overdensity calculations.\n");
 
-    analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
-                num_structures, output_num, a_scale_factor,us,pcs, cosmo);
+    if (pars->DoSphericalOverdensities) {
+        message(rank, "Proceeding with spherical overdensity calculations.\n");
+
+        analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
+                    num_structures, output_num, a_scale_factor,us,pcs, cosmo);
+    }
 
     /* Free the remaining memory */
     free(parts_per_rank);

@@ -62,8 +62,11 @@ int readParams(struct params *pars, const char *fname) {
 
      /* Halo finding parameters */
      pars->DoHaloFindingWithSnapshots = ini_getl("HaloFinding", "DoHaloFindingWithSnapshots", 0, fname);
+     pars->DoSphericalOverdensities = ini_getl("HaloFinding", "DoSphericalOverdensities", 1, fname);
      pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
+     pars->CatalogueBaseName = malloc(len);
+     ini_gets("HaloFinding", "BaseName", "", pars->CatalogueBaseName, len, fname);
 
      return 0;
 }
@@ -74,6 +77,7 @@ int cleanParams(struct params *pars) {
     free(pars->TransferFunctionsFile);
     free(pars->SnapshotTimesString);
     free(pars->SnapshotBaseName);
+    free(pars->CatalogueBaseName);
 
     return 0;
 }
