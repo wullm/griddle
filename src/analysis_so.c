@@ -29,6 +29,7 @@
 
 #include "../include/analysis_fof.h"
 #include "../include/analysis_so.h"
+#include "../include/catalogue_io.h"
 #include "../include/message.h"
 
 #define DEBUG_CHECKS
@@ -697,10 +698,10 @@ int generate_snipshot(struct particle *parts, struct fof_halo *fofs,
 
 int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long int Np, long long int Ng, long long int num_localpart,
-                long long int max_partnum, long int num_local_fofs,
-                int output_num, double a_scale_factor, const struct units *us,
-                const struct physical_consts *pcs,
-                const struct cosmology *cosmo) {
+                long long int max_partnum, long int total_num_fofs,
+                long int num_local_fofs, int output_num, double a_scale_factor,
+                const struct units *us, const struct physical_consts *pcs,
+                const struct cosmology *cosmo, const struct params *pars) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -1040,9 +1041,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
                     const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
-                    halos[i].x_com[0] += (int_to_pos_fac * com[0] + fx) * mass;
-                    halos[i].x_com[1] += (int_to_pos_fac * com[1] + fy) * mass;
-                    halos[i].x_com[2] += (int_to_pos_fac * com[2] + fz) * mass;
+                    /* Centre of mass (use relative position for periodic boundary conditions) */
+                    halos[i].x_com[0] += fx * mass;
+                    halos[i].x_com[1] += fy * mass;
+                    halos[i].x_com[2] += fz * mass;
                     halos[i].v_com[0] += parts[index_a].v[0] * mass;
                     halos[i].v_com[1] += parts[index_a].v[1] * mass;
                     halos[i].v_com[2] += parts[index_a].v[2] * mass;
@@ -1074,21 +1076,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].v_com[1] *= inv_halo_mass;
             halos[i].v_com[2] *= inv_halo_mass;
         }
+
+        /* Add the FOF CoM to get the absolute position */
+        halos[i].x_com[0] += (*fofs)[i].x_com[0];
+        halos[i].x_com[1] += (*fofs)[i].x_com[1];
+        halos[i].x_com[2] += (*fofs)[i].x_com[2];
     }
 
-    /* Print the halo properties to a file */
-    /* TODO: replace by HDF5 output */
-    char fname[50];
-    sprintf(fname, "halos_SO_%04d_%03d.txt", output_num, rank);
-    FILE *f = fopen(fname, "w");
-
-    fprintf(f, "# i M_FOF npart_FOF M_tot M_SO R_SO npart_SO x[0] x[1] x[2] v[0] v[1] v[2] x_fof[0] x_fof[1] x_fof[2] \n");
-    for (long int i = 0; i < num_local_fofs; i++) {
-        fprintf(f, "%ld %g %d %g %g %g %d %g %g %g %g %g %g %g %g %g\n", (*fofs)[i].global_id, (*fofs)[i].mass_fof, (*fofs)[i].npart, halos[i].mass_tot, halos[i].M_SO, halos[i].R_SO, halos[i].npart_tot, halos[i].x_com[0], halos[i].x_com[1], halos[i].x_com[2], halos[i].v_com[0], halos[i].v_com[1], halos[i].v_com[2], (*fofs)[i].x_com[0], (*fofs)[i].x_com[1], (*fofs)[i].x_com[2]);
-    }
-
-    /* Close the file */
-    fclose(f);
+    /* Export the SO properties to an HDF5 file */
+    exportSOCatalogue(pars, us, pcs, output_num, a_scale_factor, total_num_fofs, num_local_fofs, halos);
 
     /* Timer */
     timer_stop(rank, &so_timer, "Writing SO halo properties took ");

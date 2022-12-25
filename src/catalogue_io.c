@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <math.h>
 #include "../include/analysis_fof.h"
+#include "../include/analysis_so.h"
 #include "../include/catalogue_io.h"
 #include "../include/git_version.h"
 
@@ -389,3 +390,150 @@ int exportCatalogue(const struct params *pars, const struct units *us,
 }
 
 
+int exportSOCatalogue(const struct params *pars, const struct units *us,
+                      const struct physical_consts *pcs, int output_num, double a,
+                      long int total_num_structures, long int local_num_structures,
+                      struct so_halo *so_halos) {
+
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* Form the filename */
+    char fname[DEFAULT_STRING_LENGTH];
+    sprintf(fname, "%s_%04d.hdf5", pars->CatalogueBaseName, output_num);
+
+    /* The HDF5 group name of each halo type */
+    const char ExportName[100] = "SO_200_crit";
+
+    /* Property list for MPI file access */
+    hid_t prop_faxs = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_mpio(prop_faxs, MPI_COMM_WORLD, MPI_INFO_NULL);
+
+    /* Open the hdf5 file */
+    hid_t h_out_file = H5Fopen(fname, H5F_ACC_RDWR, prop_faxs);
+    H5Pclose(prop_faxs);
+
+    /* Create vector & scalar dataspace for all data of this type */
+    const hsize_t vrank = 2;
+    const hsize_t srank = 1;
+    const hsize_t vdims[2] = {total_num_structures, 3};
+    const hsize_t sdims[1] = {total_num_structures};
+    hid_t h_vspace = H5Screate_simple(vrank, vdims, NULL);
+    hid_t h_sspace = H5Screate_simple(srank, sdims, NULL);
+
+    /* Set chunking for vectors */
+    hid_t h_prop_vec = H5Pcreate(H5P_DATASET_CREATE);
+    const hsize_t vchunk[2] = {HDF5_CHUNK_SIZE, 3};
+    H5Pset_chunk(h_prop_vec, vrank, vchunk);
+
+    /* Set chunking for scalars */
+    hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
+    const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
+    H5Pset_chunk(h_prop_sca, srank, schunk);
+
+    /* Create vector & scalar datapsace for smaller chunks of data */
+    const hsize_t ch_vdims[2] = {local_num_structures, 3};
+    const hsize_t ch_sdims[1] = {local_num_structures};
+    hid_t h_ch_vspace = H5Screate_simple(vrank, ch_vdims, NULL);
+    hid_t h_ch_sspace = H5Screate_simple(srank, ch_sdims, NULL);
+
+    /* Determine the number of structures on each rank */
+    long long int *halonum_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
+    long long int *first_id_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
+    halonum_by_rank[rank] = local_num_structures;
+    MPI_Allreduce(MPI_IN_PLACE, halonum_by_rank, MPI_Rank_Count, MPI_LONG_LONG,
+                  MPI_SUM, MPI_COMM_WORLD);
+
+    /* Determine the start of the hyperslab corresponding to each rank */
+    for (int i = 1; i < MPI_Rank_Count; i++) {
+        first_id_by_rank[i] = first_id_by_rank[i - 1] + halonum_by_rank[i - 1];
+    }
+
+    /* The start of this chunk, in the overall vector & scalar spaces */
+    const hsize_t start_in_group = first_id_by_rank[rank];
+    const hsize_t vstart[2] = {start_in_group, 0}; //always with the "x" coordinate
+    const hsize_t sstart[1] = {start_in_group};
+
+    /* Free memory */
+    free(halonum_by_rank);
+    free(first_id_by_rank);
+
+    /* Choose the corresponding hyperslabs inside the overall spaces */
+    H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
+    H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
+
+    /* Unpack the halo data into contiguous arrays */
+    long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
+    double *coms = malloc(3 * local_num_structures * sizeof(double));
+    double *vels = malloc(3 * local_num_structures * sizeof(double));
+    double *masses = malloc(1 * local_num_structures * sizeof(double));
+    double *radii = malloc(1 * local_num_structures * sizeof(double));
+    int *nparts = malloc(3 * local_num_structures * sizeof(int));
+    for (long long i = 0; i < local_num_structures; i++) {
+        struct so_halo *h = &so_halos[i];
+        /* Unpack the particle IDs */
+        ids[i] = h->global_id;
+        /* Unpack the CoM coordinates */
+        coms[i * 3 + 0] = h->x_com[0];
+        coms[i * 3 + 1] = h->x_com[1];
+        coms[i * 3 + 2] = h->x_com[2];
+        /* Unpack the CoM velocities */
+        vels[i * 3 + 0] = h->v_com[0];
+        vels[i * 3 + 1] = h->v_com[1];
+        vels[i * 3 + 2] = h->v_com[2];
+        /* Unpack the SO masses and radii */
+        masses[i] = h->M_SO;
+        radii[i] = h->R_SO;
+        /* Unpack the particle numbers */
+        nparts[i] = h->npart_tot;
+    }
+
+    /* Open the particle group in the output file */
+    hid_t h_grp = H5Gopen(h_out_file, ExportName, H5P_DEFAULT);
+
+    /* Write halo id data (scalar) */
+    hid_t h_data = H5Dopen(h_grp, "ID", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_LLONG, h_ch_sspace, h_sspace, H5P_DEFAULT, ids);
+    H5Dclose(h_data);
+    free(ids);
+
+    /* Write centre of mass data (vector) */
+    h_data = H5Dopen(h_grp, "CentreOfMass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, coms);
+    H5Dclose(h_data);
+    free(coms);
+
+    /* Write mass data (scalar) */
+    h_data = H5Dopen(h_grp, "Mass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
+    H5Dclose(h_data);
+    free(masses);
+
+    /* Write particle number data (scalar) */
+    h_data = H5Dopen(h_grp, "ParticleNumber", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, H5P_DEFAULT, nparts);
+    H5Dclose(h_data);
+    free(nparts);
+
+    /* Write radius data (scalar) */
+    h_data = H5Dopen(h_grp, "Radius", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, radii);
+    H5Dclose(h_data);
+    free(radii);
+
+    /* Write centre of mass velocity data (vector) */
+    h_data = H5Dopen(h_grp, "CentreOfMassVelocity", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
+    H5Dclose(h_data);
+    free(vels);
+
+    /* Close the group */
+    H5Gclose(h_grp);
+
+    /* Close the file */
+    H5Fclose(h_out_file);
+
+    return 0;
+}

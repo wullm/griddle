@@ -28,10 +28,15 @@
 #include "params.h"
 #include "units.h"
 #include "analysis_fof.h"
+#include "analysis_so.h"
 
 int exportCatalogue(const struct params *pars, const struct units *us,
                     const struct physical_consts *pcs, int output_num, double a,
                     long int total_num_structures, long int local_num_structures,
                     struct fof_halo *fofs);
+int exportSOCatalogue(const struct params *pars, const struct units *us,
+                    const struct physical_consts *pcs, int output_num, double a,
+                    long int total_num_structures, long int local_num_structures,
+                    struct so_halo *so_halos);
 
 #endif

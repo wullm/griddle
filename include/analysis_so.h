@@ -66,9 +66,9 @@ static inline int soPartSort(const void *a, const void *b) {
 
 int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long int Np, long long int Ng, long long int num_localpart,
-                long long int max_partnum, long int num_fofs, int output_num,
-                double a_scale_factor, const struct units *us,
-                const struct physical_consts *pcs,
-                const struct cosmology *cosmo);
+                long long int max_partnum, long int total_num_fofs,
+                long int num_local_fofs, int output_num, double a_scale_factor,
+                const struct units *us, const struct physical_consts *pcs,
+                const struct cosmology *cosmo, const struct params *pars);
 
 #endif

@@ -191,7 +191,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
-                 const struct cosmology *cosmo, struct params *pars, double a) {
+                 const struct cosmology *cosmo, struct params *pars) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -769,7 +769,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     free(cell_list);
 
     /* Export the FOF properties to an HDF5 file */
-    exportCatalogue(pars, us, pcs, output_num, a, total_halo_num, num_structures, fofs);
+    exportCatalogue(pars, us, pcs, output_num, a_scale_factor, total_halo_num, num_structures, fofs);
 
     /* Timer */
     timer_stop(rank, &fof_timer, "Writing FOF halo properties took ");
@@ -779,7 +779,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         message(rank, "Proceeding with spherical overdensity calculations.\n");
 
         analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
-                    num_structures, output_num, a_scale_factor,us,pcs, cosmo);
+                    total_halo_num, num_structures, output_num, a_scale_factor,
+                    us, pcs, cosmo, pars);
     }
 
     /* Free the remaining memory */
