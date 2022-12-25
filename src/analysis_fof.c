@@ -760,6 +760,34 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         fofs[i].x_com[2] += int_to_pos_fac * fof_parts[centre_particle].x[2];
     }
 
+    /* Determine the maximum distance of FOF particles to the CoM */
+    for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+        /* Skip disabled particles */
+        if (fof_parts[i].root == -1) continue;
+
+        long int root = fof_parts[i].root;
+        long int h = halo_ids[root] - halo_rank_offsets[rank];
+
+        if (h >= 0) {
+            /* Compute the offset from the centre of mass */
+            const IntPosType dx = fof_parts[i].x[0] - fofs[h].x_com[0] * pos_to_int_fac;
+            const IntPosType dy = fof_parts[i].x[1] - fofs[h].x_com[1] * pos_to_int_fac;
+            const IntPosType dz = fof_parts[i].x[2] - fofs[h].x_com[2] * pos_to_int_fac;
+
+            /* Enforce boundary conditions and convert to physical lengths */
+            const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+            const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+            const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+            const double f2 = fx * fx + fy * fy + fz * fz;
+            const double R2 = fofs[h].radius_fof * fofs[h].radius_fof;
+
+            if (f2 > R2) {
+                fofs[h].radius_fof = sqrt(f2);
+            }
+        }
+    }
+
     /* We are done with the FOF particle data and cell structures */
     free(halo_ids);
     free(centre_particles);

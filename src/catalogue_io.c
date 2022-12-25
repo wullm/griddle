@@ -252,14 +252,13 @@ int exportCatalogue(const struct params *pars, const struct units *us,
             /* Numbers of particles (use scalar space) */
             h_data = H5Dcreate(h_grp, "ParticleNumber", H5T_NATIVE_INT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
             H5Dclose(h_data);
-            
+
+            /* Numbers of particles (use scalar space) */
+            h_data = H5Dcreate(h_grp, "Radius", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+            H5Dclose(h_data);
+
             /* The following properties are only for SO halos */
             if (t == 1) {
-            
-                /* Numbers of particles (use scalar space) */
-                h_data = H5Dcreate(h_grp, "Radius", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-                H5Dclose(h_data);
-                
                 /* Centre of Mass velocities (use vector space) */
                 h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
@@ -338,6 +337,7 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
     double *coms = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
+    double *radii = malloc(1 * local_num_structures * sizeof(double));
     int *nparts = malloc(3 * local_num_structures * sizeof(int));
     for (long long i = 0; i < local_num_structures; i++) {
         struct fof_halo *h = &fofs[i];
@@ -347,8 +347,9 @@ int exportCatalogue(const struct params *pars, const struct units *us,
         coms[i * 3 + 0] = h->x_com[0];
         coms[i * 3 + 1] = h->x_com[1];
         coms[i * 3 + 2] = h->x_com[2];
-        /* Unpack the masses */
+        /* Unpack the masses and radii */
         masses[i] = h->mass_fof;
+        radii[i] = h->radius_fof;
         /* Unpack the particle numbers */
         nparts[i] = h->npart;
     }
@@ -379,6 +380,12 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, H5P_DEFAULT, nparts);
     H5Dclose(h_data);
     free(nparts);
+
+    /* Write radius data (scalar) */
+    h_data = H5Dopen(h_grp, "Radius", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, radii);
+    H5Dclose(h_data);
+    free(radii);
 
     /* Close the group */
     H5Gclose(h_grp);

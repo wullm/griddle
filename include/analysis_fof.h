@@ -93,6 +93,8 @@ struct fof_halo {
     double x_com[3];
     /* Total mass of the FOF particles */
     double mass_fof;
+    /* Maximum distance between FOF particles and the CoM */
+    double radius_fof;
     /* Number of linked FOF particles */
     int npart;
     /* Home rank of the halo */
@@ -157,10 +159,10 @@ static inline MPI_Datatype mpi_fof_halo_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[5] = {MPI_LONG, MPI_DOUBLE, MPI_DOUBLE,
-                             MPI_INT, MPI_INT};
-    int lengths[5];
-    MPI_Aint displacements[5];
+    MPI_Datatype types[6] = {MPI_LONG, MPI_DOUBLE, MPI_DOUBLE,
+                             MPI_DOUBLE, MPI_INT, MPI_INT};
+    int lengths[6];
+    MPI_Aint displacements[6];
     MPI_Aint base_address;
     struct fof_halo temp;
     MPI_Get_address(&temp, &base_address);
@@ -182,6 +184,12 @@ static inline MPI_Datatype mpi_fof_halo_type() {
     /* Mass */
     lengths[counter] = 1;
     MPI_Get_address(&temp.mass_fof, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Maximum distance to CoM */
+    lengths[counter] = 1;
+    MPI_Get_address(&temp.radius_fof, &displacements[counter]);
     displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
     counter++;
 
