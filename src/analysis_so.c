@@ -992,8 +992,13 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             com[1] += sphere_com[1] * pos_to_int_fac;
             com[2] += sphere_com[2] * pos_to_int_fac;
 
+            /* Also compute the CoM in physical units */
+            sphere_com[0] = com[0] * int_to_pos_fac;
+            sphere_com[1] = com[1] * int_to_pos_fac;
+            sphere_com[2] = com[2] * int_to_pos_fac;
+
             /* Determine all cells that overlap with the search radius */
-            find_overlapping_cells((*fofs)[i].x_com, max_radius, pos_to_cell_fac,
+            find_overlapping_cells(sphere_com, max_radius, pos_to_cell_fac,
                                    N_cells, &cells, &num_overlap);
 
             /* Iterate the shrinking sphere algorithm */
