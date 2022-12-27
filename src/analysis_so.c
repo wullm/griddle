@@ -711,9 +711,24 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     /* Timer */
     struct timepair so_timer;
     timer_start(rank, &so_timer);
+    
+    /* Find the maximum necessary search radius for SO particles */
+    double local_max = 0.0;
+    for (long int i = 0; i < num_local_fofs; i++) {
+        double search_radius = (*fofs)[i].radius_fof * 1.01;
+        if (search_radius > local_max) {
+            local_max = search_radius;
+        }
+    }
+    
+    /* Find the global maximum */
+    double global_max;
+    MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    
+    message(rank, "Maximum search radius for SO particles: %g U_L\n", global_max);
 
     /* Spherical overdensity search radius */
-    const double max_radius = 12.0 * MPC_METRES / us->UnitLengthMetres;
+    const double max_radius = global_max;
     const double max_radius_2 = max_radius * max_radius;
 
     /* Compute the critical density */
