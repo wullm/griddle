@@ -909,9 +909,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             r *= rfac;
         }
 
-        /* Determine all cells that overlap with the initial search radius */
-        find_overlapping_cells(halos[i].x_com, r_ini * 1.01, pos_to_cell_fac,
-                               N_cells, &cells, &num_overlap);
+        /* Determine all cells that overlap with the search radius */
+        const double SO_search_radius = (*fofs)[i].radius_fof * 1.1;
+        const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
+        find_overlapping_cells(halos[i].x_com, SO_search_radius,
+                               pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Count the number of particles */
         long int nearby_partnum = 0;
@@ -930,7 +932,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                if (r2 < max_radius_2) {
+                if (r2 < SO_search_radius_2) {
                     nearby_partnum++;
                 }
             } /* End particle loop */
@@ -959,7 +961,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                if (r2 < max_radius_2) {
+                if (r2 < SO_search_radius_2) {
                     so_parts[part_counter].m = parts[index_a].m;
                     so_parts[part_counter].r = sqrtf(r2);
                     part_counter++;
