@@ -289,7 +289,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
         p_select = 1;
         
         /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells(halos[i].x_com, halos[i].R_SO * 10,
+        find_overlapping_cells(halos[i].x_com, halos[i].R_SO,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
