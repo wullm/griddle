@@ -64,6 +64,9 @@ static inline int soPartSort(const void *a, const void *b) {
     return pa->r >= pb->r;
 }
 
+int find_overlapping_cells(const double com[3], double search_radius,
+                           double pos_to_cell_fac, int N_cells,
+                           int **cells, int *num_overlap);
 int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long int Np, long long int Ng, long long int num_localpart,
                 long long int max_partnum, long int total_num_fofs,

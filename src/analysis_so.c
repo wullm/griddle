@@ -30,6 +30,7 @@
 #include "../include/analysis_fof.h"
 #include "../include/analysis_so.h"
 #include "../include/catalogue_io.h"
+#include "../include/snip_io.h"
 #include "../include/message.h"
 
 #define DEBUG_CHECKS
@@ -1208,11 +1209,16 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     double reduce_factor = 0.01;
     int min_part_export_per_halo = 5;
 
-    generate_snipshot(parts, *fofs, halos, boxlen, Np, Ng, num_localpart,
-                      num_foreign_parts, num_local_fofs, output_num,
-                      a_scale_factor, N_cells, reduce_factor,
-                      min_part_export_per_halo, cell_list, cell_counts,
-                      cell_offsets, max_radius, us, pcs, cosmo);
+    exportSnipshot(pars, us, halos, pcs, parts, cosmo, cell_list, cell_counts,
+                   cell_offsets, output_num, a_scale_factor, Ng, N_cells,
+                   reduce_factor, min_part_export_per_halo, num_localpart,
+                   num_local_fofs);
+
+    // generate_snipshot(parts, *fofs, halos, boxlen, Np, Ng, num_localpart,
+    //                   num_foreign_parts, num_local_fofs, output_num,
+    //                   a_scale_factor, N_cells, reduce_factor,
+    //                   min_part_export_per_halo, cell_list, cell_counts,
+    //                   cell_offsets, max_radius, us, pcs, cosmo);
 
     /* Timer */
     timer_stop(rank, &so_timer, "Generating a halo particle snipshot took ");

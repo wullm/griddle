@@ -66,7 +66,9 @@ int readParams(struct params *pars, const char *fname) {
      pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
      pars->CatalogueBaseName = malloc(len);
+     pars->SnipBaseName = malloc(len);
      ini_gets("HaloFinding", "BaseName", "catalogue", pars->CatalogueBaseName, len, fname);
+     ini_gets("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname);
 
      return 0;
 }
@@ -78,6 +80,7 @@ int cleanParams(struct params *pars) {
     free(pars->SnapshotTimesString);
     free(pars->SnapshotBaseName);
     free(pars->CatalogueBaseName);
+    free(pars->SnipBaseName);
 
     return 0;
 }

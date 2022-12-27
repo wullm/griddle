@@ -59,6 +59,7 @@ struct params {
     double LinkingLength;
     int MinHaloParticleNum;
     char *CatalogueBaseName;
+    char *SnipBaseName;
 
 };
 
