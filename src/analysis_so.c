@@ -1075,37 +1075,42 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         /* Sort particles by radial distance */
         qsort(so_parts, nearby_partnum, sizeof(struct so_part_data), soPartSort);
 
-        /* Compute the enclosed mass and density ratio at each particle */
-        const double dens_fac = (4.0 / 3.0) * M_PI * rho_crit;
-        const double inv_fac = 1.0 / dens_fac;
+        /* Compute the cumulative mass profile */
         for (long int j = 1; j < nearby_partnum; j++) {
             so_parts[j].m += so_parts[j - 1].m;
+        }
+        /* Compute the normalized cumulative density profile */
+        const double dens_fac = (4.0 / 3.0) * M_PI * rho_crit;
+        const double inv_fac = 1.0 / dens_fac;
+        for (long int j = 0; j < nearby_partnum; j++) {
             if (so_parts[j].r > 0) {
                 double r3 = so_parts[j].r * so_parts[j].r * so_parts[j].r;
                 so_parts[j].Delta = so_parts[j].m * inv_fac / r3;
             }
         }
 
-        /* Find the first particle that exceeds the threshold */
-        long int first_above = -1;
+        /* Find the first particle with non-zero radius and positive mass */
+        long int first_nonzero = -1;
         for (long int j = 0; j < nearby_partnum; j++) {
-            /* Skip particles at zero radial distance */
-            if (so_parts[j].r == 0) continue;
+            /* Skip particles at zero radius or with negative cumulative mass */
+            if (so_parts[j].r == 0 || so_parts[j].m <= 0) continue;
 
-            if (so_parts[j].Delta >= threshold) {
-                first_above = j;
-                break;
-            }
+            first_nonzero = j;
+            break;
         }
 
-        /* If no particle exceeds the threshold, interpolate up to particle 1 */
-        if (first_above == -1) {
-            halos[i].R_SO = sqrt(so_parts[0].m * inv_fac / (threshold * so_parts[0].r));
+        if (first_nonzero == -1) {
+            printf("Error: No particles with positive radius and mass.\n");
+            exit(1);
+        } else if (so_parts[first_nonzero].Delta < threshold) {
+            /* If no particle exceeds the threshold, linearly interpolate
+             * the mass up to the first particle with non-zero radius & mass */
+            halos[i].R_SO = sqrt(so_parts[first_nonzero].m * inv_fac / (threshold * so_parts[first_nonzero].r));
             halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * dens_fac * threshold;
         } else {
             /* Find the first particle after this that drops below the threshold */
             long int first_below = -1;
-            for (long int j = first_above; j < nearby_partnum; j++) {
+            for (long int j = first_nonzero; j < nearby_partnum; j++) {
                 /* Skip particles at zero radial distance */
                 if (so_parts[j].r == 0) continue;
 
