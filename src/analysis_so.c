@@ -761,10 +761,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     /* Loop over local halos */
     for (long int i = 0; i < num_local_fofs; i++) {
 
-        /* Compute the integer position of the FOF COM */
-        IntPosType com[3] = {(*fofs)[i].x_com[0] * pos_to_int_fac,
-                             (*fofs)[i].x_com[1] * pos_to_int_fac,
-                             (*fofs)[i].x_com[2] * pos_to_int_fac};
+        /* Initially, use the centre of mass of the FOF group */
+        halos[i].x_com[0] = (*fofs)[i].x_com[0];
+        halos[i].x_com[1] = (*fofs)[i].x_com[1];
+        halos[i].x_com[2] = (*fofs)[i].x_com[2];
+
+        /* Compute the integer position of the COM */
+        IntPosType com[3] = {halos[i].x_com[0] * pos_to_int_fac,
+                             halos[i].x_com[1] * pos_to_int_fac,
+                             halos[i].x_com[2] * pos_to_int_fac};
 
         /* First perform a shrinking sphere algorithm to determine the centre */
         /* TODO: make parameters */
@@ -783,7 +788,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         }
 
         /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells((*fofs)[i].x_com, r_ini * 1.01, pos_to_cell_fac,
+        find_overlapping_cells(halos[i].x_com, r_ini * 1.01, pos_to_cell_fac,
                                N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
@@ -824,6 +829,12 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             double sphere_vel[3] = {0., 0., 0.};
             double sphere_mass = 0.;
             int sphere_npart = 0;
+
+            if (r < r_ini) {
+                /* Determine all cells that overlap with the new search radius */
+                find_overlapping_cells(halos[i].x_com, r * 1.01, pos_to_cell_fac,
+                                       N_cells, &cells, &num_overlap);
+            }
 
             /* Loop over cells */
             for (int c = 0; c < num_overlap; c++) {
@@ -896,11 +907,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             m = sphere_mass;
             npart = sphere_npart;
             r *= rfac;
-
-            /* Determine all cells that overlap with the search radius */
-            find_overlapping_cells(halos[i].x_com, r * 1.01, pos_to_cell_fac,
-                                   N_cells, &cells, &num_overlap);
         }
+
+        /* Determine all cells that overlap with the initial search radius */
+        find_overlapping_cells(halos[i].x_com, r_ini * 1.01, pos_to_cell_fac,
+                               N_cells, &cells, &num_overlap);
 
         /* Count the number of particles */
         long int nearby_partnum = 0;
