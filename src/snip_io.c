@@ -352,8 +352,8 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     /* Reallocate the particle data arrays */
     coords = realloc(coords, 3 * particles_total * sizeof(double));
     vels = realloc(vels, 3 * particles_total * sizeof(double));
-    ids = realloc(coords, 1 * particles_total * sizeof(long long));
-    masses = realloc(coords, 1 * particles_total * sizeof(double));
+    ids = realloc(ids, 1 * particles_total * sizeof(long long));
+    masses = realloc(masses, 1 * particles_total * sizeof(double));
 
     /* Determine the number of particles on each rank */
     long long int *partnum_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
