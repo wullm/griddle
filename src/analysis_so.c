@@ -596,8 +596,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     message(rank, "Maximum search radius for SO particles: %g U_L\n", global_max);
 
     /* Spherical overdensity search radius */
+    const double min_radius = 10.0 * MPC_METRES / us->UnitLengthMetres;
     const double max_radius = global_max;
-    const double max_radius_2 = max_radius * max_radius;
 
     /* Compute the critical density */
     const double h = cosmo->h;
@@ -910,7 +910,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         }
 
         /* Determine all cells that overlap with the search radius */
-        const double SO_search_radius = (*fofs)[i].radius_fof * 1.1;
+        const double SO_search_radius = fmax(min_radius, (*fofs)[i].radius_fof * 1.1);
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
         find_overlapping_cells(halos[i].x_com, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
