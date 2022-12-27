@@ -883,10 +883,6 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                              (*fofs)[i].x_com[1] * pos_to_int_fac,
                              (*fofs)[i].x_com[2] * pos_to_int_fac};
 
-        /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells((*fofs)[i].x_com, max_radius, pos_to_cell_fac,
-                               N_cells, &cells, &num_overlap);
-
         /* First perform a shrinking sphere algorithm to determine the centre */
         /* TODO: make parameters */
         const double rfac = 0.95;
@@ -902,6 +898,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             printf("Error: Maximum search radius too small.\n");
             exit(1);
         }
+
+        /* Determine all cells that overlap with the search radius */
+        find_overlapping_cells((*fofs)[i].x_com, r_ini * 1.01, pos_to_cell_fac,
+                               N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
         for (int c = 0; c < num_overlap; c++) {
@@ -1008,14 +1008,14 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].v_com[1] = sphere_vel[1];
             halos[i].v_com[2] = sphere_vel[2];
 
-            /* Determine all cells that overlap with the search radius */
-            find_overlapping_cells(halos[i].x_com, max_radius, pos_to_cell_fac,
-                                   N_cells, &cells, &num_overlap);
-
             /* Iterate the shrinking sphere algorithm */
             m = sphere_mass;
             npart = sphere_npart;
             r *= rfac;
+
+            /* Determine all cells that overlap with the search radius */
+            find_overlapping_cells(halos[i].x_com, r * 1.01, pos_to_cell_fac,
+                                   N_cells, &cells, &num_overlap);
         }
 
         /* Count the number of particles */
