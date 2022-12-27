@@ -241,8 +241,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
         } else {
             p_select = reduce_factor;
         }
-        
-        p_select = 1;
 
         maximum_local_number += p_select * halos[i].npart_tot * 1.1;                               
     }
@@ -285,8 +283,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
         } else {
             p_select = reduce_factor;
         }
-        
-        p_select = 1;
         
         /* Determine all cells that overlap with the search radius */
         find_overlapping_cells(halos[i].x_com, halos[i].R_SO,
