@@ -1135,56 +1135,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 halos[i].R_SO = so_parts[first_below - 1].r + (threshold - so_parts[first_below - 1].Delta) * delta_r / delta_Delta;
                 halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * dens_fac * threshold;
             }
-
-
         }
-
-        /* The square of the SO radius */
-        double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
-
-//         /* Loop over cells to compute other SO properties */
-//         for (int c = 0; c < num_overlap; c++) {
-//             /* Find the particle count and offset of the cell */
-//             int cell = cells[c];
-//             long int local_count = cell_counts[cell];
-//             long int local_offset = cell_offsets[cell];
-// 
-//             /* Loop over particles in cells */
-//             for (int a = 0; a < local_count; a++) {
-//                 const int index_a = cell_list[local_offset + a].offset;
-// 
-//                 const IntPosType *xa = parts[index_a].x;
-//                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-// 
-//                 if (r2 < R_SO_2) {
-// #ifdef WITH_MASSES
-//                     double mass = parts[index_a].m;
-// #else
-//                     double mass = part_mass;
-// #endif
-//                     /* Compute the offset from the FOF CoM */
-//                     const IntPosType dx = parts[index_a].x[0] - com[0];
-//                     const IntPosType dy = parts[index_a].x[1] - com[1];
-//                     const IntPosType dz = parts[index_a].x[2] - com[2];
-// 
-//                     /* Enforce boundary conditions and convert to physical lengths */
-//                     const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
-//                     const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
-//                     const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
-// 
-//                     /* Centre of mass (use relative position for periodic boundary conditions) */
-//                     halos[i].x_com[0] += fx * mass;
-//                     halos[i].x_com[1] += fy * mass;
-//                     halos[i].x_com[2] += fz * mass;
-//                     halos[i].v_com[0] += parts[index_a].v[0] * mass;
-//                     halos[i].v_com[1] += parts[index_a].v[1] * mass;
-//                     halos[i].v_com[2] += parts[index_a].v[2] * mass;
-//                     halos[i].mass_tot += mass;
-//                     halos[i].npart_tot++;
-//                 }
-//             } /* End particle loop */
-//         } /* End cell loop */
-//     } /* End halo loop */
+    } /* End halo loop */
 
     /* Free memory for SO part data */
     free(so_parts);
@@ -1194,25 +1146,6 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Free the cell indices */
     free(cells);
-
-    // /* Divide by the mass for the centre of mass properties */
-    // for (long int i = 0; i < num_local_fofs; i++) {
-    //     double halo_mass = halos[i].mass_tot;
-    //     if (halo_mass > 0) {
-    //         double inv_halo_mass = 1.0 / halo_mass;
-    //         halos[i].x_com[0] *= inv_halo_mass;
-    //         halos[i].x_com[1] *= inv_halo_mass;
-    //         halos[i].x_com[2] *= inv_halo_mass;
-    //         halos[i].v_com[0] *= inv_halo_mass;
-    //         halos[i].v_com[1] *= inv_halo_mass;
-    //         halos[i].v_com[2] *= inv_halo_mass;
-    //     }
-    // 
-    //     /* Add the FOF CoM to get the absolute position */
-    //     halos[i].x_com[0] += (*fofs)[i].x_com[0];
-    //     halos[i].x_com[1] += (*fofs)[i].x_com[1];
-    //     halos[i].x_com[2] += (*fofs)[i].x_com[2];
-    // }
 
     /* Export the SO properties to an HDF5 file */
     exportSOCatalogue(pars, us, pcs, output_num, a_scale_factor, total_num_fofs, num_local_fofs, halos);
