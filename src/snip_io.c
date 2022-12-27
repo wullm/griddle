@@ -299,8 +299,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
             
-            printf("happens %d\n", halos[i].npart_tot);
-
             /* Loop over particles in cells */
             for (int a = 0; a < local_count; a++) {
                 const int index_a = cell_list[local_offset + a].offset;
