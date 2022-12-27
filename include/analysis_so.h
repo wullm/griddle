@@ -51,6 +51,8 @@ struct so_halo {
     double M_SO;
     /* Spherical overdensity radius */
     double R_SO;
+    /* Radius enclosing the innermost particles that determine the CoM */
+    double R_inner;
     /* Total number of particles within the SO radius */
     int npart_tot;
     /* Home rank of the halo */

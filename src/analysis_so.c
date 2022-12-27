@@ -890,6 +890,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].v_com[0] = sphere_vel[0];
             halos[i].v_com[1] = sphere_vel[1];
             halos[i].v_com[2] = sphere_vel[2];
+            halos[i].R_inner = r;
 
             /* Iterate the shrinking sphere algorithm */
             m = sphere_mass;

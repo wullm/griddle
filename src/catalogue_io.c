@@ -253,12 +253,16 @@ int exportCatalogue(const struct params *pars, const struct units *us,
             h_data = H5Dcreate(h_grp, "ParticleNumber", H5T_NATIVE_INT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
             H5Dclose(h_data);
 
-            /* Numbers of particles (use scalar space) */
+            /* Halo radius (use scalar space) */
             h_data = H5Dcreate(h_grp, "Radius", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
             H5Dclose(h_data);
 
             /* The following properties are only for SO halos */
             if (t == 1) {
+                /* Radius enclosing the innermost particles that determine the CoM for SO halos (use scalar space) */
+                h_data = H5Dcreate(h_grp, "InnerRadius", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+                H5Dclose(h_data);
+
                 /* Centre of Mass velocities (use vector space) */
                 h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
@@ -477,6 +481,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     double *vels = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
     double *radii = malloc(1 * local_num_structures * sizeof(double));
+    double *inner_radii = malloc(1 * local_num_structures * sizeof(double));
     int *nparts = malloc(3 * local_num_structures * sizeof(int));
     for (long long i = 0; i < local_num_structures; i++) {
         struct so_halo *h = &so_halos[i];
@@ -493,6 +498,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         /* Unpack the SO masses and radii */
         masses[i] = h->M_SO;
         radii[i] = h->R_SO;
+        inner_radii[i] = h->R_inner;
         /* Unpack the particle numbers */
         nparts[i] = h->npart_tot;
     }
@@ -529,6 +535,12 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, radii);
     H5Dclose(h_data);
     free(radii);
+
+    /* Write inner radius data (scalar) */
+    h_data = H5Dopen(h_grp, "InnerRadius", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, inner_radii);
+    H5Dclose(h_data);
+    free(inner_radii);
 
     /* Write centre of mass velocity data (vector) */
     h_data = H5Dopen(h_grp, "CentreOfMassVelocity", H5P_DEFAULT);
