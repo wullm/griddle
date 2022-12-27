@@ -1141,6 +1141,36 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 halos[i].M_SO = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO * dens_fac * threshold;
             }
         }
+
+        /* The square of the SO radius */
+        double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
+
+        /* Loop over cells to compute other SO properties */
+        for (int c = 0; c < num_overlap; c++) {
+            /* Find the particle count and offset of the cell */
+            int cell = cells[c];
+            long int local_count = cell_counts[cell];
+            long int local_offset = cell_offsets[cell];
+
+            /* Loop over particles in cells */
+            for (int a = 0; a < local_count; a++) {
+                const int index_a = cell_list[local_offset + a].offset;
+
+                const IntPosType *xa = parts[index_a].x;
+                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                if (r2 < R_SO_2) {
+#ifdef WITH_MASSES
+                    double mass = parts[index_a].m;
+#else
+                    double mass = part_mass;
+#endif
+                    /* Accumulate mass in the SO window */
+                    halos[i].mass_tot += mass;
+                    halos[i].npart_tot++;
+                }
+            } /* End particle loop */
+        } /* End cell loop */
     } /* End halo loop */
 
     /* Free memory for SO part data */

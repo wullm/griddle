@@ -41,9 +41,9 @@ struct so_part_data {
 struct so_halo {
     /* Global ID of the halo */
     long int global_id;
-    /* Centre of mass of the SO particles */
+    /* Centre of mass of the innermost SO particles */
     double x_com[3];
-    /* Centre of mass velocity of the SO particles */
+    /* Centre of mass velocity of the innermost SO particles */
     double v_com[3];
     /* Total mass of the SO particles */
     double mass_tot; // ( = M_SO up to errors)
