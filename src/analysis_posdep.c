@@ -303,7 +303,7 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
         double *isocymatic_power  = calloc(num_cells * nonzero_bins, sizeof(double));
         for (int i = 0; i < num_cells; i++) {
             for (int j = 0; j < nonzero_bins; j++) {
-                isocymatic_power[i * nonzero_bins + j] = strooklat_interp(&spline_k, valid_power + (i * nonzero_bins), valid_k[j] / cbrt(1.0 + deltas[i]));
+                isocymatic_power[i * nonzero_bins + j] = strooklat_interp(&spline_k, all_power_in_bins + (i * nonzero_bins), valid_k[j] / cbrt(1.0 + deltas[i]));
             }
         }
 
@@ -318,8 +318,8 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
         double dd = 0.;
         for (int i = 0; i < num_cells; i++) {
             for (int j = 0; j < nonzero_bins; j++) {
-                Pd[j] += valid_power[i * nonzero_bins + j] * deltas[i] / num_cells;
-                P[j] += valid_power[i * nonzero_bins + j] / num_cells;
+                Pd[j] += all_power_in_bins[i * nonzero_bins + j] * deltas[i] / num_cells;
+                P[j] += all_power_in_bins[i * nonzero_bins + j] / num_cells;
                 Pid[j] += isocymatic_power[i * nonzero_bins + j] * deltas[i] / num_cells;
                 Pi[j] += isocymatic_power[i * nonzero_bins + j] / num_cells;
             }
