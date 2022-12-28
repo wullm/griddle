@@ -323,6 +323,29 @@ int main(int argc, char *argv[]) {
 
     /* Check if there should be an output at the start */
     if (output_list[0] == a_begin) {
+        if (true) {
+            /* Timer */
+            struct timepair posdep_timer;
+            timer_start(rank, &posdep_timer);
+
+            message(rank, "Starting position-dependent power spectrum calculation.\n");
+
+            /* Initiate mass deposition */
+            mass_deposition(&mass, particles, local_partnum);
+            timer_stop(rank, &posdep_timer, "Computing mass density took ");
+
+            /* Merge the buffers with the main grid */
+            add_local_buffers(&mass);
+            timer_stop(rank, &posdep_timer, "Communicating buffers took ");
+
+            analysis_posdep(&mass, boxlen, N, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
+
+            /* Timer */
+            MPI_Barrier(MPI_COMM_WORLD);
+            timer_stop(rank, &posdep_timer, "Position-dependent power spectra took ");
+            message(rank, "\n");
+        }
+
         if (pars.DoHaloFindingWithSnapshots) {
             /* Timer */
             struct timepair fof_timer;
