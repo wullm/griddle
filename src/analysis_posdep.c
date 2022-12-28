@@ -212,6 +212,12 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
                 sub_masses[cell] += grid[l];
             }
 
+            /* Turn the mass grid into an over-density grid */
+            double avg_density = sub_masses[cell] / (sublen * sublen * sublen);
+            for (int l = 0; l < N_sub * N_sub * N_sub; l++) {
+                grid[l] = grid[l] / avg_density - 1.0;
+            }
+
             /* Fourier transform the sub-grid */
             fft_execute(r2c);
             fft_normalize_r2c(fgrid, N_sub, sublen);
