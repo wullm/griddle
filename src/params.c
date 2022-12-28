@@ -81,6 +81,11 @@ int readParams(struct params *pars, const char *fname) {
      pars->SnipshotReduceFactor =  ini_getd("HaloFinding", "SnipshotReduceFactor", 0.01, fname);
      pars->SnipshotMinParticleNum =  ini_getl("HaloFinding", "SnipshotMinParticleNum", 5, fname);
 
+     /* Power spectrum (for on-the-fly analysis) parameters */
+     pars->DoPowerSpectra =  ini_getl("PowerSpectra", "DoPowerSpectra", 0, fname);
+     pars->PowerSpectrumBins =  ini_getl("PowerSpectra", "PowerSpectrumBins", 50, fname);
+     pars->PositionDependentSplits =  ini_getl("PowerSpectra", "PositionDependentSplits", 8, fname);
+
      return 0;
 }
 

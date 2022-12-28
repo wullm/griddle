@@ -73,6 +73,11 @@ struct params {
     /* Snipshot parameters */
     double SnipshotReduceFactor;
     int SnipshotMinParticleNum;
+
+    /* Power spectrum (for on-the-fly analysis) parameters */
+    char DoPowerSpectra;
+    int PowerSpectrumBins;
+    int PositionDependentSplits;
 };
 
 int readParams(struct params *parser, const char *fname);

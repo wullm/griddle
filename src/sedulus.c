@@ -323,7 +323,7 @@ int main(int argc, char *argv[]) {
 
     /* Check if there should be an output at the start */
     if (output_list[0] == a_begin) {
-        if (true) {
+        if (pars.DoPowerSpectra) {
             /* Timer */
             struct timepair posdep_timer;
             timer_start(rank, &posdep_timer);
@@ -549,6 +549,29 @@ int main(int argc, char *argv[]) {
                                          strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
                 double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list[j]) -
                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+
+                if (pars.DoPowerSpectra) {
+                    /* Timer */
+                    struct timepair posdep_timer;
+                    timer_start(rank, &posdep_timer);
+
+                    message(rank, "Starting position-dependent power spectrum calculation.\n");
+
+                    /* Initiate mass deposition */
+                    mass_deposition(&mass, particles, local_partnum);
+                    timer_stop(rank, &posdep_timer, "Computing mass density took ");
+
+                    /* Merge the buffers with the main grid */
+                    add_local_buffers(&mass);
+                    timer_stop(rank, &posdep_timer, "Communicating buffers took ");
+
+                    analysis_posdep(&mass, boxlen, N, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
+
+                    /* Timer */
+                    MPI_Barrier(MPI_COMM_WORLD);
+                    timer_stop(rank, &posdep_timer, "Position-dependent power spectra took ");
+                    message(rank, "\n");
+                }
 
                 if (pars.DoHaloFindingWithSnapshots) {
                     /* Timer */

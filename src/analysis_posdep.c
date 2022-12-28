@@ -135,7 +135,7 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
     /* The number of sub-grids or cells */
-    const int N_cells = 8;
+    const int N_cells = pars->PositionDependentSplits;
     const int N_sub = Ng / N_cells;
     const double sublen = boxlen / N_cells;
 
@@ -152,7 +152,7 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     }
 
     /* The number of power spectrum bins */
-    const int bins = 50;
+    const int bins = pars->PowerSpectrumBins;
 
     /* Prepare memory for the power spectrum calculation */
     double *k_in_bins = calloc(bins, sizeof(double));
