@@ -165,8 +165,6 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     /* Memory for local copies of sub-grids */
     GridFloatType *grid = malloc(N_sub * N_sub * N_sub * sizeof(GridFloatType));
     GridFloatType *temp = malloc(N_sub * N_sub * N_sub * sizeof(GridFloatType));
-    bzero(grid, N_sub * N_sub * N_sub * sizeof(GridFloatType));
-    bzero(temp, N_sub * N_sub * N_sub * sizeof(GridFloatType));
 
     /* Memory for a complex grid */
     GridComplexType *fgrid = malloc(N_sub * N_sub * (N_sub / 2 + 1) * sizeof(GridComplexType));
@@ -187,6 +185,11 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
             int home_rank = cell % MPI_Rank_Count;
             int cell_i, cell_j, cell_k;
             inverse_row_major(cell, &cell_i, &cell_j, &cell_k, N_cells);
+
+            /* Zero out the temporary grid */
+            for (int l = 0; l < N_sub * N_sub * N_sub; l++) {
+                temp[l] = 0;
+            }
 
             /* Copy over the local grid */
             copy_local_grid(temp, dgrid, N_cells, N_sub, cell_i, cell_j, cell_k);
