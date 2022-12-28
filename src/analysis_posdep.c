@@ -109,18 +109,18 @@ void calc_cross_powerspec(int N, double boxlen, const GridComplexType *box1,
 
                 /* Add to the tables */
                 k_in_bins[bin] += multiplicity * k;
-				power_in_bins[bin] += multiplicity * Power;
-				obs_in_bins[bin] += multiplicity;
+                power_in_bins[bin] += multiplicity * Power;
+                obs_in_bins[bin] += multiplicity;
             }
         }
     }
 
     /* Divide to obtain averages */
-	for (int i=0; i<bins; i++) {
-		k_in_bins[i] /= obs_in_bins[i];
-		power_in_bins[i] /= obs_in_bins[i];
-		power_in_bins[i] /= boxvol;
-	}
+    for (int i=0; i<bins; i++) {
+        k_in_bins[i] /= obs_in_bins[i];
+        power_in_bins[i] /= obs_in_bins[i];
+        power_in_bins[i] /= boxvol;
+    }
 }
 
 /* TODO, kick and drift particles to the right time */
