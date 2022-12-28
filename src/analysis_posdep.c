@@ -235,6 +235,11 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     fftw_destroy_plan(r2c);
 #endif
 
+    /* Free the local grid */
+    free(grid);
+    free(temp);
+    free(fgrid);
+
     message(rank, "Done with position-dependent power spectra.\n");
 
     /* First, let's clean up the data by removing empty bins */
@@ -248,10 +253,12 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     /* Create array with valid wavenumbers and power (from non-empty bins) */
     double *valid_k = malloc(nonzero_bins * sizeof(double));
     double *valid_power = malloc(nonzero_bins * num_cells * sizeof(double));
+    int *valid_obs = malloc(nonzero_bins * sizeof(int));
     int valid_bin = 0;
     for (int i = 0; i < bins; i++) {
         if (obs_in_bins[i] > 0) {
             valid_k[valid_bin] = k_in_bins[i];
+            valid_obs[valid_bin] = obs_in_bins[i];
             for (int cell = 0; cell < num_cells; cell++) {
                 valid_power[cell * nonzero_bins + valid_bin] = power_in_bins[cell * bins + i];
             }
@@ -275,6 +282,7 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     /* Reduce the power spectrum data */
     MPI_Reduce(valid_power, all_power_in_bins, num_cells * nonzero_bins,
                MPI_DOUBLE, MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
+    free(valid_power);
 
     /* Reduce the mass array */
     MPI_Reduce(sub_masses, all_sub_masses, num_cells, MPI_DOUBLE,
@@ -336,17 +344,43 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
         
         /* Create a file to write the response data */
         char fname[50];
-        sprintf(fname, "response_%04d_%03d.txt", output_num, rank);
+        sprintf(fname, "response_%04d.txt", output_num);
         FILE *f = fopen(fname, "w");
 
         /* Write the response data */
         fprintf(f, "# a = %g, z = %g, N_cells = %d, N_sub = %d\n", a_scale_factor, 1. / a_scale_factor - 1., N_cells, N_sub);
         fprintf(f, "# k B I <P> <Pi> <Pd> <Pid>\n");
         for (int j = 0; j < nonzero_bins; j++) {
-            fprintf(f, "%g %g %g %g %g %g %g\n", valid_k[j], B[j], Bi[j], P[j], Pi[j], Pd[j], Pid[j]);
+            fprintf(f, "%g %g %g %g %g %g %g %d\n", valid_k[j], B[j], Bi[j], P[j], Pi[j], Pd[j], Pid[j], valid_obs[j]);
         }
 
         /* Close the file */
+        fclose(f);
+
+        /* Print all the spectra in one big table (bins as columns)*/
+        char fname2[100];
+        sprintf(fname2, "posdep_%04d.txt", output_num);
+        f = fopen(fname2, "w");
+        fprintf(f, "# Position-dependent power spectra for %d^3 sub-grids.\n", N_cells);
+        fprintf(f, "# grid mass P[k_0] P[k_1] ...\n");
+        fprintf(f, "# k = NA NA ");
+        for (int j = 0; j < nonzero_bins; j++) {
+            fprintf(f, "%.8g ", valid_k[j]);
+        }
+        fprintf(f, "\n");
+        fprintf(f, "# obs = NA NA ");
+        for (int j = 0; j < nonzero_bins; j++) {
+            fprintf(f, "%d ", valid_obs[j]);
+        }
+        fprintf(f, "\n");
+        for (int i = 0; i < num_cells; i++) {
+            fprintf(f, "%d ", i);
+            fprintf(f, "%.8g ", all_sub_masses[i]);
+            for (int j = 0; j < nonzero_bins; j++) {
+                fprintf(f, "%.8g ", all_power_in_bins[i * nonzero_bins + j]);
+            }
+            fprintf(f, "\n");
+        }
         fclose(f);
 
         /* Free memory */
@@ -364,12 +398,7 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
 
     /* Free the cleaned up arrays */
     free(valid_k);
-    free(valid_power);
-
-    /* Free the local grid */
-    free(grid);
-    free(temp);
-    free(fgrid);
+    free(valid_obs);
 
     return 0;
 }
