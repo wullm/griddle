@@ -195,7 +195,9 @@ int exportCatalogue(const struct params *pars, const struct units *us,
 
     /* The HDF5 group name of each halo type */
     const int num_types = pars->DoSphericalOverdensities ? 2 : 1;
-    const char ExportNames[2][100] = {"FOF", "SO_200_crit"};
+    char ExportNames[2][100];
+    sprintf(ExportNames[0], "FOF");
+    sprintf(ExportNames[1], "SO_%d_crit", (int) pars->SphericalOverdensityThreshold);
 
     if (rank == 0) {
         /* Create the output file */

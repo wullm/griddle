@@ -596,7 +596,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     message(rank, "Maximum search radius for SO particles: %g U_L\n", global_max);
 
     /* Spherical overdensity search radius */
-    const double min_radius = 10.0 * MPC_METRES / us->UnitLengthMetres;
+    const double min_radius = pars->SphericalOverdensityMinLookRadius;
     const double max_radius = global_max;
 
     /* Compute the critical density */
@@ -608,14 +608,14 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
 #endif
 
-    /* Densitty threshold w.r.t. the critical density (TODO: make parameter) */
-    const double threshold = 200.0;
+    /* Densitty threshold w.r.t. the critical density */
+    const double threshold = pars->SphericalOverdensityThreshold;
 
     /* We start holding no foreign FOFs */
     long int num_foreign_fofs = 0;
 
     /* Allocate additional memory for holding some foreign FOFs */
-    long int fof_buffer = 10000; //TODO: make parameter
+    long int fof_buffer = pars->FOFBufferSize;
     long int num_max_fofs = num_local_fofs + fof_buffer;
     *fofs = realloc(*fofs, num_max_fofs * sizeof(struct fof_halo));
 
@@ -772,13 +772,12 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                              halos[i].x_com[2] * pos_to_int_fac};
 
         /* First perform a shrinking sphere algorithm to determine the centre */
-        /* TODO: make parameters */
-        const double rfac = 0.95;
-        const double mfac = 0.01;
-        const int minpart = 100;
+        const double rfac = pars->ShrinkingSphereRadiusFactor;
+        const double mfac = pars->ShrinkingSphereMassFraction;
+        const int minpart = pars->ShrinkingSphereMinParticleNum;
 
         /* The initial search radius */
-        double r_ini = (*fofs)[i].radius_fof * 0.9;
+        double r_ini = (*fofs)[i].radius_fof * pars->ShrinkingSphereInitialRadius;
         double m_ini = 0.;
         int npart_ini = 0;
 
@@ -1086,9 +1085,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     timer_stop(rank, &so_timer, "Writing SO halo properties took ");
 
     /* Export x% of particles in halos, but aim for a minimum of y */
-    /* TODO: make parameter */
-    double reduce_factor = 0.01;
-    int min_part_export_per_halo = 5;
+    double reduce_factor = pars->SnipshotReduceFactor;
+    int min_part_export_per_halo = pars->SnipshotMinParticleNum;
 
     exportSnipshot(pars, us, halos, pcs, parts, cosmo, cell_list, cell_counts,
                    cell_offsets, output_num, a_scale_factor, Ng, N_cells,

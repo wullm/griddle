@@ -54,13 +54,25 @@ struct params {
     char *SnapshotBaseName;
 
     /* Halo finding parameters */
+    char *CatalogueBaseName;
+    char *SnipBaseName;
     char DoHaloFindingWithSnapshots;
     char DoSphericalOverdensities;
     double LinkingLength;
     int MinHaloParticleNum;
-    char *CatalogueBaseName;
-    char *SnipBaseName;
+    double SphericalOverdensityThreshold;
+    double SphericalOverdensityMinLookRadius;
+    int FOFBufferSize;
 
+    /* Shrinking sphere parameters */
+    double ShrinkingSphereInitialRadius;
+    double ShrinkingSphereRadiusFactor;
+    double ShrinkingSphereMassFraction;
+    int ShrinkingSphereMinParticleNum;
+
+    /* Snipshot parameters */
+    double SnipshotReduceFactor;
+    int SnipshotMinParticleNum;
 };
 
 int readParams(struct params *parser, const char *fname);

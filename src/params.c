@@ -60,15 +60,26 @@ int readParams(struct params *pars, const char *fname) {
      ini_gets("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname);
      ini_gets("Snapshots", "BaseName", "snap", pars->SnapshotBaseName, len, fname);
 
+     /* Halo finding string parameters */
+     pars->CatalogueBaseName = malloc(len);
+     pars->SnipBaseName = malloc(len);
+     ini_gets("HaloFinding", "BaseName", "catalogue", pars->CatalogueBaseName, len, fname);
+     ini_gets("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname);
+
      /* Halo finding parameters */
      pars->DoHaloFindingWithSnapshots = ini_getl("HaloFinding", "DoHaloFindingWithSnapshots", 0, fname);
      pars->DoSphericalOverdensities = ini_getl("HaloFinding", "DoSphericalOverdensities", 1, fname);
      pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
-     pars->CatalogueBaseName = malloc(len);
-     pars->SnipBaseName = malloc(len);
-     ini_gets("HaloFinding", "BaseName", "catalogue", pars->CatalogueBaseName, len, fname);
-     ini_gets("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname);
+     pars->FOFBufferSize =  ini_getl("HaloFinding", "FOFBufferSize", 10000, fname);
+     pars->SphericalOverdensityThreshold = ini_getd("HaloFinding", "SphericalOverdensityThreshold", 200.0, fname);
+     pars->SphericalOverdensityMinLookRadius = ini_getd("HaloFinding", "SphericalOverdensityMinLookRadius", 10.0, fname);
+     pars->ShrinkingSphereInitialRadius = ini_getd("HaloFinding", "ShrinkingSphereInitialRadius", 0.9, fname);
+     pars->ShrinkingSphereRadiusFactor = ini_getd("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname);
+     pars->ShrinkingSphereMassFraction = ini_getd("HaloFinding", "ShrinkingSphereMassFraction", 0.01, fname);
+     pars->ShrinkingSphereMinParticleNum = ini_getl("HaloFinding", "ShrinkingSphereMinParticleNum", 100, fname);
+     pars->SnipshotReduceFactor =  ini_getd("HaloFinding", "SnipshotReduceFactor", 0.01, fname);
+     pars->SnipshotMinParticleNum =  ini_getl("HaloFinding", "SnipshotMinParticleNum", 5, fname);
 
      return 0;
 }
