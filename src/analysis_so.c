@@ -571,6 +571,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const struct units *us, const struct physical_consts *pcs,
                 const struct cosmology *cosmo, const struct params *pars) {
 
+    /* Return if there is nothing to do */
+    if (total_num_fofs == 0) return 0;
+
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -626,7 +629,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     message(rank, "It took %d iterations to exchange all FOFs\n", exchange_iterations);
 
     /* The initial domain decomposition into spatial cells */
-    const int N_cells = boxlen / (0.25 * max_radius);
+    const int N_cells = boxlen / (0.25 * min_radius);
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
     const double pos_to_cell_fac = N_cells / boxlen;
 
