@@ -325,9 +325,20 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         double *isocymatic_power  = calloc(num_cells * nonzero_bins, sizeof(double));
         for (int i = 0; i < num_cells; i++) {
             for (int j = 0; j < nonzero_bins; j++) {
-                isocymatic_power[i * nonzero_bins + j] = strooklat_interp(&spline_k, all_power_in_bins + (i * nonzero_bins), valid_k[j] / cbrt(1.0 + deltas[i]));
+                isocymatic_power[i * nonzero_bins + j] = strooklat_interp(&spline_k, all_power_in_bins + (i * nonzero_bins), valid_k[j] * cbrt(1.0 + deltas[i]));
             }
         }
+
+        /* Re-normalize the power, which scales as 1 / V ~ L^-3 ~ (1 + delta) */
+        for (int i = 0; i < num_cells; i++) {
+            for (int j = 0; j < nonzero_bins; j++) {
+                isocymatic_power[i * nonzero_bins + j] *= 1.0 + deltas[i]);
+            }
+        }
+
+        /* Note: separate from the above length rescaling, we could renormalize
+         * by another factor (1 + delta)^2, such that all spectra are relative
+         * to the same global background density. We choose not to. */
 
         /* Free the spline */
         free_strooklat_spline(&spline_k);
@@ -371,7 +382,7 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         /* Close the file */
         fclose(f);
 
-        /* Print all the spectra in one big table (bins as columns)*/
+        /* Print all the raw spectra in one big table (bins as columns)*/
         char fname2[100];
         sprintf(fname2, "posdep_%04d.txt", output_num);
         f = fopen(fname2, "w");
