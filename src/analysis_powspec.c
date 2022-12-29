@@ -161,7 +161,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     const double boxvol = boxlen * boxlen * boxlen;
     const double dk = 2 * M_PI / boxlen;
     const double grid_fac = boxlen / N;
-    const double fft_factor = 1.0 / ((double) N * N * N);
+    const double fft_factor = boxvol / ((double) N * N * N);
     GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the inverse CIC kernel */
