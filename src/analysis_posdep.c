@@ -367,6 +367,13 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
             Bi[j] = Pid[j] / (Pi[j] * dd);
         }
         
+        /* Unit conversion factors */
+        const double m_unit = us->UnitMassKilogram;
+        const double k_unit = 1.0 / us->UnitLengthMetres;
+        const double P_unit = 1.0 / (k_unit * k_unit * k_unit);
+        const double k_unit_Mpc = MPC_METRES * k_unit;
+        const double P_unit_Mpc = 1.0 / (k_unit_Mpc * k_unit_Mpc * k_unit_Mpc);
+
         /* Create a file to write the response data */
         char fname[50];
         sprintf(fname, "response_%04d.txt", output_num);
@@ -374,7 +381,9 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
 
         /* Write the response data */
         fprintf(f, "# a = %g, z = %g, N_cells = %d, N_sub = %d\n", a_scale_factor, 1. / a_scale_factor - 1., N_cells, N_sub);
-        fprintf(f, "# k B I <P> <Pi> <Pd> <Pid>\n");
+        fprintf(f, "# k in units of U_L^-1 = %g m^-1 = %g Mpc^-1\n", k_unit, k_unit_Mpc);
+        fprintf(f, "# P, Pi in units of U_L^3 = %g m^3 = %g Mpc^3\n", P_unit, P_unit_Mpc);
+        fprintf(f, "# k B I <P> <Pi> <Pd> <Pid> obs\n");
         for (int j = 0; j < nonzero_bins; j++) {
             fprintf(f, "%g %g %g %g %g %g %g %d\n", valid_k[j], B[j], Bi[j], P[j], Pi[j], Pd[j], Pid[j], valid_obs[j]);
         }
@@ -387,6 +396,9 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         sprintf(fname2, "posdep_%04d.txt", output_num);
         f = fopen(fname2, "w");
         fprintf(f, "# Position-dependent power spectra for %d^3 sub-grids.\n", N_cells);
+        fprintf(f, "# mass in units of U_M = %g kg\n", m_unit);
+        fprintf(f, "# k in units of U_L^-1 = %g m^-1 = %g Mpc^-1\n", k_unit, k_unit_Mpc);
+        fprintf(f, "# P in units of U_L^3 = %g m^3 = %g Mpc^3\n", P_unit, P_unit_Mpc);
         fprintf(f, "# grid mass P[k_0] P[k_1] ...\n");
         fprintf(f, "# k = NA NA ");
         for (int j = 0; j < nonzero_bins; j++) {

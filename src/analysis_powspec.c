@@ -260,6 +260,12 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
             }
         }
 
+        /* Unit conversion factors */
+        const double k_unit = 1.0 / us->UnitLengthMetres;
+        const double P_unit = 1.0 / (k_unit * k_unit * k_unit);
+        const double k_unit_Mpc = MPC_METRES * k_unit;
+        const double P_unit_Mpc = 1.0 / (k_unit_Mpc * k_unit_Mpc * k_unit_Mpc);
+
         /* Create a file to write the power spectrum data */
         char fname[50];
         sprintf(fname, "power_%04d.txt", output_num);
@@ -267,6 +273,8 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
 
         /* Write the response data */
         fprintf(f, "# a = %g, z = %g, N = %ld\n", a_scale_factor, 1. / a_scale_factor - 1., dgrid->N);
+        fprintf(f, "# k in units of U_L^-1 = %g m^-1 = %g Mpc^-1\n", k_unit, k_unit_Mpc);
+        fprintf(f, "# P in units of U_L^3 = %g m^3 = %g Mpc^3\n", P_unit, P_unit_Mpc);
         fprintf(f, "# k P obs\n");
         for (int j = 0; j < nonzero_bins; j++) {
             fprintf(f, "%g %g %d\n", valid_k[j], valid_power[j], valid_obs[j]);
