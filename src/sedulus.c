@@ -558,6 +558,10 @@ int main(int argc, char *argv[]) {
 
                     message(rank, "Starting power spectrum calculation.\n");
 
+                    /* Exchange particles before attempting a mass deposition */
+                    exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+                    timer_stop(rank, &run_timer, "Exchanging particles took ");
+
                     /* Initiate mass deposition */
                     mass_deposition(&mass, particles, local_partnum);
                     timer_stop(rank, &powspec_timer, "Computing mass density took ");
