@@ -22,10 +22,6 @@
 
 #include "../include/distributed_grid.h"
 
-static inline long int row_major_index(int i, int j, int k, long int N, long int Nz) {
-    return i*N*Nz + j*Nz + k;
-}
-
 /* Agnostic acceleration through differentiation of the potential grid */
 void accelCIC(const struct distributed_grid *dg, const double x[3], double a[3]);
 

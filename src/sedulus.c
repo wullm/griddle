@@ -325,24 +325,24 @@ int main(int argc, char *argv[]) {
     if (output_list[0] == a_begin) {
         if (pars.DoPowerSpectra) {
             /* Timer */
-            struct timepair posdep_timer;
-            timer_start(rank, &posdep_timer);
+            struct timepair powspec_timer;
+            timer_start(rank, &powspec_timer);
 
-            message(rank, "Starting position-dependent power spectrum calculation.\n");
+            message(rank, "Starting power spectrum calculation.\n");
 
             /* Initiate mass deposition */
             mass_deposition(&mass, particles, local_partnum);
-            timer_stop(rank, &posdep_timer, "Computing mass density took ");
+            timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
             /* Merge the buffers with the main grid */
             add_local_buffers(&mass);
-            timer_stop(rank, &posdep_timer, "Communicating buffers took ");
+            timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+
+            analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us, &pcs, &cosmo, &pars);
+            timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
             analysis_posdep(&mass, boxlen, N, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
-
-            /* Timer */
-            MPI_Barrier(MPI_COMM_WORLD);
-            timer_stop(rank, &posdep_timer, "Position-dependent power spectra took ");
+            timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
             message(rank, "\n");
         }
 
@@ -552,24 +552,24 @@ int main(int argc, char *argv[]) {
 
                 if (pars.DoPowerSpectra) {
                     /* Timer */
-                    struct timepair posdep_timer;
-                    timer_start(rank, &posdep_timer);
+                    struct timepair powspec_timer;
+                    timer_start(rank, &powspec_timer);
 
-                    message(rank, "Starting position-dependent power spectrum calculation.\n");
+                    message(rank, "Starting power spectrum calculation.\n");
 
                     /* Initiate mass deposition */
                     mass_deposition(&mass, particles, local_partnum);
-                    timer_stop(rank, &posdep_timer, "Computing mass density took ");
+                    timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
                     /* Merge the buffers with the main grid */
                     add_local_buffers(&mass);
-                    timer_stop(rank, &posdep_timer, "Communicating buffers took ");
+                    timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+
+                    analysis_powspec(&mass, /* output_num = */ j, output_list[j], r2c_mpi, &us, &pcs, &cosmo, &pars);
+                    timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
                     analysis_posdep(&mass, boxlen, N, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
-
-                    /* Timer */
-                    MPI_Barrier(MPI_COMM_WORLD);
-                    timer_stop(rank, &posdep_timer, "Position-dependent power spectra took ");
+                    timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
                     message(rank, "\n");
                 }
 

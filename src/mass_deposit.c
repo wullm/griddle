@@ -27,14 +27,6 @@
 #include "../include/fft_kernels.h"
 #include "../include/message.h"
 
-static inline long int row_major_index(int i, int j, int k, long int N, long int Nz) {
-    return i*N*Nz + j*Nz + k;
-}
-
-static inline long int row_major_half_transposed(int i, int j, int k, long int N, long int Nz_half) {
-    return j*Nz_half*N + i*Nz_half + k;
-}
-
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum) {
 

@@ -24,7 +24,7 @@ SOURCES =
 SOURCES += params units grid_io random fermi_dirac distributed_grid particle_exchange
 SOURCES += fft gaussian_field perturb_data cosmology initial_conditions mesh_grav
 SOURCES += mass_deposit snap_io analysis_fof analysis_so catalogue_io snip_io
-SOURCES += analysis_posdep
+SOURCES += analysis_powspec analysis_posdep
 
 # The corresponding objects
 OBJECTS = $(patsubst %, lib/%.o, $(SOURCES))

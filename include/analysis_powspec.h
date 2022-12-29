@@ -17,32 +17,20 @@
  *
  ******************************************************************************/
 
-#ifndef SEDULUS_H
-#define SEDULUS_H
+/* On-the-fly power spectra */
 
-#include "message.h"
-#include "params.h"
-#include "units.h"
-#include "cosmology.h"
-#include "strooklat.h"
-#include "grid_io.h"
-#include "random.h"
-#include "fermi_dirac.h"
-#include "distributed_grid.h"
-#include "fft.h"
-#include "fft_kernels.h"
-#include "gaussian_field.h"
-#include "perturb_data.h"
-#include "initial_conditions.h"
+#ifndef ANALYSIS_POWSPEC_H
+#define ANALYSIS_POWSPEC_H
+
 #include "particle.h"
-#include "particle_exchange.h"
-#include "mesh_grav.h"
-#include "mass_deposit.h"
-#include "snap_io.h"
-#include "git_version.h"
-#include "relativity.h"
-#include "analysis_fof.h"
-#include "analysis_powspec.h"
-#include "analysis_posdep.h"
+#include "units.h"
+#include "params.h"
+#include "cosmology.h"
+#include "distributed_grid.h"
+
+int analysis_powspec(struct distributed_grid *dgrid, int output_num,
+                     double a_scale_factor, FourierPlanType r2c,
+                     const struct units *us, const struct physical_consts *pcs,
+                     const struct cosmology *cosmo, struct params *pars);
 
 #endif
