@@ -91,6 +91,8 @@ void fft_free(void *ptr);
 ptrdiff_t fft_mpi_local_size_3d(ptrdiff_t n0, ptrdiff_t n1, ptrdiff_t n2,
                                 MPI_Comm comm, ptrdiff_t *local_n0,
                                 ptrdiff_t *local_0_start);
+void fft_prepare_mpi_plans(FourierPlanType *r2c_mpi, FourierPlanType *c2r_mpi,
+                           struct distributed_grid *dgrid);
 
 /* Functions for ordinary contiguous arrays */
 int fft_normalize_r2c(GridComplexType *arr, int N, double boxlen);

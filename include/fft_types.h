@@ -21,6 +21,7 @@
 #define FFT_TYPES_H
 
 #define SINGLE_PRECISION_FFTW
+// #define MEASURED_FFTW_PLANS
 // #define USE_IN_PLACE_FFTS
 
 #ifdef SINGLE_PRECISION_FFTW
@@ -37,6 +38,12 @@ typedef fftw_plan FourierPlanType;
 #define MPI_GRID_TYPE MPI_DOUBLE
 #define MPI_COMPLEX_GRID_TYPE MPI_DOUBLE_COMPLEX
 #define H5T_GRID_TYPE H5T_NATIVE_DOUBLE
+#endif
+
+#ifdef MEASURED_FFTW_PLANS
+#define PREPARE_FLAG FFTW_MEASURE
+#else
+#define PREPARE_FLAG FFTW_ESTIMATE
 #endif
 
 #endif

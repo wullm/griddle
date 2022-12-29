@@ -134,6 +134,32 @@ ptrdiff_t fft_mpi_local_size_3d(ptrdiff_t n0, ptrdiff_t n1, ptrdiff_t n2,
 }
 
 
+void fft_prepare_mpi_plans(FourierPlanType *r2c_mpi, FourierPlanType *c2r_mpi,
+                           struct distributed_grid *dgrid) {
+
+    /* The grid size */
+    const long int N = dgrid->N;
+
+#ifdef USE_IN_PLACE_FFTS
+    int fftws_flag_in = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_IN;
+    int fftws_flag_out = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_OUT;
+#else
+    int fftws_flag_in = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_IN | FFTW_DESTROY_INPUT;
+    int fftws_flag_out = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_OUT | FFTW_DESTROY_INPUT;
+#endif
+#ifdef SINGLE_PRECISION_FFTW
+    *r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(N, N, N, dgrid->box, dgrid->fbox,
+                                         MPI_COMM_WORLD, fftws_flag_out);
+    *c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(N, N, N, dgrid->fbox, dgrid->box,
+                                         MPI_COMM_WORLD, fftws_flag_in);
+#else
+    *r2c_mpi = fftw_mpi_plan_dft_r2c_3d(N, N, N, dgrid->box, dgrid->fbox,
+                                        MPI_COMM_WORLD, fftws_flag_out);
+    *c2r_mpi = fftw_mpi_plan_dft_c2r_3d(N, N, N, dgrid->fbox, dgrid->box,
+                                        MPI_COMM_WORLD, fftws_flag_in);
+#endif
+}
+
 /* Apply a kernel to a 3D array after transforming to momentum space */
 int fft_apply_kernel(GridComplexType *write, const GridComplexType *read, int N,
                      double boxlen, void (*compute)(struct kernel* the_kernel),

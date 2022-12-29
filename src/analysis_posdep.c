@@ -332,7 +332,7 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         /* Re-normalize the power, which scales as 1 / V ~ L^-3 ~ (1 + delta) */
         for (int i = 0; i < num_cells; i++) {
             for (int j = 0; j < nonzero_bins; j++) {
-                isocymatic_power[i * nonzero_bins + j] *= 1.0 + deltas[i]);
+                isocymatic_power[i * nonzero_bins + j] *= 1.0 + deltas[i];
             }
         }
 

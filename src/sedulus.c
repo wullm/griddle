@@ -271,24 +271,8 @@ int main(int argc, char *argv[]) {
 
     /* Prepare FFT plans for the gravity mesh */
     message(rank, "Carefully planning FFTs. This may take awhile.\n");
-#ifdef USE_IN_PLACE_FFTS
-    int fftws_flag_in = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_IN;
-    int fftws_flag_out = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_OUT;
-#else
-    int fftws_flag_in = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_IN | FFTW_DESTROY_INPUT;
-    int fftws_flag_out = FFTW_ESTIMATE | FFTW_MPI_TRANSPOSED_OUT | FFTW_DESTROY_INPUT;
-#endif
-#ifdef SINGLE_PRECISION_FFTW
-    FourierPlanType r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
-                                                        MPI_COMM_WORLD, fftws_flag_out);
-    FourierPlanType c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
-                                                        MPI_COMM_WORLD, fftws_flag_in);
-#else
-    FourierPlanType r2c_mpi = fftw_mpi_plan_dft_r2c_3d(M, M, M, mass.box, mass.fbox,
-                                                       MPI_COMM_WORLD, fftws_flag_out);
-    FourierPlanType c2r_mpi = fftw_mpi_plan_dft_c2r_3d(M, M, M, mass.fbox, mass.box,
-                                                       MPI_COMM_WORLD, fftws_flag_in);
-#endif
+    FourierPlanType r2c_mpi, c2r_mpi;
+    fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
 
     /* Timer */
     timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
