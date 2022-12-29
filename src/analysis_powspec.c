@@ -110,8 +110,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
 
     /* The number of power spectrum bins */
     const int bins = pars->PowerSpectrumBins;
-    const double boxlen = dgrid->boxlen;
-    const double boxvol = boxlen * boxlen * boxlen;
+    const long int N = dgrid->N;
 
     /* Accumulate the total mass in the grid */
     double mass_tot_local = 0.;
@@ -125,9 +124,9 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                   MPI_SUM, MPI_COMM_WORLD);
 
     /* Turn the mass grid into an overdensity grid */
-    const double avg_density = mass_tot_global / boxvol;
+    double avg_mass = mass_tot_global / ((double) N * N * N);
     for (long int i = 0; i < dgrid->local_real_size; i++) {
-        dgrid->box[i] = dgrid->box[i] / avg_density - 1.;
+        dgrid->box[i] = dgrid->box[i] / avg_mass - 1.;
     }
 
     /* Prepare memory for the power spectrum calculation */
@@ -144,7 +143,6 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
      * runs over [X0, X0 + NX]. After the FFT, the complex is array is transposed
      * and the local slice is NY * N * (N/2 + 1), with the y-index running over
      * [Y0, Y0 + NY]. Note that the complex array has half the size. */
-    const long int N = dgrid->N;
     const long int Nz_half = N/2 + 1;
 
     /* Get the local portion of the transposed array */
@@ -159,6 +157,8 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
 #endif
 
     /* Pull out other grid constants */
+    const double boxlen = dgrid->boxlen;
+    const double boxvol = boxlen * boxlen * boxlen;
     const double dk = 2 * M_PI / boxlen;
     const double grid_fac = boxlen / N;
     const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
