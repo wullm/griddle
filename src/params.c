@@ -54,10 +54,16 @@ int readParams(struct params *pars, const char *fname) {
      ini_gets("InitialConditions", "File", "", pars->InitialConditionsFile, len, fname);
      ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
 
-     /* Snapshot parameters */
+     /* Output time strings */
      pars->SnapshotTimesString = malloc(len);
-     pars->SnapshotBaseName = malloc(len);
+     pars->PowerSpectrumTimesString = malloc(len);
+     pars->HaloFindingTimesString = malloc(len);
      ini_gets("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname);
+     ini_gets("PowerSpectra", "OutputTimes", "", pars->PowerSpectrumTimesString, len, fname);
+     ini_gets("HaloFinding", "OutputTimes", "", pars->HaloFindingTimesString, len, fname);
+
+     /* Snapshot parameters */
+     pars->SnapshotBaseName = malloc(len);
      ini_gets("Snapshots", "BaseName", "snap", pars->SnapshotBaseName, len, fname);
 
      /* Halo finding string parameters */
@@ -67,7 +73,6 @@ int readParams(struct params *pars, const char *fname) {
      ini_gets("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname);
 
      /* Halo finding parameters */
-     pars->DoHaloFindingWithSnapshots = ini_getl("HaloFinding", "DoHaloFindingWithSnapshots", 0, fname);
      pars->DoSphericalOverdensities = ini_getl("HaloFinding", "DoSphericalOverdensities", 1, fname);
      pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
@@ -82,7 +87,6 @@ int readParams(struct params *pars, const char *fname) {
      pars->SnipshotMinParticleNum =  ini_getl("HaloFinding", "SnipshotMinParticleNum", 5, fname);
 
      /* Power spectrum (for on-the-fly analysis) parameters */
-     pars->DoPowerSpectra =  ini_getl("PowerSpectra", "DoPowerSpectra", 0, fname);
      pars->PowerSpectrumBins =  ini_getl("PowerSpectra", "PowerSpectrumBins", 50, fname);
      pars->PositionDependentSplits =  ini_getl("PowerSpectra", "PositionDependentSplits", 8, fname);
 
@@ -94,6 +98,8 @@ int cleanParams(struct params *pars) {
     free(pars->InitialConditionsFile);
     free(pars->TransferFunctionsFile);
     free(pars->SnapshotTimesString);
+    free(pars->PowerSpectrumTimesString);
+    free(pars->HaloFindingTimesString);
     free(pars->SnapshotBaseName);
     free(pars->CatalogueBaseName);
     free(pars->SnipBaseName);
@@ -104,8 +110,10 @@ int cleanParams(struct params *pars) {
 
 int parseArrayString(char *string, double **array, int *length) {
     /* Check that there is anything there */
-    if (strlen(string) <= 0)
+    if (strlen(string) <= 0) {
+        *length = 0;
         return 0;
+    }
 
     /* Permissible delimiters */
     char delimiters[] = " ,\t\n";
@@ -135,6 +143,36 @@ int parseArrayString(char *string, double **array, int *length) {
     for (int i = 0; i < count; i++) {
         sscanf(token, "%lf", &(*array)[i]);
         token = strtok(NULL, delimiters);
+    }
+
+    return 0;
+}
+
+int parseOutputList(char *string, double **output_list, int *num_outputs,
+                    double a_begin, double a_end) {
+
+    /* Parse the output times from the input string */
+    parseArrayString(string, output_list, num_outputs);
+
+    if (*num_outputs < 1) {
+        return 0;
+    } else if (*num_outputs > 1) {
+        /* Check that the output times are in ascending order */
+        for (int i = 1; i < *num_outputs; i++) {
+            if ((*output_list)[i] <= (*output_list)[i - 1]) {
+                printf("Output times should be in strictly ascending order.\n");
+                exit(1);
+            }
+        }
+    }
+
+    /* Check that the first output is after the beginning and the last before the end */
+    if ((*output_list)[0] < a_begin) {
+        printf("The first output should be after the start of the simulation.\n");
+        exit(1);
+    } else if ((*output_list)[*num_outputs - 1] > a_end) {
+        printf("The last output should be before the end of the simulation.\n");
+        exit(1);
     }
 
     return 0;

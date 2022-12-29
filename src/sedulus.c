@@ -278,91 +278,79 @@ int main(int argc, char *argv[]) {
     timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
     message(rank, "\n");
 
-    /* Determine the snapshot output times */
-    double *output_list;
-    int num_outputs;
-    parseArrayString(pars.SnapshotTimesString, &output_list, &num_outputs);
+    /* Determine the output times for various output types */
+    double *output_list_snap, *output_list_power, *output_list_halos;
+    int num_outputs_snap, num_outputs_power, num_outputs_halos;
+    parseOutputList(pars.SnapshotTimesString, &output_list_snap,
+                    &num_outputs_snap, a_begin, a_end);
+    parseOutputList(pars.PowerSpectrumTimesString, &output_list_power,
+                    &num_outputs_power, a_begin, a_end);
+    parseOutputList(pars.HaloFindingTimesString, &output_list_halos,
+                    &num_outputs_halos, a_begin, a_end);
 
-    if (num_outputs < 1) {
-        printf("No output times specified!\n");
-        exit(1);
-    } else if (num_outputs > 1) {
-        /* Check that the output times are in ascending order */
-        for (int i = 1; i < num_outputs; i++) {
-            if (output_list[i] <= output_list[i - 1]) {
-                printf("Output times should be in strictly ascending order.\n");
-                exit(1);
-            }
-        }
-    }
-
-    /* Check that the first output is after the beginning and the last before the end */
-    if (output_list[0] < a_begin) {
-        printf("The first output should be after the start of the simulation.\n");
-        exit(1);
-    } else if (output_list[num_outputs - 1] > a_end) {
-        printf("The last output should be before the end of the simulation.\n");
-        exit(1);
-    }
+    message(rank, "Exporting snapshots %d times.\n", num_outputs_snap);
+    message(rank, "Exporting power spectra %d times.\n", num_outputs_power);
+    message(rank, "Exporting halo catalogues %d times.\n", num_outputs_halos);
+    message(rank, "\n");
 
     /* Check if there should be an output at the start */
-    if (output_list[0] == a_begin) {
-        if (pars.DoPowerSpectra) {
-            /* Timer */
-            struct timepair powspec_timer;
-            timer_start(rank, &powspec_timer);
+    if (num_outputs_power > 0 && output_list_power[0] == a_begin) {
+        /* Timer */
+        struct timepair powspec_timer;
+        timer_start(rank, &powspec_timer);
 
-            message(rank, "Starting power spectrum calculation.\n");
+        message(rank, "Starting power spectrum calculation.\n");
 
-            /* Initiate mass deposition */
-            mass_deposition(&mass, particles, local_partnum);
-            timer_stop(rank, &powspec_timer, "Computing mass density took ");
+        /* Initiate mass deposition */
+        mass_deposition(&mass, particles, local_partnum);
+        timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
-            /* Merge the buffers with the main grid */
-            add_local_buffers(&mass);
-            timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+        /* Merge the buffers with the main grid */
+        add_local_buffers(&mass);
+        timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
-            analysis_posdep(&mass, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
-            timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+        analysis_posdep(&mass, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
+        timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
 
-            analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us, &pcs, &cosmo, &pars);
-            timer_stop(rank, &powspec_timer, "Global power spectra took ");
+        analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us, &pcs, &cosmo, &pars);
+        timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
-            message(rank, "\n");
-        }
+        message(rank, "\n");
+    }
 
-        if (pars.DoHaloFindingWithSnapshots) {
-            /* Timer */
-            struct timepair fof_timer;
-            timer_start(rank, &fof_timer);
+    if (num_outputs_halos > 0 && output_list_halos[0] == a_begin) {
+        /* Timer */
+        struct timepair fof_timer;
+        timer_start(rank, &fof_timer);
 
-            message(rank, "Starting friends-of-friends halo finding.\n");
+        message(rank, "Starting friends-of-friends halo finding.\n");
 
-            /* Free the main grid before engaging the halo finder */
-            free_local_grid(&mass);
+        /* Free the main grid before engaging the halo finder */
+        free_local_grid(&mass);
 
-            /* Run the halo finder */
-            const double linking_length = pars.LinkingLength * boxlen / N;
-            analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
+        /* Run the halo finder */
+        const double linking_length = pars.LinkingLength * boxlen / N;
+        analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
 
-            /* Timer */
-            MPI_Barrier(MPI_COMM_WORLD);
-            timer_stop(rank, &fof_timer, "Finding halos took ");
-            message(rank, "\n");
+        /* Timer */
+        MPI_Barrier(MPI_COMM_WORLD);
+        timer_stop(rank, &fof_timer, "Finding halos took ");
+        message(rank, "\n");
 
-            /* Re-allocate the main grid after finishing with the halo finder */
-            alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
-            mass.momentum_space = 0;
+        /* Re-allocate the main grid after finishing with the halo finder */
+        alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+        mass.momentum_space = 0;
 
-            /* Re-create the FFT plans */
-            fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
-        }
+        /* Re-create the FFT plans */
+        fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+    }
 
+    if (num_outputs_snap > 0 && output_list_snap[0] == a_begin) {
         /* Timer */
         struct timepair snapshot_timer;
         timer_start(rank, &snapshot_timer);
 
-        message(rank, "Exporting a snapshot at a = %g.\n", output_list[0]);
+        message(rank, "Exporting a snapshot at a = %g.\n", output_list_snap[0]);
         exportSnapshot(&pars, &us, &pcs, particles, 0, a_begin, N, local_partnum, /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
 
         timer_stop(rank, &snapshot_timer, "Exporting a snapshot took ");
@@ -535,75 +523,96 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &run_timer, "Evolving particles took ");
 
-        /* Should there be a snapshot output? */
-        for (int j = 0; j < num_outputs; j++) {
-            if (output_list[j] > a && output_list[j] <= a_next) {
+        /* Should there be a power spectrum output? */
+        for (int j = 0; j < num_outputs_power; j++) {
+            if (output_list_power[j] > a && output_list_power[j] <= a_next) {
 
                 /* Drift and kick particles to the right time */
-                double snap_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list[j]) -
+                // double power_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
+                //                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
+                // double power_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
+                //                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+
+                /* Timer */
+                struct timepair powspec_timer;
+                timer_start(rank, &powspec_timer);
+
+                message(rank, "\n");
+                message(rank, "Starting power spectrum calculation at a = %g.\n", output_list_power[j]);
+
+                /* Exchange particles before attempting a mass deposition */
+                exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+                timer_stop(rank, &run_timer, "Exchanging particles took ");
+
+                /* Initiate mass deposition */
+                mass_deposition(&mass, particles, local_partnum);
+                timer_stop(rank, &powspec_timer, "Computing mass density took ");
+
+                /* Merge the buffers with the main grid */
+                add_local_buffers(&mass);
+                timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+
+                analysis_posdep(&mass, /* output_num = */ j, output_list_power[j], &us, &pcs, &cosmo, &pars);
+                timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+
+                analysis_powspec(&mass, /* output_num = */ j, output_list_power[j], r2c_mpi, &us, &pcs, &cosmo, &pars);
+                timer_stop(rank, &powspec_timer, "Global power spectra took ");
+
+                message(rank, "\n");
+            }
+        }
+
+        /* Should there be a halo finding output? */
+        for (int j = 0; j < num_outputs_halos; j++) {
+            if (output_list_halos[j] > a && output_list_halos[j] <= a_next) {
+
+                /* Drift and kick particles to the right time */
+                // double halos_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
+                //                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
+                // double halos_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
+                //                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+
+                /* Timer */
+                struct timepair fof_timer;
+                timer_start(rank, &fof_timer);
+
+                message(rank, "\n");
+                message(rank, "Starting friends-of-friends halo finding at a = %g.\n", output_list_halos[j]);
+
+                /* Free the main grid before engaging the halo finder */
+                free_local_grid(&mass);
+
+                /* Run the halo finder */
+                const double linking_length = pars.LinkingLength * boxlen / N;
+                analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars);
+
+                /* Timer */
+                MPI_Barrier(MPI_COMM_WORLD);
+                timer_stop(rank, &fof_timer, "Finding halos took ");
+                message(rank, "\n");
+
+                /* Re-allocate the main grid after finishing with the halo finder */
+                alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+                mass.momentum_space = 0;
+
+                /* Re-create the FFT plans */
+                fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+                timer_stop(rank, &fof_timer, "Recreating Fourier structures took ");
+            }
+        }
+
+        /* Should there be a snapshot output? */
+        for (int j = 0; j < num_outputs_snap; j++) {
+            if (output_list_snap[j] > a && output_list_snap[j] <= a_next) {
+
+                /* Drift and kick particles to the right time */
+                double snap_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_snap[j]) -
                                          strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
-                double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list[j]) -
+                double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_snap[j]) -
                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
 
-                if (pars.DoPowerSpectra) {
-                    /* Timer */
-                    struct timepair powspec_timer;
-                    timer_start(rank, &powspec_timer);
-
-                    message(rank, "\n");
-                    message(rank, "Starting power spectrum calculation.\n");
-
-                    /* Exchange particles before attempting a mass deposition */
-                    exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
-                    timer_stop(rank, &run_timer, "Exchanging particles took ");
-
-                    /* Initiate mass deposition */
-                    mass_deposition(&mass, particles, local_partnum);
-                    timer_stop(rank, &powspec_timer, "Computing mass density took ");
-
-                    /* Merge the buffers with the main grid */
-                    add_local_buffers(&mass);
-                    timer_stop(rank, &powspec_timer, "Communicating buffers took ");
-
-                    analysis_posdep(&mass, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
-                    timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
-
-                    analysis_powspec(&mass, /* output_num = */ j, output_list[j], r2c_mpi, &us, &pcs, &cosmo, &pars);
-                    timer_stop(rank, &powspec_timer, "Global power spectra took ");
-
-                    message(rank, "\n");
-                }
-
-                if (pars.DoHaloFindingWithSnapshots) {
-                    /* Timer */
-                    struct timepair fof_timer;
-                    timer_start(rank, &fof_timer);
-
-                    message(rank, "\n");
-                    message(rank, "Starting friends-of-friends halo finding.\n");
-
-                    /* Free the main grid before engaging the halo finder */
-                    free_local_grid(&mass);
-
-                    /* Run the halo finder */
-                    const double linking_length = pars.LinkingLength * boxlen / N;
-                    analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
-
-                    /* Timer */
-                    MPI_Barrier(MPI_COMM_WORLD);
-                    timer_stop(rank, &fof_timer, "Finding halos took ");
-                    message(rank, "\n");
-
-                    /* Re-allocate the main grid after finishing with the halo finder */
-                    alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
-                    mass.momentum_space = 0;
-
-                    /* Re-create the FFT plans */
-                    fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
-                }
-
-                message(rank, "Exporting a snapshot at a = %g.\n", output_list[j]);
-                exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
+                message(rank, "Exporting a snapshot at a = %g.\n", output_list_snap[j]);
+                exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
                 timer_stop(rank, &run_timer, "Exporting a snapshot took ");
             }
         }
@@ -625,8 +634,10 @@ int main(int argc, char *argv[]) {
         message(rank, "\n");
     }
 
-    /* Free the list with snapshot output times */
-    free(output_list);
+    /* Free the lists with output times */
+    free(output_list_snap);
+    free(output_list_power);
+    free(output_list_halos);
 
     /* Free the particle lattice */
     free(particles);

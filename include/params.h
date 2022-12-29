@@ -49,14 +49,17 @@ struct params {
     double ScaleFactorStep;
     int DerivativeOrder;
 
-    /* Snapshot parameters */
+    /* Output time strings */
     char *SnapshotTimesString;
+    char *PowerSpectrumTimesString;
+    char *HaloFindingTimesString;
+
+    /* Snapshot parameters */
     char *SnapshotBaseName;
 
     /* Halo finding parameters */
     char *CatalogueBaseName;
     char *SnipBaseName;
-    char DoHaloFindingWithSnapshots;
     char DoSphericalOverdensities;
     double LinkingLength;
     int MinHaloParticleNum;
@@ -75,7 +78,6 @@ struct params {
     int SnipshotMinParticleNum;
 
     /* Power spectrum (for on-the-fly analysis) parameters */
-    char DoPowerSpectra;
     int PowerSpectrumBins;
     int PositionDependentSplits;
 };
@@ -83,5 +85,7 @@ struct params {
 int readParams(struct params *parser, const char *fname);
 int cleanParams(struct params *parser);
 int parseArrayString(char *string, double **array, int *length);
+int parseOutputList(char *string, double **output_list, int *num_outputs,
+                    double a_begin, double a_end);
 
 #endif
