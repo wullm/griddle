@@ -30,6 +30,7 @@
 #include "../include/analysis_posdep.h"
 #include "../include/message.h"
 #include "../include/fft.h"
+#include "../include/fft_kernels.h"
 #include "../include/strooklat.h"
 
 #define DEBUG_CHECKS
@@ -221,6 +222,15 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
             /* Fourier transform the sub-grid */
             fft_execute(r2c);
             fft_normalize_r2c(fgrid, N_sub, sublen);
+
+            /* Undo the CIC window function */
+            struct Hermite_kern_params Hkp;
+            Hkp.order = 2; //CIC
+            Hkp.N = N_sub;
+            Hkp.boxlen = sublen;
+
+            /* Apply the inverse CIC kernel */
+            fft_apply_kernel(fgrid, fgrid, N_sub, sublen, kernel_undo_Hermite_window, &Hkp);
 
             /* Compute the power spectrum */
             calc_cross_powerspec(N_sub, sublen, fgrid, fgrid, bins, k_in_bins,

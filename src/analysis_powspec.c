@@ -168,7 +168,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     GridFloatType *sinc_tab = malloc(N * sizeof(GridFloatType));
     for (int x = 0; x < N; x++) {
         double kx = (x > N/2) ? (x - N) * dk : x * dk;
-        sinc_tab[x] = sinc(0.5 * kx * grid_fac);
+        sinc_tab[x] = 1.0 / sinc(0.5 * kx * grid_fac);
     }
 
     timer_stop(rank, &run_timer, "Creating look-up table took ");
