@@ -338,11 +338,12 @@ int main(int argc, char *argv[]) {
             add_local_buffers(&mass);
             timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
+            analysis_posdep(&mass, boxlen, N, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
+            timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+
             analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us, &pcs, &cosmo, &pars);
             timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
-            analysis_posdep(&mass, boxlen, N, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
-            timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
             message(rank, "\n");
         }
 
@@ -565,11 +566,12 @@ int main(int argc, char *argv[]) {
                     add_local_buffers(&mass);
                     timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
+                    analysis_posdep(&mass, boxlen, N, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
+                    timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+
                     analysis_powspec(&mass, /* output_num = */ j, output_list[j], r2c_mpi, &us, &pcs, &cosmo, &pars);
                     timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
-                    analysis_posdep(&mass, boxlen, N, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
-                    timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
                     message(rank, "\n");
                 }
 
