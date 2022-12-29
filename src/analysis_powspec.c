@@ -161,9 +161,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     const double boxvol = boxlen * boxlen * boxlen;
     const double dk = 2 * M_PI / boxlen;
     const double grid_fac = boxlen / N;
-    const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
     const double fft_factor = 1.0 / ((double) N * N * N);
-    const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
     GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the inverse CIC kernel */
@@ -189,7 +187,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                 ctot = cx * cy * cz;
                 ctot = ctot * ctot;
 
-                GridComplexType kern = overall_fac * ctot;
+                GridComplexType kern = fft_factor * ctot;
                 fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
             }
         }
