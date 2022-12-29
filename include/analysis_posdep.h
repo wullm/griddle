@@ -28,9 +28,9 @@
 #include "cosmology.h"
 #include "distributed_grid.h"
 
-int analysis_posdep(struct distributed_grid *dgrid, double boxlen, 
-                    long long int Ng, int output_num, double a_scale_factor,
-                    const struct units *us, const struct physical_consts *pcs,
+int analysis_posdep(struct distributed_grid *dgrid, int output_num,
+                    double a_scale_factor, const struct units *us,
+                    const struct physical_consts *pcs,
                     const struct cosmology *cosmo, struct params *pars);
 
 #endif

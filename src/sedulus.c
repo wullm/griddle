@@ -338,7 +338,7 @@ int main(int argc, char *argv[]) {
             add_local_buffers(&mass);
             timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
-            analysis_posdep(&mass, boxlen, N, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
+            analysis_posdep(&mass, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
             timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
 
             analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us, &pcs, &cosmo, &pars);
@@ -556,6 +556,7 @@ int main(int argc, char *argv[]) {
                     struct timepair powspec_timer;
                     timer_start(rank, &powspec_timer);
 
+                    message(rank, "\n");
                     message(rank, "Starting power spectrum calculation.\n");
 
                     /* Exchange particles before attempting a mass deposition */
@@ -570,7 +571,7 @@ int main(int argc, char *argv[]) {
                     add_local_buffers(&mass);
                     timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
-                    analysis_posdep(&mass, boxlen, N, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
+                    analysis_posdep(&mass, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
                     timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
 
                     analysis_powspec(&mass, /* output_num = */ j, output_list[j], r2c_mpi, &us, &pcs, &cosmo, &pars);

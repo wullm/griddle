@@ -125,9 +125,9 @@ void calc_cross_powerspec(int N, double boxlen, const GridComplexType *box1,
 }
 
 /* TODO, kick and drift particles to the right time */
-int analysis_posdep(struct distributed_grid *dgrid, double boxlen, 
-                    long long int Ng, int output_num, double a_scale_factor,
-                    const struct units *us, const struct physical_consts *pcs,
+int analysis_posdep(struct distributed_grid *dgrid, int output_num,
+                    double a_scale_factor, const struct units *us,
+                    const struct physical_consts *pcs,
                     const struct cosmology *cosmo, struct params *pars) {
 
     /* Get the dimensions of the cluster */
@@ -135,12 +135,16 @@ int analysis_posdep(struct distributed_grid *dgrid, double boxlen,
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
+    /* Grid parameters */
+    const int N = dgrid->N;
+    const double boxlen = dgrid->boxlen;
+
     /* The number of sub-grids or cells */
     const int N_cells = pars->PositionDependentSplits;
-    const int N_sub = Ng / N_cells;
+    const int N_sub = N / N_cells;
     const double sublen = boxlen / N_cells;
 
-    if (N_cells * N_sub != Ng) {
+    if (N_cells * N_sub != N) {
         printf("Error: The sub-grids do not divide into the main grid.\n");
         exit(1);
     }
