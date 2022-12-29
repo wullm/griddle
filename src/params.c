@@ -83,6 +83,7 @@ int readParams(struct params *pars, const char *fname) {
      pars->ShrinkingSphereRadiusFactor = ini_getd("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname);
      pars->ShrinkingSphereMassFraction = ini_getd("HaloFinding", "ShrinkingSphereMassFraction", 0.01, fname);
      pars->ShrinkingSphereMinParticleNum = ini_getl("HaloFinding", "ShrinkingSphereMinParticleNum", 100, fname);
+     pars->ExportSnipshots = ini_getl("HaloFinding", "ExportSnipshots", 1, fname);
      pars->SnipshotReduceFactor =  ini_getd("HaloFinding", "SnipshotReduceFactor", 0.01, fname);
      pars->SnipshotMinParticleNum =  ini_getl("HaloFinding", "SnipshotMinParticleNum", 5, fname);
 

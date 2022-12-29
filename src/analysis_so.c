@@ -1088,16 +1088,18 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     timer_stop(rank, &so_timer, "Writing SO halo properties took ");
 
     /* Export x% of particles in halos, but aim for a minimum of y */
-    double reduce_factor = pars->SnipshotReduceFactor;
-    int min_part_export_per_halo = pars->SnipshotMinParticleNum;
+    if (pars->ExportSnipshots) {
+        double reduce_factor = pars->SnipshotReduceFactor;
+        int min_part_export_per_halo = pars->SnipshotMinParticleNum;
 
-    exportSnipshot(pars, us, halos, pcs, parts, cosmo, cell_list, cell_counts,
-                   cell_offsets, output_num, a_scale_factor, Ng, N_cells,
-                   reduce_factor, min_part_export_per_halo, num_localpart,
-                   num_local_fofs);
+        exportSnipshot(pars, us, halos, pcs, parts, cosmo, cell_list, cell_counts,
+                       cell_offsets, output_num, a_scale_factor, Ng, N_cells,
+                       reduce_factor, min_part_export_per_halo, num_localpart,
+                       num_local_fofs);
 
-    /* Timer */
-    timer_stop(rank, &so_timer, "Generating a halo particle snipshot took ");
+        /* Timer */
+        timer_stop(rank, &so_timer, "Exporting a halo particle snipshot took ");
+    }
 
     /* Free all memory */
     free(cell_list);

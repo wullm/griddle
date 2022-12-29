@@ -74,6 +74,7 @@ struct params {
     int ShrinkingSphereMinParticleNum;
 
     /* Snipshot parameters */
+    char ExportSnipshots;
     double SnipshotReduceFactor;
     int SnipshotMinParticleNum;
 
