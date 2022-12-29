@@ -338,14 +338,24 @@ int main(int argc, char *argv[]) {
 
             message(rank, "Starting friends-of-friends halo finding.\n");
 
-            const double linking_length = pars.LinkingLength * boxlen / N;
+            /* Free the main grid before engaging the halo finder */
+            free_local_grid(&mass);
 
+            /* Run the halo finder */
+            const double linking_length = pars.LinkingLength * boxlen / N;
             analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
 
             /* Timer */
             MPI_Barrier(MPI_COMM_WORLD);
             timer_stop(rank, &fof_timer, "Finding halos took ");
             message(rank, "\n");
+
+            /* Re-allocate the main grid after finishing with the halo finder */
+            alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+            mass.momentum_space = 0;
+
+            /* Re-create the FFT plans */
+            fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
         }
 
         /* Timer */
@@ -572,14 +582,24 @@ int main(int argc, char *argv[]) {
                     message(rank, "\n");
                     message(rank, "Starting friends-of-friends halo finding.\n");
 
-                    const double linking_length = pars.LinkingLength * boxlen / N;
+                    /* Free the main grid before engaging the halo finder */
+                    free_local_grid(&mass);
 
+                    /* Run the halo finder */
+                    const double linking_length = pars.LinkingLength * boxlen / N;
                     analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list[j], &us, &pcs, &cosmo, &pars);
 
                     /* Timer */
                     MPI_Barrier(MPI_COMM_WORLD);
                     timer_stop(rank, &fof_timer, "Finding halos took ");
                     message(rank, "\n");
+
+                    /* Re-allocate the main grid after finishing with the halo finder */
+                    alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+                    mass.momentum_space = 0;
+
+                    /* Re-create the FFT plans */
+                    fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
                 }
 
                 message(rank, "Exporting a snapshot at a = %g.\n", output_list[j]);
