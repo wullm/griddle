@@ -84,6 +84,20 @@ void union_roots(struct fof_part_data *fof_parts, struct fof_part_data *a, struc
     }
 }
 
+/* A safe global version of find_root that terminates when the root is nonlocal.
+ * This should be run only when the roots are global. By contrast, the regular
+ * find_root and union_roots should be run when the roots are local. */
+long int find_root_global(struct fof_part_data *fof_parts, struct fof_part_data *part,
+                          long int rank_offset, long int num_localpart) {
+
+    if (!is_local(part->root, rank_offset, num_localpart))
+        return part->root;
+    else if (fof_parts[part->root - rank_offset].root == part->root)
+        return part->root;
+    part->root = find_root_global(fof_parts, &fof_parts[part->root - rank_offset], rank_offset, num_localpart);
+    return part->root;
+}
+
 /* Link particles within two cells */
 int link_cells(struct fof_part_data *fof_parts, struct fof_cell_list *cl,
                long int local_offset1, long int local_offset2,
@@ -505,6 +519,11 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                               &receive_from_left, rank_left, num_localpart,
                               max_partnum);
 
+            /* Collapse the tree using the global roots */
+            for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+                fof_parts[i].root = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
+            }
+
             /* After receiving (possibly still foreign rooted) particles,
              * determine the number of particles with foreign roots */
             int num_foreign_rooted = 0;
@@ -565,8 +584,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
        that are linked to something are located on the "home rank" of the root
        particle of that group. Now we can attach the trees. */
 
-    /* Turn the global_roots back into roots. This is safe because no particle
-     * has a foreign root. Additionally, update the local offsets.  */
+    /* Turn the global_roots back into local roots. This is safe because no
+     *  particle has a foreign root. Additionally, update the local offsets.  */
     for (long long i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue; // don't remove
@@ -709,7 +728,6 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         long int root = fof_parts[i].root;
         long int h = halo_ids[root] - halo_rank_offsets[rank];
-        long int centre_particle = centre_particles[h];
 
         if (h >= 0) {
 #ifdef WITH_MASSES
@@ -724,6 +742,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             fofs[h].mass_fof += mass;
 
             /* Compute the offset from the most central particle */
+            long int centre_particle = centre_particles[h];
             const IntPosType dx = fof_parts[i].x[0] - fof_parts[centre_particle].x[0];
             const IntPosType dy = fof_parts[i].x[1] - fof_parts[centre_particle].x[1];
             const IntPosType dz = fof_parts[i].x[2] - fof_parts[centre_particle].x[2];
@@ -795,6 +814,10 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     free(cell_counts);
     free(cell_offsets);
     free(cell_list);
+
+    /* We are done with halo rank offsets and sizes */
+    free(halos_per_rank);
+    free(halo_rank_offsets);
 
     /* Export the FOF properties to an HDF5 file */
     exportCatalogue(pars, us, pcs, output_num, a_scale_factor, total_halo_num, num_structures, fofs);

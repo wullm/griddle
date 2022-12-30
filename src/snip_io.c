@@ -586,6 +586,10 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     /* Close the file */
     H5Fclose(h_out_file);
 
+    /* We are done with halo rank offsets and sizes */
+    free(halos_per_rank);
+    free(halo_rank_offsets);
+
     return 0;
 }
 
