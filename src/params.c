@@ -113,6 +113,7 @@ int parseArrayString(char *string, double **array, int *length) {
     /* Check that there is anything there */
     if (strlen(string) <= 0) {
         *length = 0;
+        *array = NULL;
         return 0;
     }
 
