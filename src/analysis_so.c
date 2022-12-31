@@ -247,36 +247,36 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
 
 /* Find cells that overlap with the search radius from a given centre of mass */
 int find_overlapping_cells(const double com[3], double search_radius,
-                           double pos_to_cell_fac, int N_cells,
-                           int **cells, int *num_overlap) {
+                           double pos_to_cell_fac, long int N_cells,
+                           long int **cells, long int *num_overlap) {
 
     /* Determine the cells of the corners of the circumscribing cube */
-    int min_x[3] = {(com[0] - search_radius) * pos_to_cell_fac,
-                    (com[1] - search_radius) * pos_to_cell_fac,
-                    (com[2] - search_radius) * pos_to_cell_fac};
-    int max_x[3] = {(com[0] + search_radius) * pos_to_cell_fac,
-                    (com[1] + search_radius) * pos_to_cell_fac,
-                    (com[2] + search_radius) * pos_to_cell_fac};
+    long int min_x[3] = {(com[0] - search_radius) * pos_to_cell_fac,
+                         (com[1] - search_radius) * pos_to_cell_fac,
+                         (com[2] - search_radius) * pos_to_cell_fac};
+    long int max_x[3] = {(com[0] + search_radius) * pos_to_cell_fac,
+                         (com[1] + search_radius) * pos_to_cell_fac,
+                         (com[2] + search_radius) * pos_to_cell_fac};
 
     /* The search radius spans this many cells in each dimension */
-    int dx = max_x[0] - min_x[0] + 1;
-    int dy = max_x[1] - min_x[1] + 1;
-    int dz = max_x[2] - min_x[2] + 1;
+    long int dx = max_x[0] - min_x[0] + 1;
+    long int dy = max_x[1] - min_x[1] + 1;
+    long int dz = max_x[2] - min_x[2] + 1;
 
     /* Allocate memory for the cell indices */
     *num_overlap = dx * dy * dz;
-    *cells = realloc(*cells, dx * dy * dz * sizeof(int));
+    *cells = realloc(*cells, dx * dy * dz * sizeof(long int));
 
     /* Loop over cells */
-    int i = 0;
-    for (int x = min_x[0]; x <= max_x[0]; x++) {
-        for (int y = min_x[1]; y <= max_x[1]; y++) {
-            for (int z = min_x[2]; z <= max_x[2]; z++) {
+    long int i = 0;
+    for (long int x = min_x[0]; x <= max_x[0]; x++) {
+        for (long int y = min_x[1]; y <= max_x[1]; y++) {
+            for (long int z = min_x[2]; z <= max_x[2]; z++) {
 
                 /* Handle wrapping */
-                int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+                long int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
+                long int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
+                long int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
 
                 /* Find the particle count and offset of the cell */
                 (*cells)[i] = row_major_cell(cx, cy, cz, N_cells);
@@ -300,7 +300,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                       long int *cell_offsets, double boxlen, long long int Ng,
                       long long int num_localpart, long long int *num_foreignpart,
                       long long int max_partnum, long int num_foreign_fofs,
-                      int N_cells, double search_radius,
+                      long int N_cells, double search_radius,
                       int exchange_iteration, int max_iterations) {
 
     /* Get the dimensions of the cluster */
@@ -327,8 +327,8 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     const double max_radius_2 = search_radius * search_radius;
 
     /* Memory for holding the indices of overlapping cells */
-    int *cells = malloc(0);
-    int num_overlap;
+    long int *cells = malloc(0);
+    long int num_overlap;
 
     /* Find local particles that overlap with foreign FOFs at distance n */
     long int send_left_counter = 0;
@@ -347,15 +347,15 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -394,15 +394,15 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -629,21 +629,16 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     message(rank, "It took %d iterations to exchange all FOFs\n", exchange_iterations);
 
     /* The initial domain decomposition into spatial cells */
-    const int N_cells = boxlen / (0.25 * min_radius);
+    const long int N_cells = boxlen / (0.25 * min_radius);
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
     const double pos_to_cell_fac = N_cells / boxlen;
-
-    if (N_cells > 1250) {
-        printf("The number of cells is large. We should switch to larger ints (TODO).\n");
-        exit(1);
-    }
 
     /* The conversion factor from integers to physical lengths */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
     const double int_to_pos_fac = 1.0 / pos_to_int_fac;
 
     /* Cell domain decomposition */
-    const int num_cells = N_cells * N_cells * N_cells;
+    const long int num_cells = N_cells * N_cells * N_cells;
     long int *cell_counts = calloc(num_cells, sizeof(long int));
     long int *cell_offsets = calloc(num_cells, sizeof(long int));
 
@@ -668,14 +663,14 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     timer_stop(rank, &so_timer, "Sorting particles took ");
 
     /* Reset the cell particle counts and offsets */
-    for (int i = 0; i < num_cells; i++) {
+    for (long int i = 0; i < num_cells; i++) {
         cell_counts[i] = 0;
         cell_offsets[i] = 0;
     }
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart; i++) {
-        int c = cell_list[i].cell;
+        long int c = cell_list[i].cell;
 #ifdef DEBUG_CHECKS
         assert((c >= 0) && (c < num_cells));
 #endif
@@ -684,7 +679,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Determine the offsets, using the fact that the particles are sorted */
     cell_offsets[0] = 0;
-    for (int i = 1; i < num_cells; i++) {
+    for (long int i = 1; i < num_cells; i++) {
         cell_offsets[i] = cell_offsets[i-1] + cell_counts[i-1];
     }
 
@@ -721,14 +716,14 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     timer_stop(rank, &so_timer, "Sorting particles took ");
 
     /* Reset the cell particle counts and offsets */
-    for (int i = 0; i < num_cells; i++) {
+    for (long int i = 0; i < num_cells; i++) {
         cell_counts[i] = 0;
         cell_offsets[i] = 0;
     }
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart + num_foreign_parts; i++) {
-        int c = cell_list[i].cell;
+        long int c = cell_list[i].cell;
 #ifdef DEBUG_CHECKS
         assert((c >= 0) && (c < num_cells));
 #endif
@@ -737,7 +732,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Determine the offsets, using the fact that the particles are sorted */
     cell_offsets[0] = 0;
-    for (int i = 1; i < num_cells; i++) {
+    for (long int i = 1; i < num_cells; i++) {
         cell_offsets[i] = cell_offsets[i-1] + cell_counts[i-1];
     }
 
@@ -758,8 +753,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     struct so_part_data *so_parts = malloc(working_space * sizeof(struct so_part_data));
 
     /* Memory for holding the indices of overlapping cells */
-    int *cells = malloc(0);
-    int num_overlap;
+    long int *cells = malloc(0);
+    long int num_overlap;
 
     /* Loop over local halos */
     for (long int i = 0; i < num_local_fofs; i++) {
@@ -794,15 +789,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                                N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -839,15 +834,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             }
 
             /* Loop over cells */
-            for (int c = 0; c < num_overlap; c++) {
+            for (long int c = 0; c < num_overlap; c++) {
                 /* Find the particle count and offset of the cell */
-                int cell = cells[c];
+                long int cell = cells[c];
                 long int local_count = cell_counts[cell];
                 long int local_offset = cell_offsets[cell];
 
                 /* Loop over particles in cells */
-                for (int a = 0; a < local_count; a++) {
-                    const int index_a = cell_list[local_offset + a].offset;
+                for (long int a = 0; a < local_count; a++) {
+                    const long int index_a = cell_list[local_offset + a].offset;
 
                     const IntPosType *xa = parts[index_a].x;
                     const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -860,9 +855,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #endif
 
                         /* Compute the offset from the current CoM */
-                        const IntPosType dx = parts[index_a].x[0] - com[0];
-                        const IntPosType dy = parts[index_a].x[1] - com[1];
-                        const IntPosType dz = parts[index_a].x[2] - com[2];
+                        const IntPosType dx = xa[0] - com[0];
+                        const IntPosType dy = xa[1] - com[1];
+                        const IntPosType dz = xa[2] - com[2];
 
                         /* Enforce boundary conditions and convert to physical lengths */
                         const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
@@ -921,15 +916,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         long int nearby_partnum = 0;
 
         /* Loop over cells */
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -950,15 +945,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
         /* Loop over cells to create an array of distances */
         long int part_counter = 0;
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -1045,15 +1040,15 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
 
         /* Loop over cells to compute other SO properties */
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -1093,7 +1088,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         int min_part_export_per_halo = pars->SnipshotMinParticleNum;
 
         exportSnipshot(pars, us, halos, pcs, parts, cosmo, cell_list, cell_counts,
-                       cell_offsets, output_num, a_scale_factor, Ng, N_cells,
+                       cell_offsets, output_num, a_scale_factor, N_cells,
                        reduce_factor, min_part_export_per_halo, num_localpart,
                        num_local_fofs);
 

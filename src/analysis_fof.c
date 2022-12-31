@@ -239,13 +239,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     timer_start(rank, &fof_timer);
 
     /* The initial domain decomposition into spatial cells */
-    const int N_cells = boxlen / (4.0 * linking_length);
+    const long int N_cells = boxlen / (4.0 * linking_length);
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
-
-    if (N_cells > 1250) {
-        printf("The number of cells is large. We should switch to larger ints (TODO).\n");
-        exit(1);
-    }
 
     /* The conversion factor from integers to physical lengths */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
@@ -384,13 +379,13 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     timer_stop(rank, &fof_timer, "Sorting particles took ");
 
     /* Determine the counts and offsets of particles in each cell */
-    const int num_cells = N_cells * N_cells * N_cells;
+    const long int num_cells = N_cells * N_cells * N_cells;
     long int *cell_counts = calloc(num_cells, sizeof(long int));
     long int *cell_offsets = calloc(num_cells, sizeof(long int));
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        int c = cell_list[i].cell;
+        long int c = cell_list[i].cell;
 #ifdef DEBUG_CHECKS
         assert((c >= 0) && (c < num_cells));
 #endif
@@ -408,9 +403,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     long int total_links = 0;
 
     /* Now link particles within and between neighbouring cells */
-    for (int i = 0; i < N_cells; i++) {
-        for (int j = 0; j < N_cells; j++) {
-            for (int k = 0; k < N_cells; k++) {
+    for (long int i = 0; i < N_cells; i++) {
+        for (long int j = 0; j < N_cells; j++) {
+            for (long int k = 0; k < N_cells; k++) {
 
                 long int offset = cell_offsets[row_major_cell(i, j, k, N_cells)];
                 long int count = cell_counts[row_major_cell(i, j, k, N_cells)];
@@ -419,9 +414,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 for (int u = -1; u <= 1; u++) {
                     for (int v = -1; v <= 1; v++) {
                         for (int w = -1; w <= 1; w++) {
-                            int i1 = i + u;
-                            int j1 = j + v;
-                            int k1 = k + w;
+                            long int i1 = i + u;
+                            long int j1 = j + v;
+                            long int k1 = k + w;
 
                             /* Account for periodic boundary conditions */
                             if (i1 >= N_cells) i1 -= N_cells;

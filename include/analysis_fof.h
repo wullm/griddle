@@ -29,16 +29,18 @@
 
 struct fof_cell_list {
     long int offset;
-    int cell;
+    long int cell;
 };
 
-static inline int row_major_cell(int i, int j, int k, int N_cells) {
+static inline long int row_major_cell(long int i, long int j, long int k, long int N_cells) {
     return i * N_cells * N_cells + j * N_cells + k;
 }
 
 /* Determine the cell containing a given particle */
-static inline int which_cell(IntPosType x[3], double int_to_cell_fac, int N_cells) {
-    return row_major_cell((int) (int_to_cell_fac * x[0]), (int) (int_to_cell_fac * x[1]), (int) (int_to_cell_fac * x[2]), N_cells);
+static inline long int which_cell(IntPosType x[3], double int_to_cell_fac, long int N_cells) {
+    return row_major_cell((long int) (int_to_cell_fac * x[0]),
+                          (long int) (int_to_cell_fac * x[1]),
+                          (long int) (int_to_cell_fac * x[2]), N_cells);
 }
 
 /* Order particles by their spatial cell index */

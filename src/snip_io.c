@@ -197,7 +197,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                    const struct particle *parts, const struct cosmology *cosmo,
                    const struct so_cell_list *cell_list, long int *cell_counts,
                    long int *cell_offsets, int output_num, double a_scale_factor,
-                   int N, int N_cells, double reduce_factor,
+                   long int N_cells, double reduce_factor,
                    int min_part_export_per_halo, long long int local_partnum,
                    long long int local_halo_num) {
 
@@ -260,8 +260,8 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     long long int particles_total = 0;
 
     /* Memory for holding the indices of overlapping cells */
-    int *cells = malloc(0);
-    int num_overlap;
+    long int *cells = malloc(0);
+    long int num_overlap;
 
     /* Loop over SO halos */
     for (long int i = 0; i < local_halo_num; i++) {
@@ -289,15 +289,15 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (int c = 0; c < num_overlap; c++) {
+        for (long int c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            int cell = cells[c];
+            long int cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
             
             /* Loop over particles in cells */
-            for (int a = 0; a < local_count; a++) {
-                const int index_a = cell_list[local_offset + a].offset;
+            for (long int a = 0; a < local_count; a++) {
+                const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -305,9 +305,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                 if (r2 < R_SO_2) {
                     /* Randomly decide whether to select */
                     double p = rand() / ((double) RAND_MAX);
-                    
-                    
-                    
+
                     if (p < p_select) {
                         /* Unpack the coordinates */
                         coords[particles_total * 3 + 0] = parts[index_a].x[0] * int_to_pos_fac;
