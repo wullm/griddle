@@ -394,7 +394,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Determine the offsets, using the fact that the particles are sorted */
     cell_offsets[0] = 0;
-    for (int i = 1; i < num_cells; i++) {
+    for (long int i = 1; i < num_cells; i++) {
         cell_offsets[i] = cell_offsets[i-1] + cell_counts[i-1];
     }
 
