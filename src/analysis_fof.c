@@ -99,24 +99,24 @@ long int find_root_global(struct fof_part_data *fof_parts, struct fof_part_data 
 }
 
 /* Link particles within two cells */
-int link_cells(struct fof_part_data *fof_parts, struct fof_cell_list *cl,
-               long int local_offset1, long int local_offset2,
-               long int local_count1, long int local_count2,
-               double int_to_pos_fac, double linking_length_2) {
+long int link_cells(struct fof_part_data *fof_parts, struct fof_cell_list *cl,
+                    long int local_offset1, long int local_offset2,
+                    long int local_count1, long int local_count2,
+                    double int_to_pos_fac, double linking_length_2) {
 
     if (local_count1 < 1 || local_count2 < 1 || (local_count1 + local_count2 < 2)) return 0;
 
-    int links = 0;
+    long int links = 0;
 
-    for (int a = 0; a < local_count1; a++) {
-        const int index_a = cl[local_offset1 + a].offset;
+    for (long int a = 0; a < local_count1; a++) {
+        const long int index_a = cl[local_offset1 + a].offset;
         const IntPosType *xa = fof_parts[index_a].x;
 
         /* If we are linking within the same cell, only check all pairs once */
-        int max_check = (local_offset1 == local_offset2) ? a : local_count2;
+        long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
 
-        for (int b = 0; b < max_check; b++) {
-            const int index_b = cl[local_offset2 + b].offset;
+        for (long int b = 0; b < max_check; b++) {
+            const long int index_b = cl[local_offset2 + b].offset;
             const IntPosType *xb = fof_parts[index_b].x;
             if (should_link(xa, xb, int_to_pos_fac, linking_length_2)) {
                 links++;
