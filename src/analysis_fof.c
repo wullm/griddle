@@ -24,9 +24,11 @@
 #include <math.h>
 #include <mpi.h>
 
+#include <fftw3.h>
 #include <assert.h>
 #include <sys/time.h>
 
+#include "../include/fft_types.h"
 #include "../include/analysis_fof.h"
 #include "../include/analysis_so.h"
 #include "../include/catalogue_io.h"
@@ -239,7 +241,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     timer_start(rank, &fof_timer);
 
     /* The initial domain decomposition into spatial cells */
-    const long int N_cells = boxlen / (4.0 * linking_length);
+    const long int N_cells = pars->HaloFindCellNumber;
+    const long int num_cells = N_cells * N_cells * N_cells;
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
 
     /* The conversion factor from integers to physical lengths */
@@ -252,9 +255,32 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     const double int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
     const double int_to_rank_fac = 1.0 / int_block_width;
 
+    /* Compare memory use of FOF structures with that of the PM grid. */
+    const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
+    const double mem_cell_structures = (2 * num_cells * sizeof(long int)) / (1.0e9);
+    const double mem_cell_list = (max_partnum * sizeof(struct fof_cell_list)) / (1.0e9);
+    const double mem_fof_parts = (max_partnum * sizeof(struct fof_part_data)) / (1.0e9);
+    const double mem_roots = (max_partnum * sizeof(long int)) / (1.0e9);
+    /* Estimate the number of halos */
+    const double halo_num_estimate = 0.005 * num_localpart;
+    const double mem_central_parts = (halo_num_estimate * (sizeof(double) + sizeof(long int))) / (1.0e9);
+    const double mem_halo_struct = (halo_num_estimate * sizeof(struct fof_halo)) / (1.0e9);
+    const double net_mem_use = (mem_cell_structures + mem_cell_list + mem_fof_parts + mem_roots + mem_central_parts + mem_halo_struct) - mem_grid;
+    message(rank, "\n");
+    message(rank, "Estimated memory use of FOF structures.\n");
+    message(rank, "Cell structures: %g GB\n", mem_cell_structures);
+    message(rank, "Cell list: %g GB\n", mem_cell_list);
+    message(rank, "FOF particle data: %g GB\n", mem_fof_parts);
+    message(rank, "Root list: %g GB\n", mem_roots);
+    message(rank, "Central particle data: %g GB\n", mem_central_parts);
+    message(rank, "Halo data: %g GB\n", mem_halo_struct);
+    message(rank, "Available from PM grid: %g GB\n", mem_grid);
+    message(rank, "Net use: %g GB\n", net_mem_use);
+    message(rank, "\n");
+
     /* The cells must be larger than the linking length */
     if (boxlen / N_cells <= 2 * linking_length) {
-        printf("The cells are smaller than the linking length, which is bad.\n");
+        printf("The cells are smaller than the linking length. Decrease HaloFinding:CellNumber.\n");
         exit(1);
     }
 
@@ -379,7 +405,6 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     timer_stop(rank, &fof_timer, "Sorting particles took ");
 
     /* Determine the counts and offsets of particles in each cell */
-    const long int num_cells = N_cells * N_cells * N_cells;
     long int *cell_counts = calloc(num_cells, sizeof(long int));
     long int *cell_offsets = calloc(num_cells, sizeof(long int));
 
@@ -617,7 +642,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     /* Linking is now complete. Proceed with finding group sizes and computing
      * FOF halo properties of sufficiently large groups */
 
-    /* Allocate memory for the group sizes */
+    /* Allocate memory for the group sizes (only local parts can be roots) */
     int *group_sizes = calloc(num_localpart, sizeof(int));
 
     /* Determine group sizes by counting particles with the same root */

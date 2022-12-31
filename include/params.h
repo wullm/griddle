@@ -63,6 +63,7 @@ struct params {
     char DoSphericalOverdensities;
     double LinkingLength;
     int MinHaloParticleNum;
+    double HaloFindCellNumber;
     double SphericalOverdensityThreshold;
     double SphericalOverdensityMinLookRadius;
     int FOFBufferSize;

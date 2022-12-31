@@ -629,7 +629,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     message(rank, "It took %d iterations to exchange all FOFs\n", exchange_iterations);
 
     /* The initial domain decomposition into spatial cells */
-    const long int N_cells = boxlen / (0.25 * min_radius);
+    const long int N_cells = pars->HaloFindCellNumber;
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
     const double pos_to_cell_fac = N_cells / boxlen;
 

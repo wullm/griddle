@@ -76,6 +76,7 @@ int readParams(struct params *pars, const char *fname) {
      pars->DoSphericalOverdensities = ini_getl("HaloFinding", "DoSphericalOverdensities", 1, fname);
      pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
+     pars->HaloFindCellNumber = ini_getl("HaloFinding", "CellNumber", 256, fname);
      pars->FOFBufferSize =  ini_getl("HaloFinding", "FOFBufferSize", 10000, fname);
      pars->SphericalOverdensityThreshold = ini_getd("HaloFinding", "SphericalOverdensityThreshold", 200.0, fname);
      pars->SphericalOverdensityMinLookRadius = ini_getd("HaloFinding", "SphericalOverdensityMinLookRadius", 10.0, fname);
