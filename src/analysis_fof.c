@@ -106,7 +106,7 @@ long int find_root_global(struct fof_part_data *fof_parts, struct fof_part_data 
 }
 
 /* Link particles within two cells */
-long int link_cells(struct fof_part_data *fof_parts, struct fof_cell_list *cl,
+long int link_cells(struct fof_part_data *fof_parts, long int *cl,
                     long int local_offset1, long int local_offset2,
                     long int local_count1, long int local_count2,
                     double int_to_pos_fac, double linking_length_2) {
@@ -116,14 +116,14 @@ long int link_cells(struct fof_part_data *fof_parts, struct fof_cell_list *cl,
     long int links = 0;
 
     for (long int a = 0; a < local_count1; a++) {
-        const long int index_a = cl[local_offset1 + a].offset;
+        const long int index_a = cl[local_offset1 + a];
         const IntPosType *xa = fof_parts[index_a].x;
 
         /* If we are linking within the same cell, only check all pairs once */
         long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
 
         for (long int b = 0; b < max_check; b++) {
-            const long int index_b = cl[local_offset2 + b].offset;
+            const long int index_b = cl[local_offset2 + b];
             const IntPosType *xb = fof_parts[index_b].x;
             if (should_link(xa, xb, int_to_pos_fac, linking_length_2)) {
                 links++;
@@ -270,23 +270,29 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
     const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(long int)) / (1.0e9);
     const double mem_cell_list = (max_partnum_global * sizeof(struct fof_cell_list)) / (1.0e9);
+    const double mem_offset_list = (max_partnum_global * sizeof(long int)) / (1.0e9);
     const double mem_fof_parts = (max_partnum_global * sizeof(struct fof_part_data)) / (1.0e9);
     const double mem_roots = (max_partnum_global * sizeof(long int)) / (1.0e9);
+    const double net_presort = (mem_fof_parts + mem_cell_list) - mem_grid;
+    const double net_postsort = (mem_fof_parts + mem_cell_structures + mem_offset_list + mem_roots) - mem_grid;
     /* Estimate the number of halos */
     const double halo_num_estimate = 0.005 * Np * Np * Np;
     const double mem_central_parts = (halo_num_estimate * (sizeof(double) + sizeof(long int))) / (1.0e9);
     const double mem_halo_struct = (halo_num_estimate * sizeof(struct fof_halo)) / (1.0e9);
-    const double net_mem_use = (mem_cell_structures + mem_cell_list + mem_fof_parts + mem_roots + mem_central_parts + mem_halo_struct) - mem_grid;
+    const double net_mem_use = (mem_fof_parts + mem_cell_structures + mem_roots + mem_central_parts + mem_halo_struct) - mem_grid;
     message(rank, "\n");
     message(rank, "Estimated memory use of FOF structures.\n");
-    message(rank, "Cell structures: %g GB\n", mem_cell_structures);
-    message(rank, "Cell list: %g GB\n", mem_cell_list);
-    message(rank, "FOF particle data: %g GB\n", mem_fof_parts);
-    message(rank, "Root list: %g GB\n", mem_roots);
-    message(rank, "Central particle data: %g GB\n", mem_central_parts);
-    message(rank, "Halo data: %g GB\n", mem_halo_struct);
+    message(rank, "FOF particle data (always): %g GB\n", mem_fof_parts);
+    message(rank, "Cell list (pre-sort): %g GB\n", mem_cell_list);
+    message(rank, "Cell structures (post-sort): %g GB\n", mem_cell_structures);
+    message(rank, "Offset list (post-sort): %g GB\n", mem_offset_list);
+    message(rank, "Root list  (post-sort): %g GB\n", mem_roots);
+    message(rank, "Central particles (final): %g GB\n", mem_central_parts);
+    message(rank, "Halo data (final): %g GB\n", mem_halo_struct);
     message(rank, "Available from PM grid: %g GB\n", mem_grid);
-    message(rank, "Net use: %g GB\n", net_mem_use);
+    message(rank, "(Pre-sort) Net use: %g\n", net_presort);
+    message(rank, "(Post-sort) Net use: %g\n", net_postsort);
+    message(rank, "(Final) Net use: %g\n", net_mem_use);
     message(rank, "\n");
 
     if ((double) N_cells * N_cells >= pow(2, CELL_INT_BYTES)) {
@@ -395,11 +401,6 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         timer_stop(rank, &fof_timer, "The first communication took ");
     }
 
-    /* Set the local offsets for the local and foreign particles */
-    for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        fof_parts[i].root = i;
-    }
-
     /* Now create a particle-cell correspondence for sorting */
     struct fof_cell_list *cell_list = malloc((num_localpart + receive_foreign_count) * sizeof(struct fof_cell_list));
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
@@ -419,13 +420,32 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     timer_stop(rank, &fof_timer, "Sorting particles took ");
 
+    /* Temporarily use the roots as scratch space to copy over the cell list */
+    for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
+        fof_parts[i].root = cell_list[i].offset;
+    }
+
+    /* Free the sorted list and create a new list with offsets only */
+    free(cell_list);
+    long int *offset_list = malloc((num_localpart + receive_foreign_count) * sizeof(long int));
+    for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
+        offset_list[i] = fof_parts[i].root;
+    }
+
+    /* Make each particle its own root using the current local offset */
+    for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
+        fof_parts[i].root = i;
+    }
+
+    timer_stop(rank, &fof_timer, "Shrinking cell list took ");
+
     /* Determine the counts and offsets of particles in each cell */
     long int *cell_counts = calloc(num_cells, sizeof(long int));
     long int *cell_offsets = calloc(num_cells, sizeof(long int));
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        CellIntType c = cell_list[i].cell;
+        CellIntType c = which_cell(fof_parts[i].x, int_to_cell_fac, N_cells);
 #ifdef DEBUG_CHECKS
         assert((c >= 0) && (c < num_cells));
 #endif
@@ -465,7 +485,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                     long int count1 = cell_counts[row_major_cell(j1, k1, N_cells)];
 
                     /* Link cells */
-                    total_links += link_cells(fof_parts, cell_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
+                    total_links += link_cells(fof_parts, offset_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
                 }
             }
         }
