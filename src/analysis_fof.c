@@ -106,7 +106,7 @@ long int find_root_global(struct fof_part_data *fof_parts, struct fof_part_data 
 }
 
 /* Link particles within two cells */
-long int link_cells(struct fof_part_data *fof_parts, long int *cl,
+long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, long int *cl,
                     long int local_offset1, long int local_offset2,
                     long int local_count1, long int local_count2,
                     double int_to_pos_fac, double linking_length_2) {
@@ -117,14 +117,14 @@ long int link_cells(struct fof_part_data *fof_parts, long int *cl,
 
     for (long int a = 0; a < local_count1; a++) {
         const long int index_a = cl[local_offset1 + a];
-        const IntPosType *xa = fof_parts[index_a].x;
+        const IntPosType *xa = parts[index_a].x;
 
         /* If we are linking within the same cell, only check all pairs once */
         long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
 
         for (long int b = 0; b < max_check; b++) {
             const long int index_b = cl[local_offset2 + b];
-            const IntPosType *xb = fof_parts[index_b].x;
+            const IntPosType *xb = parts[index_b].x;
             if (should_link(xa, xb, int_to_pos_fac, linking_length_2)) {
                 links++;
                 union_roots(fof_parts, index_a, index_b);
@@ -136,8 +136,8 @@ long int link_cells(struct fof_part_data *fof_parts, long int *cl,
 }
 
 /* Receive FOF particle data */
-void receive_fof_parts(struct fof_part_data *dest, int *num_received,
-                       int from_rank, long long int num_localpart,
+void receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
+                       int *num_received, int from_rank, long long int num_localpart,
                        long long int max_partnum) {
 
     /* Prepare to receive particles */
@@ -151,8 +151,23 @@ void receive_fof_parts(struct fof_part_data *dest, int *num_received,
         exit(1);
     }
 
+    /* Allocate memory for receiving particles */
+    struct fof_part_exchange_data *recv_parts = malloc(*num_received * sizeof(struct fof_part_exchange_data));
+
     /* Receive the particle data */
-    MPI_Recv(dest, *num_received, fof_type, from_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(recv_parts, *num_received, fof_type, from_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    /* Copy over the data */
+    for (long int i = 0; i < *num_received; i++) {
+        parts_dest[i].x[0] = recv_parts[i].x[0];
+        parts_dest[i].x[1] = recv_parts[i].x[1];
+        parts_dest[i].x[2] = recv_parts[i].x[2];
+        dest[i].root = recv_parts[i].root;
+        dest[i].global_offset = recv_parts[i].global_offset;
+    }
+
+    /* Free the received data */
+    free(recv_parts);
 }
 
 /* Compute the distance from a particle to a given edge:
@@ -177,30 +192,36 @@ double edge_distance(IntPosType x, double boxlen, double int_to_rank_fac,
 /* Copy particles within a linking length from an edge. There are two types:
  * type = 0: left edge of the rank
  * type = 1: right edge of the domain */
-void copy_edge_parts(struct fof_part_data **dest, struct fof_part_data *fof_parts,
-                     int *num_copied, long long int num_localpart, int type,
+void copy_edge_parts(struct fof_part_exchange_data **dest,
+                     struct fof_part_data *fof_parts,
+                     struct particle *parts, int *num_copied,
+                     long long int num_localpart, int type,
                      double int_to_rank_fac, double int_to_pos_fac,
                      double boxlen, double linking_length) {
 
     /* Count the number of particles within one linking length from the left edge */
     int count_near_edge = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, int_to_pos_fac, type);
+        double dx = edge_distance(parts[i].x[0], boxlen, int_to_rank_fac, int_to_pos_fac, type);
         if (dx < linking_length) {
             count_near_edge++;
         }
     }
 
     /* Allocate memory for the edge particles */
-    *dest = malloc(count_near_edge * sizeof(struct fof_part_data));
+    *dest = malloc(count_near_edge * sizeof(struct fof_part_exchange_data));
     *num_copied = count_near_edge;
 
     /* Fish out particles within one linking length from the left edge */
     int copy_counter = 0;
     for (long int i = 0; i < num_localpart; i++) {
-        double dx = edge_distance(fof_parts[i].x[0], boxlen, int_to_rank_fac, int_to_pos_fac, type);
+        double dx = edge_distance(parts[i].x[0], boxlen, int_to_rank_fac, int_to_pos_fac, type);
         if (dx < linking_length) {
-            memcpy(*dest + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
+            (*dest)[copy_counter].x[0] = parts[i].x[0];
+            (*dest)[copy_counter].x[1] = parts[i].x[1];
+            (*dest)[copy_counter].x[2] = parts[i].x[2];
+            (*dest)[copy_counter].root = fof_parts[i].root;
+            (*dest)[copy_counter].global_offset = fof_parts[i].global_offset;
             copy_counter++;
         }
     }
@@ -314,15 +335,12 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         exit(1);
     }
 
-    /* Copy over the hot particle data */
+    /* Allocate memory for linking FOF particles */
     struct fof_part_data *fof_parts = malloc(max_partnum * sizeof(struct fof_part_data));
 
     for (long int i = 0; i < num_localpart; i++) {
-        fof_parts[i].x[0] = parts[i].x[0];
-        fof_parts[i].x[1] = parts[i].x[1];
-        fof_parts[i].x[2] = parts[i].x[2];
         fof_parts[i].global_offset = i + rank_offset;
-        // root and local_offset set later
+        // root set after exchanging
     }
 
     timer_stop(rank, &fof_timer, "Copying particle data took ");
@@ -345,11 +363,13 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             int receive_from_right, receive_from_left;
 
             /* Receive particle data from the right */
-            receive_fof_parts(fof_parts + num_localpart, &receive_from_right,
-                              rank_right, num_localpart, max_partnum);
+            receive_fof_parts(fof_parts + num_localpart, parts + num_localpart,
+                              &receive_from_right, rank_right, num_localpart,
+                              max_partnum);
 
             /* Receive particle data from the left */
             receive_fof_parts(fof_parts + num_localpart + receive_from_right,
+                              parts + num_localpart + receive_from_right,
                               &receive_from_left, rank_left, num_localpart,
                               max_partnum);
 
@@ -357,14 +377,15 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             receive_foreign_count += receive_from_left;
         } else if (rank < MPI_Rank_Count - 1) {
             /* Receive particles from the right */
-            receive_fof_parts(fof_parts + num_localpart, &receive_foreign_count,
-                              rank_right, num_localpart, max_partnum);
+            receive_fof_parts(fof_parts + num_localpart, parts + num_localpart,
+                              &receive_foreign_count, rank_right, num_localpart,
+                              max_partnum);
 
-            struct fof_part_data *edge_parts;
+            struct fof_part_exchange_data *edge_parts;
             int count_near_edge;
 
             /* Fish out particles within one linking length from the left edge */
-            copy_edge_parts(&edge_parts, fof_parts, &count_near_edge,
+            copy_edge_parts(&edge_parts, fof_parts, parts, &count_near_edge,
                             num_localpart, /* left */ 0, int_to_rank_fac,
                             int_to_pos_fac, boxlen, linking_length);
 
@@ -374,11 +395,11 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Release the delivered particles */
             free(edge_parts);
         } else {
-            struct fof_part_data *edge_parts;
+            struct fof_part_exchange_data *edge_parts;
             int count_near_edge;
 
             /* Fish out particles within one linking length from the left edge */
-            copy_edge_parts(&edge_parts, fof_parts, &count_near_edge,
+            copy_edge_parts(&edge_parts, fof_parts, parts, &count_near_edge,
                             num_localpart, /* left */ 0, int_to_rank_fac,
                             int_to_pos_fac, boxlen, linking_length);
 
@@ -389,7 +410,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             free(edge_parts);
 
             /* Fish out particles within one linking length from the right edge */
-            copy_edge_parts(&edge_parts, fof_parts, &count_near_edge,
+            copy_edge_parts(&edge_parts, fof_parts, parts, &count_near_edge,
                             num_localpart, /* right */ 1, int_to_rank_fac,
                             int_to_pos_fac, boxlen, linking_length);
 
@@ -406,7 +427,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     /* Now create a particle-cell correspondence for sorting */
     struct fof_cell_list *cell_list = malloc((num_localpart + receive_foreign_count) * sizeof(struct fof_cell_list));
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        cell_list[i].cell = which_cell(fof_parts[i].x, int_to_cell_fac, N_cells);
+        cell_list[i].cell = which_cell(parts[i].x, int_to_cell_fac, N_cells);
         cell_list[i].offset = i;
     }
 
@@ -447,7 +468,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        CellIntType c = which_cell(fof_parts[i].x, int_to_cell_fac, N_cells);
+        CellIntType c = which_cell(parts[i].x, int_to_cell_fac, N_cells);
 #ifdef DEBUG_CHECKS
         assert((c >= 0) && (c < num_cells));
 #endif
@@ -487,7 +508,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                     long int count1 = cell_counts[row_major_cell(j1, k1, N_cells)];
 
                     /* Link cells */
-                    total_links += link_cells(fof_parts, particle_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
+                    total_links += link_cells(fof_parts, parts, particle_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
                 }
             }
         }
@@ -547,10 +568,14 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
             /* Now, fish out all particles with foreign roots */
             long int copy_counter = 0;
-            struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
+            struct fof_part_exchange_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_exchange_data));
             for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
                 if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
-                    memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
+                    foreign_root_parts[copy_counter].x[0] = parts[i].x[0];
+                    foreign_root_parts[copy_counter].x[1] = parts[i].x[1];
+                    foreign_root_parts[copy_counter].x[2] = parts[i].x[2];
+                    foreign_root_parts[copy_counter].root = fof_parts[i].root;
+                    foreign_root_parts[copy_counter].global_offset = fof_parts[i].global_offset;
                     copy_counter++;
                 }
             }
@@ -571,6 +596,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         } else {
             /* Receive particles from the left */
             receive_fof_parts(fof_parts + num_localpart + receive_foreign_count,
+                              parts + num_localpart + receive_foreign_count,
                               &receive_from_left, rank_left, num_localpart,
                               max_partnum);
 
@@ -593,13 +619,17 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
             /* Now, fish out particles with foreign roots */
             long int copy_counter = 0;
-            struct fof_part_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_data));
+            struct fof_part_exchange_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_exchange_data));
             for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
                 /* Skip disabled particles */
                 if (fof_parts[i].root == -1) continue;
 
                 if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
-                    memcpy(foreign_root_parts + copy_counter, fof_parts + i, sizeof(struct fof_part_data));
+                    foreign_root_parts[copy_counter].x[0] = parts[i].x[0];
+                    foreign_root_parts[copy_counter].x[1] = parts[i].x[1];
+                    foreign_root_parts[copy_counter].x[2] = parts[i].x[2];
+                    foreign_root_parts[copy_counter].root = fof_parts[i].root;
+                    foreign_root_parts[copy_counter].global_offset = fof_parts[i].global_offset;
                     copy_counter++;
                 }
             }
@@ -755,9 +785,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         if (h >= 0) {
             /* Compute the distance to the centre */
-            const IntPosType dx = fof_parts[i].x[0] - int_half_boxlen;
-            const IntPosType dy = fof_parts[i].x[1] - int_half_boxlen;
-            const IntPosType dz = fof_parts[i].x[2] - int_half_boxlen;
+            const IntPosType dx = parts[i].x[0] - int_half_boxlen;
+            const IntPosType dy = parts[i].x[1] - int_half_boxlen;
+            const IntPosType dz = parts[i].x[2] - int_half_boxlen;
 
             /* Enforce boundary conditions and convert to physical lengths */
             const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
@@ -797,9 +827,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
             /* Compute the offset from the most central particle */
             long int centre_particle = centre_particles[h];
-            const IntPosType dx = fof_parts[i].x[0] - fof_parts[centre_particle].x[0];
-            const IntPosType dy = fof_parts[i].x[1] - fof_parts[centre_particle].x[1];
-            const IntPosType dz = fof_parts[i].x[2] - fof_parts[centre_particle].x[2];
+            const IntPosType dx = parts[i].x[0] - parts[centre_particle].x[0];
+            const IntPosType dy = parts[i].x[1] - parts[centre_particle].x[1];
+            const IntPosType dz = parts[i].x[2] - parts[centre_particle].x[2];
 
             /* Enforce boundary conditions and convert to physical lengths */
             const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
@@ -828,9 +858,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         /* Add the position of the most central particle to get the absolute CoM */
         long int centre_particle = centre_particles[i];
-        fofs[i].x_com[0] += int_to_pos_fac * fof_parts[centre_particle].x[0];
-        fofs[i].x_com[1] += int_to_pos_fac * fof_parts[centre_particle].x[1];
-        fofs[i].x_com[2] += int_to_pos_fac * fof_parts[centre_particle].x[2];
+        fofs[i].x_com[0] += int_to_pos_fac * parts[centre_particle].x[0];
+        fofs[i].x_com[1] += int_to_pos_fac * parts[centre_particle].x[1];
+        fofs[i].x_com[2] += int_to_pos_fac * parts[centre_particle].x[2];
     }
 
     /* Determine the maximum distance of FOF particles to the CoM */
@@ -843,9 +873,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         if (h >= 0) {
             /* Compute the offset from the centre of mass */
-            const IntPosType dx = fof_parts[i].x[0] - fofs[h].x_com[0] * pos_to_int_fac;
-            const IntPosType dy = fof_parts[i].x[1] - fofs[h].x_com[1] * pos_to_int_fac;
-            const IntPosType dz = fof_parts[i].x[2] - fofs[h].x_com[2] * pos_to_int_fac;
+            const IntPosType dx = parts[i].x[0] - fofs[h].x_com[0] * pos_to_int_fac;
+            const IntPosType dy = parts[i].x[1] - fofs[h].x_com[1] * pos_to_int_fac;
+            const IntPosType dz = parts[i].x[2] - fofs[h].x_com[2] * pos_to_int_fac;
 
             /* Enforce boundary conditions and convert to physical lengths */
             const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);

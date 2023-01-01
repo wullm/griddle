@@ -76,10 +76,17 @@ static inline double int_to_phys_dist2(const IntPosType ax[3],
     return fx * fx + fy * fy + fz * fz;
 }
 
+struct fof_part_data {
+    /* The offset (local or global) of the root of the linked particle tree */
+    long int root;
+    /* The global offset of the corresponding particle in parts */
+    long int global_offset;
+};
+
 /* If you add/change/remove fields to fof_part_data or fof_halo,
  * update the corresponding MPI data types below. */
 
-struct fof_part_data {
+struct fof_part_exchange_data {
     /* Integer positons of the particle */
     IntPosType x[3];
     /* The offset (local or global) of the root of the linked particle tree */
@@ -120,7 +127,7 @@ static inline MPI_Datatype mpi_fof_part_type() {
     int lengths[4];
     MPI_Aint displacements[4];
     MPI_Aint base_address;
-    struct fof_part_data temp;
+    struct fof_part_exchange_data temp;
     MPI_Get_address(&temp, &base_address);
 
     int counter = 0;
