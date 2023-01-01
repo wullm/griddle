@@ -32,14 +32,13 @@ struct fof_cell_list {
     long int cell;
 };
 
-static inline long int row_major_cell(long int i, long int j, long int k, long int N_cells) {
-    return i * N_cells * N_cells + j * N_cells + k;
+static inline long int row_major_cell(long int j, long int k, long int N_cells) {
+    return j * N_cells + k;
 }
 
 /* Determine the cell containing a given particle */
 static inline long int which_cell(IntPosType x[3], double int_to_cell_fac, long int N_cells) {
-    return row_major_cell((long int) (int_to_cell_fac * x[0]),
-                          (long int) (int_to_cell_fac * x[1]),
+    return row_major_cell((long int) (int_to_cell_fac * x[1]),
                           (long int) (int_to_cell_fac * x[2]), N_cells);
 }
 

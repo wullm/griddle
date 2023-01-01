@@ -260,34 +260,30 @@ int find_overlapping_cells(const double com[3], double search_radius,
                          (com[2] + search_radius) * pos_to_cell_fac};
 
     /* The search radius spans this many cells in each dimension */
-    long int dx = max_x[0] - min_x[0] + 1;
     long int dy = max_x[1] - min_x[1] + 1;
     long int dz = max_x[2] - min_x[2] + 1;
 
     /* Allocate memory for the cell indices */
-    *num_overlap = dx * dy * dz;
-    *cells = realloc(*cells, dx * dy * dz * sizeof(long int));
+    *num_overlap = dy * dz;
+    *cells = realloc(*cells, dy * dz * sizeof(long int));
 
     /* Loop over cells */
     long int i = 0;
-    for (long int x = min_x[0]; x <= max_x[0]; x++) {
-        for (long int y = min_x[1]; y <= max_x[1]; y++) {
-            for (long int z = min_x[2]; z <= max_x[2]; z++) {
+    for (long int y = min_x[1]; y <= max_x[1]; y++) {
+        for (long int z = min_x[2]; z <= max_x[2]; z++) {
 
-                /* Handle wrapping */
-                long int cx = (x < 0) ? x + N_cells : (x > N_cells - 1) ? x - N_cells : x;
-                long int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
-                long int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
+            /* Handle wrapping */
+            long int cy = (y < 0) ? y + N_cells : (y > N_cells - 1) ? y - N_cells : y;
+            long int cz = (z < 0) ? z + N_cells : (z > N_cells - 1) ? z - N_cells : z;
 
-                /* Find the particle count and offset of the cell */
-                (*cells)[i] = row_major_cell(cx, cy, cz, N_cells);
-                i++;
-            }
+            /* Find the particle count and offset of the cell */
+            (*cells)[i] = row_major_cell(cy, cz, N_cells);
+            i++;
         }
     }
 
 #ifdef DEBUG_CHECKS
-    assert(i == (dx * dy * dz));
+    assert(i == (dy * dz));
 #endif
 
     return 0;
@@ -642,7 +638,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double int_to_pos_fac = 1.0 / pos_to_int_fac;
 
     /* Cell domain decomposition */
-    const long int num_cells = N_cells * N_cells * N_cells;
+    const long int num_cells = N_cells * N_cells;
     long int *cell_counts = calloc(num_cells, sizeof(long int));
     long int *cell_offsets = calloc(num_cells, sizeof(long int));
 

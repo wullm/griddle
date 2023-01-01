@@ -248,7 +248,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* The initial domain decomposition into spatial cells */
     const long int N_cells = pars->HaloFindCellNumber;
-    const long int num_cells = N_cells * N_cells * N_cells;
+    const long int num_cells = N_cells * N_cells;
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
 
     /* The conversion factor from integers to physical lengths */
@@ -438,36 +438,29 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     long int total_links = 0;
 
     /* Now link particles within and between neighbouring cells */
-    for (long int i = 0; i < N_cells; i++) {
-        for (long int j = 0; j < N_cells; j++) {
-            for (long int k = 0; k < N_cells; k++) {
+    for (long int j = 0; j < N_cells; j++) {
+        for (long int k = 0; k < N_cells; k++) {
 
-                long int offset = cell_offsets[row_major_cell(i, j, k, N_cells)];
-                long int count = cell_counts[row_major_cell(i, j, k, N_cells)];
+            long int offset = cell_offsets[row_major_cell(j, k, N_cells)];
+            long int count = cell_counts[row_major_cell(j, k, N_cells)];
 
-                /* Loop over the 27 neighbour cells (including itself) */
-                for (int u = -1; u <= 1; u++) {
-                    for (int v = -1; v <= 1; v++) {
-                        for (int w = -1; w <= 1; w++) {
-                            long int i1 = i + u;
-                            long int j1 = j + v;
-                            long int k1 = k + w;
+            /* Loop over the 9 neighbour cells (including itself) */
+            for (int v = -1; v <= 1; v++) {
+                for (int w = -1; w <= 1; w++) {
+                    long int j1 = j + v;
+                    long int k1 = k + w;
 
-                            /* Account for periodic boundary conditions */
-                            if (i1 >= N_cells) i1 -= N_cells;
-                            if (j1 >= N_cells) j1 -= N_cells;
-                            if (k1 >= N_cells) k1 -= N_cells;
-                            if (i1 < 0) i1 += N_cells;
-                            if (j1 < 0) j1 += N_cells;
-                            if (k1 < 0) k1 += N_cells;
+                    /* Account for periodic boundary conditions */
+                    if (j1 >= N_cells) j1 -= N_cells;
+                    if (k1 >= N_cells) k1 -= N_cells;
+                    if (j1 < 0) j1 += N_cells;
+                    if (k1 < 0) k1 += N_cells;
 
-                            long int offset1 = cell_offsets[row_major_cell(i1, j1, k1, N_cells)];
-                            long int count1 = cell_counts[row_major_cell(i1, j1, k1, N_cells)];
+                    long int offset1 = cell_offsets[row_major_cell(j1, k1, N_cells)];
+                    long int count1 = cell_counts[row_major_cell(j1, k1, N_cells)];
 
-                            /* Link cells */
-                            total_links += link_cells(fof_parts, cell_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
-                        }
-                    }
+                    /* Link cells */
+                    total_links += link_cells(fof_parts, cell_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
                 }
             }
         }
