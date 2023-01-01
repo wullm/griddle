@@ -297,7 +297,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                       long int *cell_offsets, double boxlen, long long int Ng,
                       long long int num_localpart, long long int *num_foreignpart,
                       long long int max_partnum, long int num_foreign_fofs,
-                      long int N_cells, double search_radius,
+                      long int N_cells, double min_radius,
                       int exchange_iteration, int max_iterations) {
 
     /* Get the dimensions of the cluster */
@@ -320,9 +320,6 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     const double int_to_pos_fac = 1.0 / pos_to_int_fac;
     const double pos_to_cell_fac = N_cells / boxlen;
 
-    /* The search radius squared */
-    const double max_radius_2 = search_radius * search_radius;
-
     /* Memory for holding the indices of overlapping cells */
     long int *cells = malloc(0);
     long int num_overlap;
@@ -340,7 +337,9 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                              foreign_fofs[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells(foreign_fofs[i].x_com, search_radius,
+        const double SO_search_radius = fmax(min_radius, foreign_fofs[i].radius_fof * 1.1);
+        const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
+        find_overlapping_cells(foreign_fofs[i].x_com, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
@@ -357,7 +356,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                if (r2 < max_radius_2) {
+                if (r2 < SO_search_radius_2) {
                     if (foreign_fofs[i].rank == rank_left) {
                         send_left_counter++;
                     } else {
@@ -387,7 +386,9 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                              foreign_fofs[i].x_com[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells(foreign_fofs[i].x_com, search_radius,
+        const double SO_search_radius = fmax(min_radius, foreign_fofs[i].radius_fof * 1.1);
+        const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
+        find_overlapping_cells(foreign_fofs[i].x_com, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
@@ -404,7 +405,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
-                if (r2 < max_radius_2) {
+                if (r2 < SO_search_radius_2) {
                     if (foreign_fofs[i].rank == rank_left) {
                         indices_send_left[copy_left_counter] = index_a;
                         copy_left_counter++;
@@ -554,7 +555,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                                                cell_counts, cell_offsets,
                                                boxlen, Ng, num_localpart,
                                                num_foreignpart, max_partnum,
-                                               num_foreign_fofs, N_cells, search_radius,
+                                               num_foreign_fofs, N_cells, min_radius,
                                                exchange_iteration + 1, max_iterations);
     }
 
@@ -690,7 +691,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     exchange_so_parts(parts, *fofs + num_local_fofs, cell_list, cell_counts,
                       cell_offsets, boxlen, Ng, num_localpart,
                       &num_foreign_parts, max_partnum, num_foreign_fofs,
-                      N_cells, max_radius, /* iter = */ 0,
+                      N_cells, min_radius, /* iter = */ 0,
                       /* max_iter = */ exchange_iterations);
 
     /* Timer */
