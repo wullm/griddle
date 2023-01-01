@@ -31,6 +31,7 @@
 #include "../include/analysis_so.h"
 #include "../include/catalogue_io.h"
 #include "../include/snip_io.h"
+#include "../include/cosmology.h"
 #include "../include/message.h"
 
 #define DEBUG_CHECKS
@@ -569,7 +570,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long long int max_partnum, long int total_num_fofs,
                 long int num_local_fofs, int output_num, double a_scale_factor,
                 const struct units *us, const struct physical_consts *pcs,
-                const struct cosmology *cosmo, const struct params *pars) {
+                const struct cosmology *cosmo, const struct params *pars,
+                const struct cosmology_tables *ctabs) {
 
     /* Return if there is nothing to do */
     if (total_num_fofs == 0) return 0;
@@ -605,7 +607,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     /* Compute the critical density */
     const double h = cosmo->h;
     const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
-    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double H = get_H_of_a(ctabs, a_scale_factor);
+    const double rho_crit_0 = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double rho_crit = rho_crit_0 * (H * H) / (H_0 * H_0);
 #ifndef WITH_MASSES
     const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
     const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);

@@ -497,7 +497,7 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     free_strooklat_spline(&spline_y);
 }
 
-double get_H_of_a(struct cosmology_tables *tab, double a) {
+double get_H_of_a(const struct cosmology_tables *tab, double a) {
     /* Prepare a spline for the scale factor */
     struct strooklat spline = {tab->avec, tab->size};
     init_strooklat_spline(&spline, 100);

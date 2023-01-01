@@ -108,7 +108,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
-                 const struct cosmology *cosmo, struct params *pars);
+                 const struct cosmology *cosmo, struct params *pars,
+                 const struct cosmology_tables *ctabs);
 
 /* The MPI data type of the FOF particle data */
 static inline MPI_Datatype mpi_fof_part_type() {

@@ -207,7 +207,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
-                 const struct cosmology *cosmo, struct params *pars) {
+                 const struct cosmology *cosmo, struct params *pars,
+                 const struct cosmology_tables *ctabs) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -255,14 +256,19 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     const double int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
     const double int_to_rank_fac = 1.0 / int_block_width;
 
+    /* Find the maximum number of particles across all ranks */
+    long int max_partnum_global;
+    MPI_Allreduce(&max_partnum, &max_partnum_global, 1, MPI_LONG,
+                  MPI_SUM, MPI_COMM_WORLD);
+
     /* Compare memory use of FOF structures with that of the PM grid. */
     const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
-    const double mem_cell_structures = (2 * num_cells * sizeof(long int)) / (1.0e9);
-    const double mem_cell_list = (max_partnum * sizeof(struct fof_cell_list)) / (1.0e9);
-    const double mem_fof_parts = (max_partnum * sizeof(struct fof_part_data)) / (1.0e9);
-    const double mem_roots = (max_partnum * sizeof(long int)) / (1.0e9);
+    const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(long int)) / (1.0e9);
+    const double mem_cell_list = (max_partnum_global * sizeof(struct fof_cell_list)) / (1.0e9);
+    const double mem_fof_parts = (max_partnum_global * sizeof(struct fof_part_data)) / (1.0e9);
+    const double mem_roots = (max_partnum_global * sizeof(long int)) / (1.0e9);
     /* Estimate the number of halos */
-    const double halo_num_estimate = 0.005 * num_localpart;
+    const double halo_num_estimate = 0.005 * Np * Np * Np;
     const double mem_central_parts = (halo_num_estimate * (sizeof(double) + sizeof(long int))) / (1.0e9);
     const double mem_halo_struct = (halo_num_estimate * sizeof(struct fof_halo)) / (1.0e9);
     const double net_mem_use = (mem_cell_structures + mem_cell_list + mem_fof_parts + mem_roots + mem_central_parts + mem_halo_struct) - mem_grid;
@@ -851,7 +857,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
                     total_halo_num, num_structures, output_num, a_scale_factor,
-                    us, pcs, cosmo, pars);
+                    us, pcs, cosmo, pars, ctabs);
     }
 
     /* Free the remaining memory */
