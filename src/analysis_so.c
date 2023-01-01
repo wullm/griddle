@@ -1062,6 +1062,26 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     /* Accumulate mass in the SO window */
                     halos[i].mass_tot += mass;
                     halos[i].npart_tot++;
+
+                    /* Also compute CoM if shrinking sphere failed */
+                    if (halos[i].R_inner == 0.) {
+                        /* Compute the offset from the current CoM */
+                        const IntPosType dx = xa[0] - com[0];
+                        const IntPosType dy = xa[1] - com[1];
+                        const IntPosType dz = xa[2] - com[2];
+
+                        /* Enforce boundary conditions and convert to physical lengths */
+                        const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+                        const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+                        const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+                        halos[i].x_com[0] += fx * mass;
+                        halos[i].x_com[1] += fy * mass;
+                        halos[i].x_com[2] += fz * mass;
+                        halos[i].v_com[0] += parts[index_a].v[0] * mass;
+                        halos[i].v_com[1] += parts[index_a].v[1] * mass;
+                        halos[i].v_com[2] += parts[index_a].v[2] * mass;
+                    }
                 }
             } /* End particle loop */
         } /* End cell loop */
@@ -1069,6 +1089,18 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Free memory for SO part data */
     free(so_parts);
+
+    /* Finalize CoM calculations for halos for which shrinking sphere failed */
+    for (long int i = 0; i < num_local_fofs; i++) {
+        if (halos[i].R_inner == 0. && halos[i].mass_tot > 0.) {
+            halos[i].x_com[0] /= halos[i].mass_tot;
+            halos[i].x_com[1] /= halos[i].mass_tot;
+            halos[i].x_com[2] /= halos[i].mass_tot;
+            halos[i].v_com[0] /= halos[i].mass_tot;
+            halos[i].v_com[1] /= halos[i].mass_tot;
+            halos[i].v_com[2] /= halos[i].mass_tot;
+        }
+    }
 
     /* Timer */
     timer_stop(rank, &so_timer, "Computing spherical overdensity properties took ");
