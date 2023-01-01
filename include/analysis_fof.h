@@ -84,8 +84,6 @@ struct fof_part_data {
     long int root;
     /* The global offset of the corresponding particle in parts */
     long int global_offset;
-    /* The local offset of the fof_part, which is not necessarily related to the global_offset */
-    long int local_offset;
 };
 
 struct fof_halo {
@@ -116,10 +114,9 @@ static inline MPI_Datatype mpi_fof_part_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[5] = {MPI_INTPOS_TYPE, MPI_LONG, MPI_LONG,
-                             MPI_LONG};
-    int lengths[5];
-    MPI_Aint displacements[5];
+    MPI_Datatype types[4] = {MPI_INTPOS_TYPE, MPI_LONG, MPI_LONG};
+    int lengths[4];
+    MPI_Aint displacements[4];
     MPI_Aint base_address;
     struct fof_part_data temp;
     MPI_Get_address(&temp, &base_address);
@@ -141,12 +138,6 @@ static inline MPI_Datatype mpi_fof_part_type() {
     /* Global offset */
     lengths[counter] = 1;
     MPI_Get_address(&temp.global_offset, &displacements[counter]);
-    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
-    counter++;
-
-    /* Local offset */
-    lengths[counter] = 1;
-    MPI_Get_address(&temp.local_offset, &displacements[counter]);
     displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
     counter++;
 

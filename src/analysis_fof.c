@@ -54,28 +54,33 @@ static inline int is_local(long int global_offset, long int rank_offset,
 }
 
 /* Find the root of the set of a given particle */
-long int find_root(struct fof_part_data *fof_parts, struct fof_part_data *part) {
+long int find_root(struct fof_part_data *fof_parts, long int local_offset) {
+
+    struct fof_part_data *part = &fof_parts[local_offset];
 
 #ifdef DEBUG_CHECKS
     assert(part->root >= 0);
 #endif
 
-    if (part->local_offset == part->root)
-        return part->local_offset;
-    part->root = find_root(fof_parts, &fof_parts[part->root]);
+    if (local_offset == part->root)
+        return local_offset;
+    part->root = find_root(fof_parts, part->root);
     return part->root;
 }
 
 /* Perform the union operation on the sets containing two given particles */
-void union_roots(struct fof_part_data *fof_parts, struct fof_part_data *a, struct fof_part_data *b) {
+void union_roots(struct fof_part_data *fof_parts, long int local_offset_a, long int local_offset_b) {
+
+    struct fof_part_data *a = &fof_parts[local_offset_a];
+    struct fof_part_data *b = &fof_parts[local_offset_b];
 
 #ifdef DEBUG_CHECKS
     assert(a->root >= 0);
     assert(b->root >= 0);
 #endif
 
-    long int root_a = find_root(fof_parts, a);
-    long int root_b = find_root(fof_parts, b);
+    long int root_a = find_root(fof_parts, local_offset_a);
+    long int root_b = find_root(fof_parts, local_offset_b);
 
     if (root_a != root_b) {
         if (fof_parts[root_a].global_offset <= fof_parts[root_b].global_offset) {
@@ -122,7 +127,7 @@ long int link_cells(struct fof_part_data *fof_parts, struct fof_cell_list *cl,
             const IntPosType *xb = fof_parts[index_b].x;
             if (should_link(xa, xb, int_to_pos_fac, linking_length_2)) {
                 links++;
-                union_roots(fof_parts, &fof_parts[index_a], &fof_parts[index_b]);
+                union_roots(fof_parts, index_a, index_b);
             }
         }
     }
@@ -387,7 +392,6 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Set the local offsets for the local and foreign particles */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        fof_parts[i].local_offset = i;
         fof_parts[i].root = i;
     }
 
@@ -474,7 +478,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Loop over the roots again to collapse the tree */
     for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
-        fof_parts[i].root = find_root(fof_parts, &fof_parts[i]);
+        fof_parts[i].root = find_root(fof_parts, i);
     }
 
     /* Compute the global offsets of the roots */
@@ -617,7 +621,6 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         if (fof_parts[i].root == -1) continue; // don't remove
 
         fof_parts[i].root -= rank_offset;
-        fof_parts[i].local_offset = i;
     }
 
     /* Attach the trees of the received copies of local particles to the trees
@@ -630,7 +633,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         if (is_local(fof_parts[i].global_offset, rank_offset, num_localpart)) {
             /* Attach the trees */
             long int local_copy = fof_parts[i].global_offset - rank_offset;
-            union_roots(fof_parts, &fof_parts[i], &fof_parts[local_copy]);
+            union_roots(fof_parts, i, local_copy);
 
             /* Now disable the particle */
             fof_parts[i].root = -1;
@@ -642,7 +645,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        union_roots(fof_parts, &fof_parts[i], &fof_parts[fof_parts[i].root]);
+        union_roots(fof_parts, i, fof_parts[i].root);
     }
 
     /* Linking is now complete. Proceed with finding group sizes and computing
@@ -656,7 +659,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        fof_parts[i].root = find_root(fof_parts, &fof_parts[i]);
+        fof_parts[i].root = find_root(fof_parts, i);
         group_sizes[fof_parts[i].root]++;
     }
 
@@ -666,7 +669,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        if (fof_parts[i].local_offset == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
+        if (i == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
             num_structures++;
         }
     }
@@ -698,7 +701,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         /* Skip disabled particles */
         if (fof_parts[i].root == -1) continue;
 
-        if (fof_parts[i].local_offset == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
+        if (i == fof_parts[i].root && group_sizes[i] >= halo_min_npart) {
             halo_ids[i] = halo_count + halo_rank_offsets[rank];
             fofs[halo_count].global_id = halo_count + halo_rank_offsets[rank];
             halo_count++;
