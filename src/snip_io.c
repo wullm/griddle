@@ -376,12 +376,12 @@ int exportSnipshot(const struct params *pars, const struct units *us,
 
     /* Set chunking for vectors */
     hid_t h_prop_vec = H5Pcreate(H5P_DATASET_CREATE);
-    const hsize_t vchunk[2] = {HDF5_CHUNK_SIZE, 3};
+    const hsize_t vchunk[2] = {HDF5_TINY_CHUNK_SIZE, 3};
     H5Pset_chunk(h_prop_vec, vrank, vchunk);
 
     /* Set chunking for scalars */
     hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
-    const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
+    const hsize_t schunk[1] = {HDF5_TINY_CHUNK_SIZE};
     H5Pset_chunk(h_prop_sca, srank, schunk);
 
     /* Create vector & scalar datapsace for smaller chunks of data */
