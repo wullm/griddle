@@ -27,19 +27,22 @@
 #include "params.h"
 #include "cosmology.h"
 
+typedef int32_t CellIntType;
+#define CELL_INT_BYTES 32
+
 struct fof_cell_list {
     long int offset;
-    long int cell;
+    CellIntType cell;
 };
 
-static inline long int row_major_cell(long int j, long int k, long int N_cells) {
+static inline int row_major_cell(CellIntType j, CellIntType k, CellIntType N_cells) {
     return j * N_cells + k;
 }
 
 /* Determine the cell containing a given particle */
-static inline long int which_cell(IntPosType x[3], double int_to_cell_fac, long int N_cells) {
-    return row_major_cell((long int) (int_to_cell_fac * x[1]),
-                          (long int) (int_to_cell_fac * x[2]), N_cells);
+static inline CellIntType which_cell(IntPosType x[3], double int_to_cell_fac, CellIntType N_cells) {
+    return row_major_cell((CellIntType) (int_to_cell_fac * x[1]),
+                          (CellIntType) (int_to_cell_fac * x[2]), N_cells);
 }
 
 /* Order particles by their spatial cell index */

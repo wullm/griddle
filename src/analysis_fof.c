@@ -247,8 +247,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     timer_start(rank, &fof_timer);
 
     /* The initial domain decomposition into spatial cells */
-    const long int N_cells = pars->HaloFindCellNumber;
-    const long int num_cells = N_cells * N_cells;
+    const CellIntType N_cells = pars->HaloFindCellNumber;
+    const CellIntType num_cells = N_cells * N_cells;
     const double int_to_cell_fac = N_cells / pow(2.0, POSITION_BITS);
 
     /* The conversion factor from integers to physical lengths */
@@ -288,6 +288,11 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     message(rank, "Available from PM grid: %g GB\n", mem_grid);
     message(rank, "Net use: %g GB\n", net_mem_use);
     message(rank, "\n");
+
+    if ((double) N_cells * N_cells >= pow(2, CELL_INT_BYTES)) {
+        printf("The number of cells is large. We should switch to larger ints (TODO).\n");
+        exit(1);
+    }
 
     /* The cells must be larger than the linking length */
     if (boxlen / N_cells <= 2 * linking_length) {
@@ -420,7 +425,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
-        long int c = cell_list[i].cell;
+        CellIntType c = cell_list[i].cell;
 #ifdef DEBUG_CHECKS
         assert((c >= 0) && (c < num_cells));
 #endif
@@ -429,7 +434,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
     /* Determine the offsets, using the fact that the particles are sorted */
     cell_offsets[0] = 0;
-    for (long int i = 1; i < num_cells; i++) {
+    for (CellIntType i = 1; i < num_cells; i++) {
         cell_offsets[i] = cell_offsets[i-1] + cell_counts[i-1];
     }
 

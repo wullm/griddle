@@ -197,7 +197,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                    const struct particle *parts, const struct cosmology *cosmo,
                    const struct so_cell_list *cell_list, long int *cell_counts,
                    long int *cell_offsets, int output_num, double a_scale_factor,
-                   long int N_cells, double reduce_factor,
+                   CellIntType N_cells, double reduce_factor,
                    int min_part_export_per_halo, long long int local_partnum,
                    long long int local_halo_num) {
 
@@ -260,8 +260,8 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     long long int particles_total = 0;
 
     /* Memory for holding the indices of overlapping cells */
-    long int *cells = malloc(0);
-    long int num_overlap;
+    CellIntType *cells = malloc(0);
+    CellIntType num_overlap;
 
     /* Loop over SO halos */
     for (long int i = 0; i < local_halo_num; i++) {
@@ -289,9 +289,9 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
-        for (long int c = 0; c < num_overlap; c++) {
+        for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
-            long int cell = cells[c];
+            CellIntType cell = cells[c];
             long int local_count = cell_counts[cell];
             long int local_offset = cell_offsets[cell];
             
