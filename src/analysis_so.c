@@ -607,6 +607,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double H = get_H_of_a(ctabs, a_scale_factor);
     const double rho_crit_0 = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
     const double rho_crit = rho_crit_0 * (H * H) / (H_0 * H_0);
+    const double dens_fac = (4.0 / 3.0) * M_PI * rho_crit;
+    const double inv_fac = 1.0 / dens_fac;
 #ifndef WITH_MASSES
     const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
     const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
@@ -820,7 +822,58 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         double m = m_ini;
         int npart = npart_ini;
 
-        /* While there is enough mass in the sphere, re-compute the CoM */
+        /* Compute the spherical overdensity */
+        double r3 = r * r * r;
+        double Delta = m * inv_fac / r3;
+
+        /* First, without changing the centre, shrink the sphere until
+         * we are above the density threshold. */
+        while (Delta < threshold && m > mfac * m_ini && npart > minpart) {
+            /* Accumulate mass in the sphere */
+            double sphere_mass = 0.;
+            int sphere_npart = 0;
+
+            /* Loop over cells */
+            for (CellIntType c = 0; c < num_overlap; c++) {
+                /* Find the particle count and offset of the cell */
+                CellIntType cell = cells[c];
+                long int local_count = cell_counts[cell];
+                long int local_offset = cell_offsets[cell];
+
+                /* Loop over particles in cells */
+                for (long int a = 0; a < local_count; a++) {
+                    const long int index_a = cell_list[local_offset + a].offset;
+
+                    const IntPosType *xa = parts[index_a].x;
+                    const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+
+                    if (r2 < r * r) {
+#ifdef WITH_MASSES
+                        double mass = parts[index_a].m;
+#else
+                        double mass = part_mass;
+#endif
+
+                        sphere_mass += mass;
+                        sphere_npart++;
+                    }
+                } /* End particle loop */
+            } /* End cell loop */
+
+            /* Iterate the shrinking sphere algorithm */
+            m = sphere_mass;
+            npart = sphere_npart;
+            r *= rfac;
+            r3 = r * r * r;
+            Delta = m * inv_fac / r3;
+        }
+
+        /* Set the initial radius and mass for the second stage */
+        r_ini = r;
+        m_ini = m;
+
+        /* Next, re-compute the CoM and shrink the sphere while there is
+         * enough mass in the sphere */
         while (m > mfac * m_ini && npart > minpart) {
             /* Compute the new centre of mass */
             double sphere_com[3] = {0., 0., 0.};
@@ -975,11 +1028,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             so_parts[j].m += so_parts[j - 1].m;
         }
         /* Compute the normalized cumulative density profile */
-        const double dens_fac = (4.0 / 3.0) * M_PI * rho_crit;
-        const double inv_fac = 1.0 / dens_fac;
         for (long int j = 0; j < nearby_partnum; j++) {
             if (so_parts[j].r > 0) {
-                double r3 = so_parts[j].r * so_parts[j].r * so_parts[j].r;
+                r3 = so_parts[j].r * so_parts[j].r * so_parts[j].r;
                 so_parts[j].Delta = so_parts[j].m * inv_fac / r3;
             }
         }
@@ -1040,6 +1091,25 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         /* The square of the SO radius */
         double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
 
+        /* We need to re-compute the centre of mass if the shrinking sphere
+         * algorithm failed (R_inner == 0) or if the inner radius is larger
+         * than the SO radius. */
+        if (halos[i].R_inner == 0. || halos[i].R_inner >= halos[i].R_SO) {
+            /* Reset the CoM quantities */
+            halos[i].x_com[0] = 0.;
+            halos[i].x_com[1] = 0.;
+            halos[i].x_com[2] = 0.;
+            halos[i].v_com[0] = 0.;
+            halos[i].v_com[1] = 0.;
+            halos[i].v_com[2] = 0.;
+            halos[i].R_inner = halos[i].R_SO;
+
+            /* Compute the CoM relative to the (integer) FOF CoM */
+            com[0] = (*fofs)[i].x_com[0] * pos_to_int_fac;
+            com[1] = (*fofs)[i].x_com[1] * pos_to_int_fac;
+            com[2] = (*fofs)[i].x_com[2] * pos_to_int_fac;
+        }
+
         /* Loop over cells to compute other SO properties */
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
@@ -1064,8 +1134,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     halos[i].mass_tot += mass;
                     halos[i].npart_tot++;
 
-                    /* Also compute CoM if shrinking sphere failed */
-                    if (halos[i].R_inner == 0.) {
+                    /* Also compute CoM quantities if needed */
+                    if (halos[i].R_inner == halos[i].R_SO) {
                         /* Compute the offset from the current CoM */
                         const IntPosType dx = xa[0] - com[0];
                         const IntPosType dy = xa[1] - com[1];
@@ -1091,15 +1161,20 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     /* Free memory for SO part data */
     free(so_parts);
 
-    /* Finalize CoM calculations for halos for which shrinking sphere failed */
+    /* Finalize CoM quantities if needed */
     for (long int i = 0; i < num_local_fofs; i++) {
-        if (halos[i].R_inner == 0. && halos[i].mass_tot > 0.) {
-            halos[i].x_com[0] /= halos[i].mass_tot;
-            halos[i].x_com[1] /= halos[i].mass_tot;
-            halos[i].x_com[2] /= halos[i].mass_tot;
-            halos[i].v_com[0] /= halos[i].mass_tot;
-            halos[i].v_com[1] /= halos[i].mass_tot;
-            halos[i].v_com[2] /= halos[i].mass_tot;
+        if (halos[i].R_inner == halos[i].R_SO) {
+            if (halos[i].mass_tot > 0.) {
+                halos[i].x_com[0] /= halos[i].mass_tot;
+                halos[i].x_com[1] /= halos[i].mass_tot;
+                halos[i].x_com[2] /= halos[i].mass_tot;
+                halos[i].v_com[0] /= halos[i].mass_tot;
+                halos[i].v_com[1] /= halos[i].mass_tot;
+                halos[i].v_com[2] /= halos[i].mass_tot;
+            }
+            halos[i].x_com[0] += (*fofs)[i].x_com[0];
+            halos[i].x_com[1] += (*fofs)[i].x_com[1];
+            halos[i].x_com[2] += (*fofs)[i].x_com[2];
         }
     }
 
