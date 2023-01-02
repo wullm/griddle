@@ -137,7 +137,7 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, lon
 
 /* Receive FOF particle data */
 void receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
-                       int *num_received, int from_rank, long long int num_localpart,
+                       int *num_received, int from_rank, long long int current_partnum,
                        long long int max_partnum) {
 
     /* Prepare to receive particles */
@@ -146,8 +146,8 @@ void receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
     MPI_Get_count(&status, fof_type, num_received);
 
     /* Check that we have enough memory */
-    if (num_localpart + *num_received > max_partnum) {
-        printf("Not enough memory to exchange FOF data (%lld < %lld).\n", max_partnum, num_localpart + *num_received);
+    if (current_partnum + *num_received > max_partnum) {
+        printf("Not enough memory to exchange FOF data (%lld < %lld).\n", max_partnum, current_partnum + *num_received);
         exit(1);
     }
 
@@ -370,8 +370,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Receive particle data from the left */
             receive_fof_parts(fof_parts + num_localpart + receive_from_right,
                               parts + num_localpart + receive_from_right,
-                              &receive_from_left, rank_left, num_localpart,
-                              max_partnum);
+                              &receive_from_left, rank_left,
+                              num_localpart + receive_from_right, max_partnum);
 
             receive_foreign_count += receive_from_right;
             receive_foreign_count += receive_from_left;
@@ -597,8 +597,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
             /* Receive particles from the left */
             receive_fof_parts(fof_parts + num_localpart + receive_foreign_count,
                               parts + num_localpart + receive_foreign_count,
-                              &receive_from_left, rank_left, num_localpart,
-                              max_partnum);
+                              &receive_from_left, rank_left,
+                              num_localpart + receive_foreign_count, max_partnum);
 
             /* Collapse the tree using the global roots */
             for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
