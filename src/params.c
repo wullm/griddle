@@ -81,6 +81,7 @@ int readParams(struct params *pars, const char *fname) {
      pars->SphericalOverdensityThreshold = ini_getd("HaloFinding", "SphericalOverdensityThreshold", 200.0, fname);
      pars->SphericalOverdensityMinLookRadius = ini_getd("HaloFinding", "SphericalOverdensityMinLookRadius", 10.0, fname);
      pars->ShrinkingSphereInitialRadius = ini_getd("HaloFinding", "ShrinkingSphereInitialRadius", 0.9, fname);
+     pars->ShrinkingSphereRadiusFactorCoarse = ini_getd("HaloFinding", "ShrinkingSphereRadiusFactorCoarse", 0.75, fname);
      pars->ShrinkingSphereRadiusFactor = ini_getd("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname);
      pars->ShrinkingSphereMassFraction = ini_getd("HaloFinding", "ShrinkingSphereMassFraction", 0.01, fname);
      pars->ShrinkingSphereMinParticleNum = ini_getl("HaloFinding", "ShrinkingSphereMinParticleNum", 100, fname);

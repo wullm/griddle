@@ -70,6 +70,7 @@ struct params {
 
     /* Shrinking sphere parameters */
     double ShrinkingSphereInitialRadius;
+    double ShrinkingSphereRadiusFactorCoarse;
     double ShrinkingSphereRadiusFactor;
     double ShrinkingSphereMassFraction;
     int ShrinkingSphereMinParticleNum;

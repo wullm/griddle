@@ -79,7 +79,7 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
     for (long int i = 0; i < num_local_fofs; i++) {
 
         /* Compute the integer x-position of the halo COM */
-        IntPosType com_x = fofs[i].x_com[0] * pos_to_int_fac;
+        IntPosType com_x = fofs[i].x_com_inner[0] * pos_to_int_fac;
 
         /* Determine all ranks that overlap with the search radius */
         IntPosType min_x = com_x - search_radius * pos_to_int_fac;
@@ -117,7 +117,7 @@ int exchange_fof(struct fof_halo *fofs, double boxlen, long long int Ng,
     for (long int i = 0; i < num_local_fofs; i++) {
 
         /* Compute the integer x-position of the halo COM */
-        IntPosType com_x = fofs[i].x_com[0] * pos_to_int_fac;
+        IntPosType com_x = fofs[i].x_com_inner[0] * pos_to_int_fac;
 
         /* Determine all ranks that overlap with the search radius */
         IntPosType min_x = com_x - search_radius * pos_to_int_fac;
@@ -332,14 +332,14 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
         if (foreign_fofs[i].rank != rank_left && foreign_fofs[i].rank != rank_right) continue;
 
         /* Compute the integer position of the FOF COM */
-        IntPosType com[3] = {foreign_fofs[i].x_com[0] * pos_to_int_fac,
-                             foreign_fofs[i].x_com[1] * pos_to_int_fac,
-                             foreign_fofs[i].x_com[2] * pos_to_int_fac};
+        IntPosType com[3] = {foreign_fofs[i].x_com_inner[0] * pos_to_int_fac,
+                             foreign_fofs[i].x_com_inner[1] * pos_to_int_fac,
+                             foreign_fofs[i].x_com_inner[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
         const double SO_search_radius = fmax(min_radius, foreign_fofs[i].radius_fof * 1.1);
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
-        find_overlapping_cells(foreign_fofs[i].x_com, SO_search_radius,
+        find_overlapping_cells(foreign_fofs[i].x_com_inner, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
@@ -381,14 +381,14 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
         if (foreign_fofs[i].rank != rank_left && foreign_fofs[i].rank != rank_right) continue;
 
         /* Compute the integer position of the FOF COM */
-        IntPosType com[3] = {foreign_fofs[i].x_com[0] * pos_to_int_fac,
-                             foreign_fofs[i].x_com[1] * pos_to_int_fac,
-                             foreign_fofs[i].x_com[2] * pos_to_int_fac};
+        IntPosType com[3] = {foreign_fofs[i].x_com_inner[0] * pos_to_int_fac,
+                             foreign_fofs[i].x_com_inner[1] * pos_to_int_fac,
+                             foreign_fofs[i].x_com_inner[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
         const double SO_search_radius = fmax(min_radius, foreign_fofs[i].radius_fof * 1.1);
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
-        find_overlapping_cells(foreign_fofs[i].x_com, SO_search_radius,
+        find_overlapping_cells(foreign_fofs[i].x_com_inner, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
@@ -763,9 +763,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     for (long int i = 0; i < num_local_fofs; i++) {
 
         /* Initially, use the centre of mass of the FOF group */
-        halos[i].x_com[0] = (*fofs)[i].x_com[0];
-        halos[i].x_com[1] = (*fofs)[i].x_com[1];
-        halos[i].x_com[2] = (*fofs)[i].x_com[2];
+        halos[i].x_com[0] = (*fofs)[i].x_com_inner[0];
+        halos[i].x_com[1] = (*fofs)[i].x_com_inner[1];
+        halos[i].x_com[2] = (*fofs)[i].x_com_inner[2];
 
         /* Compute the integer position of the COM */
         IntPosType com[3] = {halos[i].x_com[0] * pos_to_int_fac,
@@ -960,11 +960,22 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             r *= rfac;
         }
 
+        /* Compute the distance between the shrinking sphere and FOF centres */
+        IntPosType fof[3] = {(*fofs)[i].x_com_inner[0] * pos_to_int_fac,
+                             (*fofs)[i].x_com_inner[1] * pos_to_int_fac,
+                             (*fofs)[i].x_com_inner[2] * pos_to_int_fac};
+        const double dx_com = sqrt(int_to_phys_dist2(com, fof, int_to_pos_fac));
+
         /* Determine all cells that overlap with the search radius */
-        const double SO_search_radius = fmax(min_radius, (*fofs)[i].radius_fof * 1.1);
+        const double SO_search_radius = fmax(min_radius, (*fofs)[i].radius_fof * 1.1) - dx_com;
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
         find_overlapping_cells(halos[i].x_com, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
+
+        if (SO_search_radius <= 0) {
+           printf("Error: Minimum search radius too small (due to shrinking sphere shift).\n");
+           exit(1);
+        }
 
         /* Count the number of particles */
         long int nearby_partnum = 0;
@@ -1105,9 +1116,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].R_inner = halos[i].R_SO;
 
             /* Compute the CoM relative to the (integer) FOF CoM */
-            com[0] = (*fofs)[i].x_com[0] * pos_to_int_fac;
-            com[1] = (*fofs)[i].x_com[1] * pos_to_int_fac;
-            com[2] = (*fofs)[i].x_com[2] * pos_to_int_fac;
+            com[0] = (*fofs)[i].x_com_inner[0] * pos_to_int_fac;
+            com[1] = (*fofs)[i].x_com_inner[1] * pos_to_int_fac;
+            com[2] = (*fofs)[i].x_com_inner[2] * pos_to_int_fac;
         }
 
         /* Loop over cells to compute other SO properties */
@@ -1172,9 +1183,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 halos[i].v_com[1] /= halos[i].mass_tot;
                 halos[i].v_com[2] /= halos[i].mass_tot;
             }
-            halos[i].x_com[0] += (*fofs)[i].x_com[0];
-            halos[i].x_com[1] += (*fofs)[i].x_com[1];
-            halos[i].x_com[2] += (*fofs)[i].x_com[2];
+            halos[i].x_com[0] += (*fofs)[i].x_com_inner[0];
+            halos[i].x_com[1] += (*fofs)[i].x_com_inner[1];
+            halos[i].x_com[2] += (*fofs)[i].x_com_inner[2];
         }
     }
 

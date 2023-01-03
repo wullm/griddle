@@ -246,7 +246,7 @@ int exportCatalogue(const struct params *pars, const struct units *us,
             /* Centres of mass (use vector space) */
             h_data = H5Dcreate(h_grp, "CentreOfMass", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
             H5Dclose(h_data);
-            
+
             /* Total mass (use scalar space) */
             h_data = H5Dcreate(h_grp, "Mass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
             H5Dclose(h_data);
@@ -267,6 +267,10 @@ int exportCatalogue(const struct params *pars, const struct units *us,
 
                 /* Centre of Mass velocities (use vector space) */
                 h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+                H5Dclose(h_data);
+            } else if (t == 0) {
+                /* Shrinking sphere centre (use vector space) */
+                h_data = H5Dcreate(h_grp, "ShrinkingSphereCentre", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
             }
             
@@ -342,6 +346,7 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     /* Unpack the halo data into contiguous arrays */
     long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
     double *coms = malloc(3 * local_num_structures * sizeof(double));
+    double *shrink_xs = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
     double *radii = malloc(1 * local_num_structures * sizeof(double));
     int *nparts = malloc(3 * local_num_structures * sizeof(int));
@@ -353,6 +358,10 @@ int exportCatalogue(const struct params *pars, const struct units *us,
         coms[i * 3 + 0] = h->x_com[0];
         coms[i * 3 + 1] = h->x_com[1];
         coms[i * 3 + 2] = h->x_com[2];
+        /* Unpack the shrinking sphere coordinates */
+        shrink_xs[i * 3 + 0] = h->x_com_inner[0];
+        shrink_xs[i * 3 + 1] = h->x_com_inner[1];
+        shrink_xs[i * 3 + 2] = h->x_com_inner[2];
         /* Unpack the masses and radii */
         masses[i] = h->mass_fof;
         radii[i] = h->radius_fof;
@@ -392,6 +401,12 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, radii);
     H5Dclose(h_data);
     free(radii);
+
+    /* Write centre of mass data (vector) */
+    h_data = H5Dopen(h_grp, "ShrinkingSphereCentre", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, shrink_xs);
+    H5Dclose(h_data);
+    free(shrink_xs);
 
     /* Close the group */
     H5Gclose(h_grp);

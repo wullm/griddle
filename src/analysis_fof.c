@@ -891,6 +891,124 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
         }
     }
 
+    timer_stop(rank, &fof_timer, "Computing halo properties took ");
+
+    /* Run a shrinking sphere algorithm to determine a better halo centre */
+    const double rfac = pars->ShrinkingSphereRadiusFactorCoarse;
+    const double mfac = pars->ShrinkingSphereMassFraction;
+    const int minpart = pars->ShrinkingSphereMinParticleNum;
+
+    /* Allocate memory for the shrinking sphere algorithm */
+    double *shrink_masses = calloc(num_structures, sizeof(double));
+    double *shrink_radii = calloc(num_structures, sizeof(double));
+    int *shrink_npart =  calloc(num_structures, sizeof(int));
+    char *shrink_finished =  calloc(num_structures, sizeof(char));
+    IntPosType *shrink_com =  calloc(num_structures * 3, sizeof(IntPosType));
+
+    for (long int i = 0; i < num_structures; i++) {
+        shrink_masses[i] = fofs[i].mass_fof;
+        shrink_radii[i] = fofs[i].radius_fof;
+        shrink_npart[i] = fofs[i].npart;
+        shrink_finished[i] = 0;
+        shrink_com[i * 3 + 0] = fofs[i].x_com[0] * pos_to_int_fac;
+        shrink_com[i * 3 + 1] = fofs[i].x_com[1] * pos_to_int_fac;
+        shrink_com[i * 3 + 2] = fofs[i].x_com[2] * pos_to_int_fac;
+    }
+
+    /* Run the shrinking sphere algorithm */
+    long int halos_finished = 0;
+    while (halos_finished < num_structures) {
+        /* Loop over halos */
+        for (long int i = 0; i < num_structures; i++) {
+            if (shrink_finished[i]) continue;
+
+            fofs[i].x_com_inner[0] = 0.;
+            fofs[i].x_com_inner[1] = 0.;
+            fofs[i].x_com_inner[2] = 0.;
+            shrink_masses[i] = 0.;
+            shrink_npart[i] = 0;
+        }
+
+        /* Loop over particles */
+        for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
+            /* Skip disabled particles */
+            if (fof_parts[i].root == -1) continue;
+
+            long int root = fof_parts[i].root;
+            long int h = halo_ids[root] - halo_rank_offsets[rank];
+
+            if (h >= 0) {
+                if (shrink_finished[h]) continue;
+
+#ifdef WITH_MASSES
+                /* TODO: decide what to do about the masses */
+                // double mass = fof_parts[i].m;
+                double mass = 1.0;
+#else
+                double mass = 1.0;
+#endif
+
+                /* Compute the offset from the shrinking sphere centre of mass */
+                const IntPosType dx = parts[i].x[0] - shrink_com[h * 3 + 0];
+                const IntPosType dy = parts[i].x[1] - shrink_com[h * 3 + 1];
+                const IntPosType dz = parts[i].x[2] - shrink_com[h * 3 + 2];
+
+                /* Enforce boundary conditions and convert to physical lengths */
+                const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+                const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+                const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+
+                const double f2 = fx * fx + fy * fy + fz * fz;
+                const double R2 = shrink_radii[h] * shrink_radii[h];
+
+                if (f2 <= R2) {
+                    fofs[h].x_com_inner[0] += fx * mass;
+                    fofs[h].x_com_inner[1] += fy * mass;
+                    fofs[h].x_com_inner[2] += fz * mass;
+                    shrink_masses[h] += mass;
+                    shrink_npart[h]++;
+                }
+            }
+        }
+
+        /* Loop over halos */
+        for (long int i = 0; i < num_structures; i++) {
+            if (shrink_finished[i]) continue;
+
+            /* Stop if we drop below the particle number or mass thresholds */
+            if (shrink_npart[i] < minpart || shrink_masses[i] < fofs[i].mass_fof * mfac) {
+                halos_finished++;
+                shrink_finished[i] = 1;
+            } else {
+                /* Otherwise, shrink the radius further */
+                shrink_radii[i] *= rfac;
+            }
+
+            if (shrink_masses[i] > 0) {
+                fofs[i].x_com_inner[0] /= shrink_masses[i];
+                fofs[i].x_com_inner[1] /= shrink_masses[i];
+                fofs[i].x_com_inner[2] /= shrink_masses[i];
+            }
+
+            /* Update the CoM */
+            shrink_com[i * 3 + 0] += pos_to_int_fac * fofs[i].x_com_inner[0];
+            shrink_com[i * 3 + 1] += pos_to_int_fac * fofs[i].x_com_inner[1];
+            shrink_com[i * 3 + 2] += pos_to_int_fac * fofs[i].x_com_inner[2];
+            fofs[i].x_com_inner[0] = int_to_pos_fac * shrink_com[i * 3 + 0];
+            fofs[i].x_com_inner[1] = int_to_pos_fac * shrink_com[i * 3 + 1];
+            fofs[i].x_com_inner[2] = int_to_pos_fac * shrink_com[i * 3 + 2];
+        }
+    }
+
+    /* Free shrinking sphere data */
+    free(shrink_masses);
+    free(shrink_com);
+    free(shrink_npart);
+    free(shrink_radii);
+    free(shrink_finished);
+
+    timer_stop(rank, &fof_timer, "Finding shrinking sphere centres took ");
+
     /* We are done with the FOF particle data and cell structures */
     free(halo_ids);
     free(centre_particles);
