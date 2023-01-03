@@ -107,7 +107,6 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             /* Allocate temporary arrays for particle sort */
             struct particle *temp_left = malloc(num_send_left * sizeof(struct particle));
             struct particle *temp_right = malloc(num_send_right * sizeof(struct particle));
-            struct particle *temp_rest = malloc((*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
 
             /* Sort the particles into buckets: left, centre, right */
             long int i_left = 0;
@@ -120,8 +119,8 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
                 if (exdir == -1) {
                     memcpy(temp_left + i_left, parts + i, sizeof(struct particle));
                     i_left++;
-                } else if (exdir == 0) {
-                    memcpy(temp_rest + i_rest, parts + i, sizeof(struct particle));
+                } if (exdir == 0) {
+                    memcpy(parts + i_rest, parts + i, sizeof(struct particle));
                     i_rest++;
                 } else if (exdir == 1) {
                     memcpy(temp_right + i_right, parts + i, sizeof(struct particle));
@@ -129,14 +128,13 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
                 }
             }
 
-            /* Move the particles where they need to be in the main array */
+            /* Move the particles into the main array (memmove because of overlap) */
+            memmove(parts + num_send_left, parts, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
             memcpy(parts, temp_left, num_send_left * sizeof(struct particle));
-            memcpy(parts + num_send_left, temp_rest, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
             memcpy(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(struct particle));
 
             /* Free the temporary arrays */
             free(temp_left);
-            free(temp_rest);
             free(temp_right);
         }
 
