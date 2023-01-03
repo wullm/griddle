@@ -98,9 +98,9 @@ struct fof_part_exchange_data {
 struct fof_halo {
     /* Global ID of the halo */
     long int global_id;
-    /* Centre of mass of the FOF particles */
+    /* Centre of mass of all FOF particles */
     double x_com[3];
-    /* Total mass of the FOF particles */
+    /* Total mass of all FOF particles */
     double mass_fof;
     /* Maximum distance between FOF particles and the CoM */
     double radius_fof;
