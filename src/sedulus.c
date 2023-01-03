@@ -302,7 +302,7 @@ int main(int argc, char *argv[]) {
         message(rank, "Starting power spectrum calculation.\n");
 
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
+        mass_deposition(&mass, particles, local_partnum, 1);
         timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -375,6 +375,9 @@ int main(int argc, char *argv[]) {
     const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
     const double int_to_grid_fac = 1.0 / grid_to_int_fac;
     const double cell_fac = M / boxlen;
+    const double A_smth = 1.25;
+    const double r_s = A_smth / cell_fac;
+    const IntPosType n_folds = 4;
 
     /* Pointer to the real-space potential grid */
     const GridFloatType *mass_box = mass.buffered_box;
@@ -427,101 +430,118 @@ int main(int argc, char *argv[]) {
         struct timepair run_timer;
         timer_start(rank, &run_timer);
 
-        /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
-        timer_stop(rank, &run_timer, "Computing mass density took ");
+        for (int ll = 0; ll < 2; ll++) {
 
-        /* Merge the buffers with the main grid */
-        add_local_buffers(&mass);
-        timer_stop(rank, &run_timer, "Communicating buffers took ");
-
-        /* Re-compute the gravitational potential */
-        compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi);
-        timer_stop(rank, &run_timer, "Computing the potential in total took ");
-
-        /* Copy buffers and communicate them to the neighbour ranks */
-        create_local_buffers(&mass);
-        timer_stop(rank, &run_timer, "Communicating buffers took ");
-
-        message(rank, "Computing particle kicks and drifts.\n");
-
-        /* Integrate the particles */
-        for (long long i = 0; i < local_partnum; i++) {
-            struct particle *p = &particles[i];
-
-            /* Convert integer positions to floating points on [0, M] */
-            double x[3] = {p->x[0] * int_to_grid_fac,
-                           p->x[1] * int_to_grid_fac,
-                           p->x[2] * int_to_grid_fac};
-
-            /* Obtain the acceleration by differentiating the potential */
-            double acc[3] = {0, 0, 0};
-            if (pars.DerivativeOrder == 1) {
-                accelCIC_1st(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* first order */
-            } else if (pars.DerivativeOrder == 2) {
-                accelCIC_2nd(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* second order */
-            } else if (pars.DerivativeOrder == 4) {
-                accelCIC_4th(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* fourth order */
+            /* Initiate mass deposition */
+            if (ll == 0) {
+                mass_deposition(&mass, particles, local_partnum, 1);
+                timer_stop(rank, &run_timer, "Computing ordinary mass density took ");
             } else {
-                printf("Differentiation scheme with order %d not implemented.\n", pars.DerivativeOrder);
+                mass_deposition(&mass, particles, local_partnum, n_folds);
+                timer_stop(rank, &run_timer, "Computing folded mass density took ");
             }
 
+            /* Merge the buffers with the main grid */
+            add_local_buffers(&mass);
+            timer_stop(rank, &run_timer, "Communicating buffers took ");
+
+            /* Re-compute the gravitational potential */
+            if (ll == 0) {
+                compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi, r_s, 1, 0);
+                timer_stop(rank, &run_timer, "Computing long-range potential in total took ");
+            } else {
+                compute_potential(&mass, &pcs, r2c_mpi, c2r_mpi, r_s, n_folds, 1);
+                timer_stop(rank, &run_timer, "Computing short-range potential in total took ");
+            }
+
+            /* Copy buffers and communicate them to the neighbour ranks */
+            create_local_buffers(&mass);
+            timer_stop(rank, &run_timer, "Communicating buffers took ");
+
+            message(rank, "Computing particle kicks and drifts.\n");
+
+            /* Integrate the particles */
+            for (long long i = 0; i < local_partnum; i++) {
+                struct particle *p = &particles[i];
+
+                /* Convert integer positions to floating points on [0, M] */
+                double x[3] = {(p->x[0] * (ll ? n_folds : 1)) * int_to_grid_fac,
+                               (p->x[1] * (ll ? n_folds : 1)) * int_to_grid_fac,
+                               (p->x[2] * (ll ? n_folds : 1)) * int_to_grid_fac};
+
+                /* Obtain the acceleration by differentiating the potential */
+                double acc[3] = {0, 0, 0};
+                if (pars.DerivativeOrder == 1) {
+                    accelCIC_1st(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* first order */
+                } else if (pars.DerivativeOrder == 2) {
+                    accelCIC_2nd(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* second order */
+                } else if (pars.DerivativeOrder == 4) {
+                    accelCIC_4th(mass_box, x, acc, M, MX0, buffer_width, Mz, cell_fac); /* fourth order */
+                } else {
+                    printf("Differentiation scheme with order %d not implemented.\n", pars.DerivativeOrder);
+                }
+
 #ifndef WITH_MASSES
-            acc[0] *= part_mass;
-            acc[1] *= part_mass;
-            acc[2] *= part_mass;
+                acc[0] *= part_mass;
+                acc[1] *= part_mass;
+                acc[2] *= part_mass;
 #endif
 
 #ifdef WITH_ACCELERATIONS
-            p->a[0] = acc[0];
-            p->a[1] = acc[1];
-            p->a[2] = acc[2];
+                p->a[0] = acc[0];
+                p->a[1] = acc[1];
+                p->a[2] = acc[2];
 #endif
 
-            /* Execute kick */
-            double v[3] = {p->v[0] + acc[0] * kick_dtau,
-                           p->v[1] + acc[1] * kick_dtau,
-                           p->v[2] + acc[2] * kick_dtau};
+                /* Execute kick */
+                double v[3] = {p->v[0] + acc[0] * kick_dtau,
+                               p->v[1] + acc[1] * kick_dtau,
+                               p->v[2] + acc[2] * kick_dtau};
 
-            /* Relativistic drift correction */
+                if (ll == 1) {
+
+                    /* Relativistic drift correction */
 #ifdef WITH_PARTTYPE
-            const double rel_drift = relativistic_drift(v, p->type, &pcs, a);
+                    const double rel_drift = relativistic_drift(v, p->type, &pcs, a);
 #else
-            const double rel_drift = 1.0;
+                    const double rel_drift = 1.0;
 #endif
 
-            /* Execute drift */
-            p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
+                    /* Execute drift */
+                    p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
+                    p->x[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
+                    p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
+                }
 
-            /* Update velocities */
-            p->v[0] = v[0];
-            p->v[1] = v[1];
-            p->v[2] = v[2];
+                /* Update velocities */
+                p->v[0] = v[0];
+                p->v[1] = v[1];
+                p->v[2] = v[2];
 
-            /* Delta-f weighting for neutrino variance reduction (2010.07321) */
+                /* Delta-f weighting for neutrino variance reduction (2010.07321) */
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
-            if (p->type == 6) {
-                double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
-                double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-                double q = sqrt(v2) * neutrino_qfac * m_eV;
-                double qi = neutrino_seed_to_fermi_dirac(p->id);
-                double f = fermi_dirac_density(q);
-                double fi = fermi_dirac_density(qi);
+                if (p->type == 6) {
+                    double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
+                    double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+                    double q = sqrt(v2) * neutrino_qfac * m_eV;
+                    double qi = neutrino_seed_to_fermi_dirac(p->id);
+                    double f = fermi_dirac_density(q);
+                    double fi = fermi_dirac_density(qi);
 
-                p->w = 1.0 - f / fi;
-            }
+                    p->w = 1.0 - f / fi;
+                }
 #endif
 
-            // /* Convert positions to integers (wrapping automatic by overflow) */
-            // p->x[0] = x[0] * grid_to_int_fac;
-            // p->x[1] = x[1] * grid_to_int_fac;
-            // p->x[2] = x[2] * grid_to_int_fac;
-        }
+                // /* Convert positions to integers (wrapping automatic by overflow) */
+                // p->x[0] = x[0] * grid_to_int_fac;
+                // p->x[1] = x[1] * grid_to_int_fac;
+                // p->x[2] = x[2] * grid_to_int_fac;
+            }
 
-        /* Timer */
-        timer_stop(rank, &run_timer, "Evolving particles took ");
+            /* Timer */
+            timer_stop(rank, &run_timer, "Evolving particles took ");
+
+        }
 
         /* Should there be a power spectrum output? */
         for (int j = 0; j < num_outputs_power; j++) {
@@ -545,7 +565,7 @@ int main(int argc, char *argv[]) {
                 timer_stop(rank, &run_timer, "Exchanging particles took ");
 
                 /* Initiate mass deposition */
-                mass_deposition(&mass, particles, local_partnum);
+                mass_deposition(&mass, particles, local_partnum, 1);
                 timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
                 /* Merge the buffers with the main grid */

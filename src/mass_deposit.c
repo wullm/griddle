@@ -28,7 +28,7 @@
 #include "../include/message.h"
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
-                    long long int local_partnum) {
+                    long long int local_partnum, IntPosType n_folds) {
 
     const long int N = dgrid->N;
     const long int Nz = dgrid->Nz;
@@ -53,9 +53,9 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *part = &parts[i];
 
-        double X = part->x[0] * int_to_grid_fac;
-        double Y = part->x[1] * int_to_grid_fac;
-        double Z = part->x[2] * int_to_grid_fac;
+        double X = (n_folds * part->x[0]) * int_to_grid_fac;
+        double Y = (n_folds * part->x[1]) * int_to_grid_fac;
+        double Z = (n_folds * part->x[2]) * int_to_grid_fac;
 
 #ifdef WITH_MASSES
         double M = part->m * cell_factor_3;
@@ -114,7 +114,8 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs, FourierPlanType r2c,
-                      FourierPlanType c2r) {
+                      FourierPlanType c2r, double r_s, IntPosType n_folds,
+                      int short_range) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -152,18 +153,22 @@ int compute_potential(struct distributed_grid *dgrid,
 #endif
 
     /* Pull out other grid constants */
+    const double fold_fact = n_folds;
     const double boxlen = dgrid->boxlen;
-    const double dk = 2 * M_PI / boxlen;
+    const double dk = 2 * M_PI / boxlen * fold_fact;
     const double grid_fac = boxlen / N;
     const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
     const double fft_factor = 1.0 / ((double) N * N * N);
     const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
+    const GridFloatType rs2 = r_s * r_s;
     GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the cosines */
     GridFloatType *cos_tab = malloc(N * sizeof(GridFloatType));
+    GridFloatType *k_tab = malloc(N * sizeof(GridFloatType));
     for (int x = 0; x < N; x++) {
         double kx = (x > N/2) ? (x - N) * dk : x * dk;
+        k_tab[x] = kx;
         cos_tab[x] = cos(kx * grid_fac);
     }
 
@@ -171,19 +176,25 @@ int compute_potential(struct distributed_grid *dgrid,
 
     /* Apply the inverse Poisson kernel (note that x and y are now transposed) */
     GridFloatType cx, cy, cz, ctot;
+    GridFloatType kx, ky, kz, k2;
     for (int y = Y0; y < Y0 + NY; y++) {
         cy = cos_tab[y];
+        ky = k_tab[y];
 
         for (int x = 0; x < N; x++) {
             cx = cos_tab[x];
+            kx = k_tab[x];
 
             for (int z = 0; z <= N / 2; z++) {
                 cz = cos_tab[z];
+                kz = k_tab[z];
 
                 ctot = cx + cy + cz;
+                k2 = kx * kx + ky * ky + kz * kz;
 
                 if (ctot != 3.0) {
-                    GridComplexType kern = overall_fac / (ctot - 3.0);
+                    GridComplexType trans_kern = short_range ? 1.0 - exp(-k2 * rs2) : exp(-k2 * rs2);
+                    GridComplexType kern = overall_fac * trans_kern / (ctot - 3.0);
                     fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
                 }
             }
@@ -194,6 +205,7 @@ int compute_potential(struct distributed_grid *dgrid,
 
     /* Free the look-up table */
     free(cos_tab);
+    free(k_tab);
 
     /* Carry out the backward Fourier transform */
     // fft_c2r_dg(dgrid);

@@ -26,9 +26,10 @@
 #include "../include/fft.h"
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
-                    long long int local_partnum);
+                    long long int local_partnum, IntPosType n_folds);
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs, FourierPlanType r2c,
-                      FourierPlanType c2r);
+                      FourierPlanType c2r, double r_s, IntPosType n_folds,
+                      int short_range);
 
 #endif
