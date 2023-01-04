@@ -499,9 +499,9 @@ int main(int argc, char *argv[]) {
 #endif
 
             /* Execute kick */
-            double v[3] = {p->v[0] + acc[0] * kick_dtau,
-                           p->v[1] + acc[1] * kick_dtau,
-                           p->v[2] + acc[2] * kick_dtau};
+            FloatVelType v[3] = {p->v[0] + acc[0] * kick_dtau,
+                                 p->v[1] + acc[1] * kick_dtau,
+                                 p->v[2] + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
 #ifdef WITH_PARTTYPE
