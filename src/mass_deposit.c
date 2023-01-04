@@ -54,8 +54,8 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         struct particle *part = &parts[i];
 
 #ifdef WITH_PARTTYPE
-        if (gtype == cb_mass && part != 1) continue;
-        else if (gtype == nu_mass && part != 6) continue;
+        if (gtype == cb_mass && part->type != 1) continue;
+        else if (gtype == nu_mass && part->type != 6) continue;
 #endif
 
         double X = part->x[0] * int_to_grid_fac;
