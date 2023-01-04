@@ -252,7 +252,7 @@ int exportSnapshot(struct params *pars, struct units *us,
             /* Drift to the right time */
             if (dtau_drift != 0.) {
 #ifdef WITH_PARTTYPE
-                const double rel_drift = relativistic_drift(p->v, p->type pcs, a);
+                const double rel_drift = relativistic_drift(p->v, p->type, pcs, a);
 #else
                 const double rel_drift = 1.0;
 #endif
