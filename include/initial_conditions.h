@@ -42,11 +42,16 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              long long X0, long long NX, double z_start);
+                              long long X0, long long NX, double z_start,
+                              double f_asymptotic);
 int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct cosmology_tables *ctabs, struct units *us,
                        struct physical_consts *pcs, long long int N_nupart,
                        long long local_partnum, long long local_neutrino_num,
                        double boxlen, long long X0, long long NX, long long N,
                        double z_start, rng_state *state);
+int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
+                        struct cosmology_tables *ctabs, struct units *us,
+                        struct physical_consts *pcs, double z_start,
+                        double z_target, double *f_asymptotic);
 #endif

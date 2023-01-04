@@ -25,8 +25,14 @@
 #include "../include/units.h"
 #include "../include/fft.h"
 
+enum grid_type {
+    all_mass,
+    cb_mass,
+    nu_mass
+};
+
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
-                    long long int local_partnum);
+                    long long int local_partnum, enum grid_type gtype);
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs, FourierPlanType r2c,
                       FourierPlanType c2r);

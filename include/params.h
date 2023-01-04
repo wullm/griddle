@@ -34,6 +34,7 @@ struct params {
     /* Initial conditions parameters */
     char GenerateICs;
     char *InitialConditionsFile;
+    char DoNewtonianBackscaling;
 
     /* Perturbation file parameters */
     char *TransferFunctionsFile;
@@ -47,6 +48,7 @@ struct params {
     double ScaleFactorBegin;
     double ScaleFactorEnd;
     double ScaleFactorStep;
+    double ScaleFactorTarget;
     int DerivativeOrder;
 
     /* Output time strings */

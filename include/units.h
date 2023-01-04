@@ -29,6 +29,8 @@
 #define BOLTZMANN_CONST_SI_UNITS 1.380649e-23 //J / K
 #define ELECTRONVOLT_SI_UNITS 1.602176634e-19 // J
 
+#define NEUTRINO_SOUND_SPEED_1EV_SI_UNITS 134423.0 // m / s
+
 struct units {
     double UnitLengthMetres;
     double UnitTimeSeconds;
@@ -44,6 +46,7 @@ struct physical_consts {
     double hPlanck;
     double kBoltzmann;
     double ElectronVolt;
+    double SoundSpeedNeutrinos;
 };
 
 int readUnits(struct units *us, const char *fname);

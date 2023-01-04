@@ -100,15 +100,27 @@ int main(int argc, char *argv[]) {
     /* Integration limits */
     const double a_begin = pars.ScaleFactorBegin;
     const double a_end = pars.ScaleFactorEnd;
+    const double a_target = pars.ScaleFactorTarget;
     const double a_factor = 1.0 + pars.ScaleFactorStep;
     const double z_start = 1.0 / a_begin - 1.0;
+    const double z_target = 1.0 / a_target - 1.0;
+
+    /* Timer */
+    struct timepair setup_timer;
+    timer_start(rank, &setup_timer);
 
     /* Integrate the background cosmology */
     integrate_cosmology_tables(&cosmo, &us, &pcs, &ctabs, 1e-3, fmax(1.0, a_end) * 1.01, 1000);
 
+    /* Timer */
+    timer_stop(rank, &setup_timer, "Integrating cosmological tables took ");
+
     /* Read the perturbation data file */
     readPerturb(&us, &ptdat, pars.TransferFunctionsFile);
     readPerturbParams(&us, &ptpars, pars.TransferFunctionsFile);
+
+    /* Timer */
+    timer_stop(rank, &setup_timer, "Reading transfer functions took ");
 
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat.redshift, ptdat.tau_size};
@@ -119,6 +131,13 @@ int main(int argc, char *argv[]) {
     /* Additional interpolation spline for the background cosmology scale factors */
     struct strooklat spline_bg_a = {ctabs.avec, ctabs.size};
     init_strooklat_spline(&spline_bg_a, 100);
+
+    /* Perform a Newtonian back-scaling procedure on the transfer functions */
+    double f_asymptotic = 0.; // the asymptotic logarithmic growth rate
+    if (pars.DoNewtonianBackscaling) {
+        backscale_transfers(&ptdat, &cosmo, &ctabs, &us, &pcs, z_start, z_target, &f_asymptotic);
+        timer_stop(rank, &setup_timer, "Solving back-scaling fluid equations took ");
+    }
 
     /* Store the MPI rank */
     pars.rank = rank;
@@ -223,7 +242,8 @@ int main(int argc, char *argv[]) {
 
         /* Generate a particle lattice */
         generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
-                                  particles, &cosmo, &us, &pcs, X0, NX, z_start);
+                                  particles, &cosmo, &us, &pcs, X0, NX, z_start,
+                                  f_asymptotic);
 
         /* We are done with the LPT potentials */
         free_local_grid(&lpt_potential);
@@ -301,8 +321,8 @@ int main(int argc, char *argv[]) {
 
         message(rank, "Starting power spectrum calculation.\n");
 
-        /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
+        /* Initiate mass deposition (CDM + baryons only) */
+        mass_deposition(&mass, particles, local_partnum, cb_mass);
         timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -428,7 +448,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &run_timer);
 
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
+        mass_deposition(&mass, particles, local_partnum, all_mass);
         timer_stop(rank, &run_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -479,9 +499,9 @@ int main(int argc, char *argv[]) {
 #endif
 
             /* Execute kick */
-            double v[3] = {p->v[0] + acc[0] * kick_dtau,
-                           p->v[1] + acc[1] * kick_dtau,
-                           p->v[2] + acc[2] * kick_dtau};
+            FloatVelType v[3] = {p->v[0] + acc[0] * kick_dtau,
+                                 p->v[1] + acc[1] * kick_dtau,
+                                 p->v[2] + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
 #ifdef WITH_PARTTYPE
@@ -544,8 +564,8 @@ int main(int argc, char *argv[]) {
                 exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
                 timer_stop(rank, &run_timer, "Exchanging particles took ");
 
-                /* Initiate mass deposition */
-                mass_deposition(&mass, particles, local_partnum);
+                /* Initiate mass deposition (CDM + baryons only) */
+                mass_deposition(&mass, particles, local_partnum, cb_mass);
                 timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
                 /* Merge the buffers with the main grid */

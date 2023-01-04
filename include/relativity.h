@@ -24,14 +24,13 @@
 #include "particle.h"
 
 /* Relativistic equations of motion (2207.14256) */
-static inline double relativistic_drift(const FloatVelType v[3],
-                                        const int ptype,
+static inline double relativistic_drift(const FloatVelType v[3], int ptype,
                                         const struct physical_consts *pcs,
                                         double a) {
     if (ptype == 6) {
-        double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-        double ac = a * pcs->SpeedOfLight;
-        double ac2 = ac * ac;
+        FloatVelType v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+        FloatVelType ac = a * pcs->SpeedOfLight;
+        FloatVelType ac2 = ac * ac;
         return ac / sqrt(ac2 + v2);
     } else {
         return 1.0;

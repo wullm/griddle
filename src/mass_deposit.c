@@ -28,7 +28,7 @@
 #include "../include/message.h"
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
-                    long long int local_partnum) {
+                    long long int local_partnum, enum grid_type gtype) {
 
     const long int N = dgrid->N;
     const long int Nz = dgrid->Nz;
@@ -52,6 +52,11 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *part = &parts[i];
+
+#ifdef WITH_PARTTYPE
+        if (gtype == cb_mass && part->type != 1) continue;
+        else if (gtype == nu_mass && part->type != 6) continue;
+#endif
 
         double X = part->x[0] * int_to_grid_fac;
         double Y = part->x[1] * int_to_grid_fac;

@@ -60,6 +60,8 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
         /* Allocate arrays for neutrino properties */
         cosmo->M_nu = malloc(cosmo->N_nu * sizeof(double));
         cosmo->deg_nu = malloc(cosmo->N_nu * sizeof(double));
+        cosmo->c_s_nu = malloc(cosmo->N_nu * sizeof(double));
+        bzero(cosmo->c_s_nu, cosmo->N_nu * sizeof(double));
 
         /* Prepare reading the strings of comma-separated lists */
         int charlen = 100;
@@ -110,6 +112,7 @@ int cleanCosmology(struct cosmology *cosmo) {
     if (cosmo->N_nu > 0) {
         free(cosmo->M_nu);
         free(cosmo->deg_nu);
+        free(cosmo->c_s_nu);
     }
     return 0;
 }
@@ -535,4 +538,14 @@ void free_cosmology_tables(struct cosmology_tables *tab) {
     free(tab->f_nu_nr_tot);
     free(tab->kick_factors);
     free(tab->drift_factors);
+}
+
+void set_neutrino_sound_speeds(struct cosmology *c, struct units *us,
+                               struct physical_consts *pcs) {
+
+    /* Use the estimate from Blas+14 as default */
+    for (int i = 0; i < c->N_nu; i++) {
+        c->c_s_nu[i] = pcs->SoundSpeedNeutrinos / c->M_nu[i];
+    }
+
 }
