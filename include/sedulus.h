@@ -33,6 +33,7 @@
 #include "fft_kernels.h"
 #include "gaussian_field.h"
 #include "perturb_data.h"
+#include "initial_conditions_ode.h"
 #include "initial_conditions.h"
 #include "particle.h"
 #include "particle_exchange.h"

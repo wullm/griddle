@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <math.h>
 #include "../include/initial_conditions.h"
+#include "../include/initial_conditions_ode.h"
 #include "../include/gaussian_field.h"
 #include "../include/fft.h"
 #include "../include/fft_kernels.h"
@@ -29,6 +30,150 @@
 #include "../include/particle.h"
 #include "../include/mesh_grav.h"
 #include "../include/fermi_dirac.h"
+
+int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
+                        struct cosmology_tables *ctabs, struct units *us,
+                        struct physical_consts *pcs, double z_start,
+                        double z_target, double *f_asymptotic) {
+
+    /* The number of wavevectors and timesteps in the perturbation data set */
+    const int k_size = ptdat->k_size;
+    const int tau_size = ptdat->tau_size;
+
+    /* Find the transfer function index for CDM, baryons, neutrinos */
+    int index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
+    int index_b = findTitle(ptdat->titles, "d_b", ptdat->n_functions);
+    int *index_ncdm = malloc(cosmo->N_nu * sizeof(int));
+    for (int i = 0; i < cosmo->N_nu; i++) {
+        char nu_title[50];
+        sprintf(nu_title, "d_ncdm[%d]", i);
+        index_ncdm[i] = findTitle(ptdat->titles, nu_title, ptdat->n_functions);
+    }
+
+    /* The baryon fraction of CDM + baryons */
+    const double f_b = cosmo->Omega_b / (cosmo->Omega_b + cosmo->Omega_cdm);
+
+    /* Pointer to the density transfer functions */
+    double *tf_cdm = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_cdm;
+    double *tf_b = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_b;
+    double **tf_ncdm = malloc(cosmo->N_nu * sizeof(double*));
+    for (int i = 0; i < cosmo->N_nu; i++) {
+        tf_ncdm[i] = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_ncdm[i];
+    }
+
+    /* Create interpolation splines for redshifts and wavenumbers */
+    struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
+    struct strooklat spline_k = {ptdat->k, ptdat->k_size};
+    init_strooklat_spline(&spline_z, 100);
+    init_strooklat_spline(&spline_k, 100);
+
+    /* Scale factors corresponding to the starting and target redshifts */
+    const double a_start = 1.0 / (1.0 + z_start);
+    const double a_target = 1.0 / (1.0 + z_target);
+    /* Redshifts for finite difference around z_start */
+    const double log_a_start = log(a_start);
+    const double delta_log_a = 0.002;
+    const double a_min = exp(log_a_start - delta_log_a);
+    const double a_pls = exp(log_a_start + delta_log_a);
+    const double z_min = 1.0 / a_min - 1.0;
+    const double z_pls = 1.0 / a_pls - 1.0;
+
+    /* Prepare the fluid integrator */
+    const double tol = 1e-12;
+    const double hstart = 1e-12;
+    prepare_fluid_integrator(cosmo, us, pcs, ctabs, tol, hstart);
+
+    /* Allocate memory for neutrino quantities */
+    double *d_n_min = malloc(cosmo->N_nu * sizeof(double));
+    double *d_n_pls = malloc(cosmo->N_nu * sizeof(double));
+    double *d_n = malloc(cosmo->N_nu * sizeof(double));
+    double *g_n = malloc(cosmo->N_nu * sizeof(double));
+    double *D_n = malloc(cosmo->N_nu * sizeof(double));
+
+    /* Compute the mean asymptotic logarithmic CDM + baryon growth rate */
+    double fcb_asymptotic_sum = 0.;
+    int count_asymptotic = 0;
+
+    /* Integrate the first-order Newtonian fluid equations */
+    for (int i = 0; i < k_size; i++) {
+        /* Obtain the transfer functions around z_start by interpolating */
+        double d_c_min = strooklat_interp_2d(&spline_z, &spline_k, tf_cdm, z_min, ptdat->k[i]);
+        double d_c_pls = strooklat_interp_2d(&spline_z, &spline_k, tf_cdm, z_pls, ptdat->k[i]);
+        double d_c_target = strooklat_interp_2d(&spline_z, &spline_k, tf_cdm, z_target, ptdat->k[i]);
+        double d_c = strooklat_interp_2d(&spline_z, &spline_k, tf_cdm, z_start, ptdat->k[i]);
+        double d_b_min = strooklat_interp_2d(&spline_z, &spline_k, tf_b, z_min, ptdat->k[i]);
+        double d_b_pls = strooklat_interp_2d(&spline_z, &spline_k, tf_b, z_pls, ptdat->k[i]);
+        double d_b_target = strooklat_interp_2d(&spline_z, &spline_k, tf_b, z_target, ptdat->k[i]);
+        double d_b = strooklat_interp_2d(&spline_z, &spline_k, tf_b, z_start, ptdat->k[i]);
+        for (int n = 0; n < cosmo->N_nu; n++) {
+            d_n_min[n] = strooklat_interp_2d(&spline_z, &spline_k, tf_ncdm[n], z_min, ptdat->k[i]);
+            d_n_pls[n] = strooklat_interp_2d(&spline_z, &spline_k, tf_ncdm[n], z_pls, ptdat->k[i]);
+            d_n[n] = strooklat_interp_2d(&spline_z, &spline_k, tf_ncdm[n], z_start, ptdat->k[i]);
+        }
+
+        /* Compute the logarithmic growth rates (also known as f) */
+        double g_c = (d_c_pls - d_c_min) / (2.0 * delta_log_a) / d_c;
+        double g_b = (d_b_pls - d_b_min) / (2.0 * delta_log_a) / d_b;
+        for (int n = 0; n < cosmo->N_nu; n++) {
+            g_n[n] = (d_n_pls[n] - d_n_min[n]) / (2.0 * delta_log_a) / d_n[n];
+        }
+
+        /* Compute the weighted CDM + baryon growth rate */
+        if (ptdat->k[i] >= 1.0) {
+            double d_cb_min = (1.0 - f_b) * d_c_min + f_b * d_b_min;
+            double d_cb_pls = (1.0 - f_b) * d_c_pls + f_b * d_b_pls;
+            double d_cb = (1.0 - f_b) * d_c + f_b * d_b;
+            double g_cb = (d_cb_pls - d_cb_min) / (2.0 * delta_log_a) / d_cb;
+
+            fcb_asymptotic_sum += g_cb;
+            count_asymptotic++;
+        }
+
+        /* Initialise the input data for the fluid equations */
+        struct growth_factors gfac;
+        gfac.k = ptdat->k[i];
+        gfac.delta_c = d_c;
+        gfac.delta_b = d_b;
+        gfac.delta_n = d_n;
+        gfac.gc = g_c;
+        gfac.gb = g_b;
+        gfac.gn = g_n;
+        gfac.Dc = 0.;
+        gfac.Db = 0.;
+        gfac.Dn = D_n;
+
+        integrate_fluid_equations(cosmo, us, pcs, ctabs, &gfac, a_start, a_target);
+
+        /* Replace the CDM transfer function by a back-scaled CDM + baryon TF */
+        double d_c_scaled = d_c_target * gfac.Dc;
+        double d_b_scaled = d_b_target * gfac.Db;
+        double d_cb_scaled = (1.0 - f_b) * d_c_scaled + f_b * d_b_scaled;
+
+        /* We replace the entire function (at all redshifts) to the constant
+         * value at z_start, just for simplicity */
+        for (int j = 0; j < tau_size; j++) {
+            tf_cdm[k_size * j + i] = d_cb_scaled;
+        }
+    }
+
+    /* The mean asymptotic growth rate */
+    *f_asymptotic = fcb_asymptotic_sum / count_asymptotic;
+
+    /* Free memory for neutrino quantities */
+    free(d_n_min);
+    free(d_n_pls);
+    free(d_n);
+    free(g_n);
+    free(D_n);
+    free(tf_ncdm);
+    free(index_ncdm);
+
+    /* Clean up strooklat interpolation splines */
+    free_strooklat_spline(&spline_z);
+    free_strooklat_spline(&spline_k);
+
+    return 0;
+}
 
 int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
                             char fix_modes, char invert_modes,
@@ -168,7 +313,8 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              long long X0, long long NX, double z_start) {
+                              long long X0, long long NX, double z_start,
+                              double f_asymptotic) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -179,9 +325,16 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
     init_strooklat_spline(&spline_z, 100);
 
+    /* The logarithmic growth rate */
+    double f_start;
+    if (f_asymptotic > 0.) {
+        f_start = f_asymptotic;
+    } else {
+        f_start = strooklat_interp(&spline_z, ptdat->f_growth, z_start);
+    }
+
     /* The velocity factor a^2Hf (a^2 for the internal velocity variable) */
     const double a_start = 1.0 / (1.0 + z_start);
-    const double f_start = strooklat_interp(&spline_z, ptdat->f_growth, z_start);
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
     const double vel_fact = a_start * a_start * f_start * H_start;
 

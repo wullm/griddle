@@ -34,6 +34,7 @@ int readParams(struct params *pars, const char *fname) {
 
      /* Initial conditions parameters */
      pars->GenerateICs = ini_getl("InitialConditions", "Generate", 1, fname);
+     pars->DoNewtonianBackscaling = ini_getl("InitialConditions", "DoNewtonianBackscaling", 1, fname);
 
      pars->PartGridSize = ini_getl("Simulation", "PartGridSize", 64, fname);
      pars->MeshGridSize = ini_getl("Simulation", "MeshGridSize", 64, fname);
@@ -44,6 +45,7 @@ int readParams(struct params *pars, const char *fname) {
      pars->ScaleFactorBegin = ini_getd("Simulation", "ScaleFactorBegin", 0.03125, fname);
      pars->ScaleFactorEnd = ini_getd("Simulation", "ScaleFactorEnd", 1.0, fname);
      pars->ScaleFactorStep = ini_getd("Simulation", "ScaleFactorStep", 0.05, fname);
+     pars->ScaleFactorTarget = ini_getd("Simulation", "ScaleFactorTarget", 1.0, fname);
 
      pars->DerivativeOrder = ini_getl("Simulation", "DerivativeOrder", 4, fname);
 
