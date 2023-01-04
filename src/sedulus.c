@@ -321,8 +321,8 @@ int main(int argc, char *argv[]) {
 
         message(rank, "Starting power spectrum calculation.\n");
 
-        /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
+        /* Initiate mass deposition (CDM + baryons only) */
+        mass_deposition(&mass, particles, local_partnum, cb_mass);
         timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -448,7 +448,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &run_timer);
 
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum);
+        mass_deposition(&mass, particles, local_partnum, all_mass);
         timer_stop(rank, &run_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -564,8 +564,8 @@ int main(int argc, char *argv[]) {
                 exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
                 timer_stop(rank, &run_timer, "Exchanging particles took ");
 
-                /* Initiate mass deposition */
-                mass_deposition(&mass, particles, local_partnum);
+                /* Initiate mass deposition (CDM + baryons only) */
+                mass_deposition(&mass, particles, local_partnum, cb_mass);
                 timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
                 /* Merge the buffers with the main grid */
