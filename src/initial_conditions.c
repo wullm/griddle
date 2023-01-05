@@ -421,7 +421,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct physical_consts *pcs, long long int N_nupart,
                        long long particle_offset, long long local_cdm_num,
                        long long local_neutrino_num, double boxlen,
-                       long long X0, long long NX, long long N,
+                       long long X0_nupart, long long NX_nupart,
                        double z_start, rng_state *state) {
 
     /* Create interpolation splines for scale factors */
@@ -465,7 +465,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
 #endif
 
         /* Sample a position uniformly in the box (on this rank) */
-        part->x[0] = pos_to_int_fac * (sampleUniform(state) * NX + X0) * boxlen / N;
+        part->x[0] = pos_to_int_fac * (sampleUniform(state) * NX_nupart + X0_nupart) * boxlen / N_nupart;
         part->x[1] = pos_to_int_fac * sampleUniform(state) * boxlen;
         part->x[2] = pos_to_int_fac * sampleUniform(state) * boxlen;
 
@@ -501,7 +501,6 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
                             struct physical_consts *pcs, long long int N_nupart,
                             long long local_partnum, long long max_partnum,
                             long long local_neutrino_num, double boxlen,
-                            long long X0, long long NX, long long N,
                             double z_start, long int Seed) {
 
     /* Get the dimensions of the cluster */

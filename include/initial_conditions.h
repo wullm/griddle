@@ -50,7 +50,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct physical_consts *pcs, long long int N_nupart,
                        long long particle_offset, long long local_cdm_num,
                        long long local_neutrino_num, double boxlen,
-                       long long X0, long long NX, long long N,
+                       long long X0_nupart, long long NX_nupart,
                        double z_start, rng_state *state);
 int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
                         struct cosmology_tables *ctabs, struct units *us,
@@ -63,6 +63,5 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
                             struct physical_consts *pcs, long long int N_nupart,
                             long long local_partnum, long long max_partnum,
                             long long local_neutrino_num, double boxlen,
-                            long long X0, long long NX, long long N,
                             double z_start, long int Seed);
 #endif

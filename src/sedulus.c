@@ -214,7 +214,7 @@ int main(int argc, char *argv[]) {
         if (N_nu > 0) {
             generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
                                local_partnum, local_cdm_num, local_neutrino_num,
-                               boxlen, X0, NX, N, z_start, &seed);
+                               boxlen, X0_nu, NX_nu, z_start, &seed);
 
             local_partnum += local_neutrino_num;
 
@@ -228,8 +228,7 @@ int main(int argc, char *argv[]) {
             pre_integrate_neutrinos(&nu_potential, &ptdat, &pars, pars.FixedModes,
                                     pars.InvertedModes, particles, &cosmo, &ctabs,
                                     &us, &pcs, N_nu, local_partnum, max_partnum,
-                                    local_neutrino_num, boxlen, X0, NX, N,
-                                    z_start, pars.Seed);
+                                    local_neutrino_num, boxlen, z_start, pars.Seed);
 
             free_local_grid(&nu_potential);
 
