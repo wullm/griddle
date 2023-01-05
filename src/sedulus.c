@@ -221,19 +221,21 @@ int main(int argc, char *argv[]) {
             /* Timer */
             timer_stop(rank, &ics_timer, "Generating neutrinos took ");
 
-            /* Allocate distributed memory arrays for a potential grid */
-            struct distributed_grid nu_potential;
-            alloc_local_grid_with_buffers(&nu_potential, N_nu, boxlen, buffer_width, MPI_COMM_WORLD);
+            if (pars.NeutrinoPreIntegration) {
+                /* Allocate distributed memory arrays for a potential grid */
+                struct distributed_grid nu_potential;
+                alloc_local_grid_with_buffers(&nu_potential, N_nu, boxlen, buffer_width, MPI_COMM_WORLD);
 
-            pre_integrate_neutrinos(&nu_potential, &ptdat, &pars, pars.FixedModes,
-                                    pars.InvertedModes, particles, &cosmo, &ctabs,
-                                    &us, &pcs, N_nu, local_partnum, max_partnum,
-                                    local_neutrino_num, boxlen, z_start, pars.Seed);
+                pre_integrate_neutrinos(&nu_potential, &ptdat, &pars, pars.FixedModes,
+                                        pars.InvertedModes, particles, &cosmo, &ctabs,
+                                        &us, &pcs, N_nu, local_partnum, max_partnum,
+                                        local_neutrino_num, boxlen, z_start, pars.Seed);
 
-            free_local_grid(&nu_potential);
+                free_local_grid(&nu_potential);
 
-            /* Timer */
-            timer_stop(rank, &ics_timer, "Integrating neutrinos took ");
+                /* Timer */
+                timer_stop(rank, &ics_timer, "Integrating neutrinos took ");
+            }
         }
 
         /* Allocate distributed memory arrays for the LPT potential */
