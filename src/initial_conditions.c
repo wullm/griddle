@@ -526,12 +526,25 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
 
     /* Before starting the main simulation, we will integrate the neutrinos
      * from some early time down to the starting redshift of the simulation. */
-    const int MAX_ITER = 10; // TODO: make parameter
-    const double a_factor = 1.05; // TODO: make parameter
+    const double a_factor = 1.0 + pars->NeutrinoScaleFactorEarlyStep;
     const double a_start = 1.0 / (1.0 + z_start);
-    const double a_early = a_start / pow(a_factor, MAX_ITER);
+    const double a_early = pars->NeutrinoScaleFactorEarly;
     const double a_stop = a_start;
+    const int MAX_ITER = (log(a_stop) - log(a_early))/log(a_factor) + 1;
     double a = a_early;
+
+    if (a_early < ctabs->avec[0] || a_early < 1.0 / (1.0 + ptdat->redshift[0])) {
+        printf("Error: Neutrino:ScaleFactorEarly smaller than earliest time in "
+               "cosmology or linear perturbation tables (%g < %g or %g < %g).\n",
+               a_early, ctabs->avec[0], a_early, 1.0 / (1.0 + ptdat->redshift[0]));
+        exit(1);
+    }
+
+    if (a_early > a_start) {
+        printf("Error: Neutrino:ScaleFactorEarly larger than the starting scale "
+               "factor of the simulation.\n");
+        exit(1);
+    }
 
     /* Pointer to and dimensions of the real-space potential grid */
     const GridFloatType *box = dgrid->buffered_box;

@@ -51,6 +51,11 @@ struct params {
     double ScaleFactorTarget;
     int DerivativeOrder;
 
+    /* Neutrino parameters */
+    char NeutrinoPreIntegration;
+    double NeutrinoScaleFactorEarly;
+    double NeutrinoScaleFactorEarlyStep;
+
     /* Output time strings */
     char *SnapshotTimesString;
     char *PowerSpectrumTimesString;

@@ -49,6 +49,11 @@ int readParams(struct params *pars, const char *fname) {
 
      pars->DerivativeOrder = ini_getl("Simulation", "DerivativeOrder", 4, fname);
 
+     /* Neutrino parameters */
+     pars->NeutrinoPreIntegration = ini_getl("Neutrino", "PreIntegration", 1, fname);
+     pars->NeutrinoScaleFactorEarly = ini_getd("Neutrino", "ScaleFactorEarly", 0.005, fname);
+     pars->NeutrinoScaleFactorEarlyStep = ini_getd("Neutrino", "ScaleFactorEarlyStep", 0.2, fname);
+
      /* Read strings */
      int len = DEFAULT_STRING_LENGTH;
      pars->InitialConditionsFile = malloc(len);
