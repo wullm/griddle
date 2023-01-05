@@ -18,6 +18,7 @@
  ******************************************************************************/
 
 #include <stdlib.h>
+#include <complex.h>
 #include <string.h>
 #include <assert.h>
 #include <math.h>
@@ -30,6 +31,9 @@
 #include "../include/particle.h"
 #include "../include/mesh_grav.h"
 #include "../include/fermi_dirac.h"
+#include "../include/message.h"
+#include "../include/relativity.h"
+#include "../include/particle_exchange.h"
 
 int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
                         struct cosmology_tables *ctabs, struct units *us,
@@ -175,7 +179,7 @@ int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
     return 0;
 }
 
-int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
+int generate_potential_grid(struct distributed_grid *dgrid, long int Seed,
                             char fix_modes, char invert_modes,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start) {
@@ -184,7 +188,7 @@ int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
     int index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
 
     /* Generate a complex Hermitian Gaussian random field */
-    generate_complex_grf(dgrid, seed);
+    generate_ngeniclike_grf(dgrid, Seed);
     enforce_hermiticity(dgrid);
 
     /* Apply fixing and/or inverting of the modes for variance reduction? */
@@ -313,7 +317,8 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              long long X0, long long NX, double z_start,
+                              long long particle_offset, long long X0,
+                              long long NX, double z_start,
                               double f_asymptotic) {
 
     /* Get the dimensions of the cluster */
@@ -360,10 +365,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
 
     /* Generate a particle lattice */
-    for (int i = X0; i < X0+NX; i++) {
+    for (int i = X0; i < X0 + NX; i++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
-                struct particle *part = &parts[(i-X0) * N * N + j * N + k];
+                struct particle *part = &parts[particle_offset + (i - X0) * N * N + j * N + k];
 #ifdef WITH_PARTICLE_IDS
                 part->id = (long long int) i * N * N + j * N + k;
 #endif
@@ -414,8 +419,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct cosmology_tables *ctabs, struct units *us,
                        struct physical_consts *pcs, long long int N_nupart,
-                       long long local_partnum, long long local_neutrino_num,
-                       double boxlen, long long X0, long long NX, long long N,
+                       long long particle_offset, long long local_cdm_num,
+                       long long local_neutrino_num, double boxlen,
+                       long long X0, long long NX, long long N,
                        double z_start, rng_state *state) {
 
     /* Create interpolation splines for scale factors */
@@ -444,8 +450,8 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
 
     /* Generate neutrinos */
     for (long long i = 0; i < local_neutrino_num; i++) {
-        struct particle *part = &parts[local_partnum + i];
-        long int seed_and_id = local_partnum + i;
+        struct particle *part = &parts[particle_offset + i];
+        long int seed_and_id = local_cdm_num + i;
 #ifdef WITH_PARTICLE_IDS
         part->id = seed_and_id;
 #endif
@@ -484,6 +490,196 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
     free_strooklat_spline(&spline_a);
     /* Free the neutrino density array */
     free(Omega_nu_0);
+
+    return 0;
+}
+
+int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data *ptdat,
+                            struct params *pars, char fix_modes, char invert_modes,
+                            struct particle *parts, struct cosmology *cosmo,
+                            struct cosmology_tables *ctabs, struct units *us,
+                            struct physical_consts *pcs, long long int N_nupart,
+                            long long local_partnum, long long max_partnum,
+                            long long local_neutrino_num, double boxlen,
+                            long long X0, long long NX, long long N,
+                            double z_start, long int Seed) {
+
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    /* Find the transfer function index for the gravitational potential */
+    int index_phi = findTitle(ptdat->titles, "phi", ptdat->n_functions);
+
+    /* Pointer to the transfer function */
+    double *tf = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_phi;
+
+    /* Create interpolation splines for redshifts and wavenumbers */
+    struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
+    struct strooklat spline_k = {ptdat->k, ptdat->k_size};
+    init_strooklat_spline(&spline_z, 100);
+    init_strooklat_spline(&spline_k, 100);
+
+    /* Additional interpolation spline for the background cosmology scale factors */
+    struct strooklat spline_bg_a = {ctabs->avec, ctabs->size};
+    init_strooklat_spline(&spline_bg_a, 100);
+
+    /* Before starting the main simulation, we will integrate the neutrinos
+     * from some early time down to the starting redshift of the simulation. */
+    const int MAX_ITER = 10; // TODO: make parameter
+    const double a_factor = 1.05; // TODO: make parameter
+    const double a_start = 1.0 / (1.0 + z_start);
+    const double a_early = a_start / pow(a_factor, MAX_ITER);
+    const double a_stop = a_start;
+    double a = a_early;
+
+    /* Pointer to and dimensions of the real-space potential grid */
+    const GridFloatType *box = dgrid->buffered_box;
+    const long int M = dgrid->N;
+    const long int Mz = dgrid->Nz;
+    const long int MX0 = dgrid->X0;
+    const long int buffer_width = dgrid->buffer_width;
+
+    /* Conversion factor between floating point and integer positions */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
+    /* Position conversion factors to [0, M] where M is the grid size */
+    const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
+    const double int_to_grid_fac = 1.0 / grid_to_int_fac;
+    const double cell_fac = M / boxlen;
+
+    /* The neutrino pre-integration loop */
+    for (int ITER = 0; ITER < MAX_ITER; ITER++) {
+        /* Determine the previous and next scale factor */
+        double a_prev, a_next;
+        if (ITER == 0) {
+            a_prev = a;
+            a_next = a * a_factor;
+        } else if (ITER < MAX_ITER - 1) {
+            a_prev = a / a_factor;
+            a_next = a * a_factor;
+        } else {
+            a_prev = a / a_factor;
+            a_next = a_stop;
+        }
+
+        /* Compute the current redshift and log conformal time */
+        double z = 1./a - 1.;
+
+        /* Determine the adjacent half-step scale factor */
+        double a_half_prev = sqrt(a_prev * a);
+        double a_half_next = sqrt(a_next * a);
+
+        /* Obtain the kick and drift time steps */
+        double kick_dtau  = strooklat_interp(&spline_bg_a, ctabs->kick_factors, a_half_next) -
+                            strooklat_interp(&spline_bg_a, ctabs->kick_factors, a_half_prev);
+        double drift_dtau = strooklat_interp(&spline_bg_a, ctabs->drift_factors, a_next) -
+                            strooklat_interp(&spline_bg_a, ctabs->drift_factors, a);
+
+        message(rank, "Neutrino pre-integration step %d at z = %g\n", ITER, z);
+
+        /* Generate a complex Hermitian Gaussian random field */
+        // generate_complex_grf(dgrid, seed);
+        generate_ngeniclike_grf(dgrid, Seed);
+        enforce_hermiticity(dgrid);
+
+        /* Apply fixing and/or inverting of the modes for variance reduction? */
+        if (fix_modes || invert_modes) {
+            fix_and_pairing(dgrid, fix_modes, invert_modes);
+        }
+
+        /* Apply the primordial power spectrum without transfer functions */
+        fft_apply_kernel_dg(dgrid, dgrid, kernel_power_no_transfer, cosmo);
+
+        /* Apply the potential transfer function */
+        struct spline_params sp = {&spline_z, &spline_k, z, tf};
+        fft_apply_kernel_dg(dgrid, dgrid, kernel_transfer_function, &sp);
+
+        /* Multiply by a constant factor */
+        for (long int i = 0; i < dgrid->local_complex_size; i++) {
+            dgrid->fbox[i] *= - a;
+        }
+
+        /* Execute the Fourier transform and normalize */
+        fft_c2r_dg(dgrid);
+
+        /* Create buffers for the potential */
+        create_local_buffers(dgrid);
+
+        /* Integrate the neutrino particles */
+        for (long long i = 0; i < local_partnum; i++) {
+            struct particle *p = &parts[i];
+
+#ifdef WITH_PARTTYPE
+            /* Only integrate neutrinos */
+            if (p->type != 6) continue;
+#endif
+
+            /* Convert integer positions to floating points on [0, M] */
+            double x[3] = {p->x[0] * int_to_grid_fac,
+                           p->x[1] * int_to_grid_fac,
+                           p->x[2] * int_to_grid_fac};
+
+            /* Obtain the acceleration by differentiating the potential */
+            double acc[3] = {0, 0, 0};
+            accelCIC_2nd(box, x, acc, M, MX0, buffer_width, Mz, cell_fac);
+
+            /* Execute kick */
+            FloatVelType v[3] = {p->v[0] + acc[0] * kick_dtau,
+                                 p->v[1] + acc[1] * kick_dtau,
+                                 p->v[2] + acc[2] * kick_dtau};
+
+            /* Relativistic drift correction */
+            const double rel_drift = relativistic_drift(v, p->type, pcs, a);
+
+            /* Execute drift */
+            p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
+            p->x[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
+            p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
+
+            /* Update velocities */
+            p->v[0] = v[0];
+            p->v[1] = v[1];
+            p->v[2] = v[2];
+        }
+
+        /* Exchange partciles between MPI tasks */
+        if (MPI_Rank_Count > 1) {
+            exchange_particles(parts, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+        }
+
+        /* Step forward */
+        a = a_next;
+    }
+
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
+    /* Conversion factor for neutrino momenta */
+    const double neutrino_qfac = pcs->ElectronVolt / (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann);
+
+    /* Finally, set the delta-f weights of the neutrino particles */
+    for (long long i = 0; i < local_partnum; i++) {
+        struct particle *p = &parts[i];
+
+        if (p->type == 6) {
+            double m_eV = cosmo->M_nu[(int)p->id % cosmo->N_nu];
+            double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
+            double q = sqrt(v2) * neutrino_qfac * m_eV;
+            double qi = neutrino_seed_to_fermi_dirac(p->id);
+            double f = fermi_dirac_density(q);
+            double fi = fermi_dirac_density(qi);
+
+            p->w = 1.0 - f / fi;
+        }
+    }
+#endif
+
+    /* Clean up strooklat interpolation splines */
+    free_strooklat_spline(&spline_z);
+    free_strooklat_spline(&spline_k);
+
+    /* Clean up strooklat interpolation splines */
+    free_strooklat_spline(&spline_bg_a);
 
     return 0;
 }

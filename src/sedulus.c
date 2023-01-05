@@ -183,10 +183,13 @@ int main(int argc, char *argv[]) {
 
     /* Allocate memory for a particle lattice */
     long long foreign_buffer = pars.ForeignBufferSize; //extra memory for exchanging particles
-    long long local_partnum = NX * N * N;
+    long long local_cdm_num = NX * N * N;
     long long local_firstpart = X0 * N * N;
-    long long max_partnum = local_partnum + local_neutrino_num + foreign_buffer;
+    long long max_partnum = local_cdm_num + local_neutrino_num + foreign_buffer;
     struct particle *particles = malloc(max_partnum * sizeof(struct particle));
+
+    /* The current number of particles */
+    long long local_partnum = 0;
 
     if (!pars.GenerateICs) {
         message(rank, "Reading initial conditions from '%s'.\n", pars.InitialConditionsFile);
@@ -195,6 +198,7 @@ int main(int argc, char *argv[]) {
         struct timepair ics_timer;
         timer_start(rank, &ics_timer);
 
+        local_partnum = local_cdm_num;
         readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, local_partnum, local_firstpart, max_partnum);
 
         /* Timer */
@@ -206,12 +210,39 @@ int main(int argc, char *argv[]) {
         struct timepair ics_timer;
         timer_start(rank, &ics_timer);
 
-        /* Allocate distributed memory arrays (one complex & one real) */
+        /* Generate neutrino particles first */
+        if (N_nu > 0) {
+            generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
+                               local_partnum, local_cdm_num, local_neutrino_num,
+                               boxlen, X0, NX, N, z_start, &seed);
+
+            local_partnum += local_neutrino_num;
+
+            /* Timer */
+            timer_stop(rank, &ics_timer, "Generating neutrinos took ");
+
+            /* Allocate distributed memory arrays for a potential grid */
+            struct distributed_grid nu_potential;
+            alloc_local_grid_with_buffers(&nu_potential, N_nu, boxlen, buffer_width, MPI_COMM_WORLD);
+
+            pre_integrate_neutrinos(&nu_potential, &ptdat, &pars, pars.FixedModes,
+                                    pars.InvertedModes, particles, &cosmo, &ctabs,
+                                    &us, &pcs, N_nu, local_partnum, max_partnum,
+                                    local_neutrino_num, boxlen, X0, NX, N,
+                                    z_start, pars.Seed);
+
+            free_local_grid(&nu_potential);
+
+            /* Timer */
+            timer_stop(rank, &ics_timer, "Integrating neutrinos took ");
+        }
+
+        /* Allocate distributed memory arrays for the LPT potential */
         struct distributed_grid lpt_potential;
         alloc_local_grid_with_buffers(&lpt_potential, N, boxlen, buffer_width, MPI_COMM_WORLD);
 
         /* Generate LPT potential grid */
-        generate_potential_grid(&lpt_potential, &seed, pars.FixedModes,
+        generate_potential_grid(&lpt_potential, pars.Seed, pars.FixedModes,
                                 pars.InvertedModes, &ptdat, &cosmo, z_start);
 
         /* Timer */
@@ -226,8 +257,8 @@ int main(int argc, char *argv[]) {
         alloc_local_grid_with_buffers(&lpt_potential_2, N, boxlen, buffer_width, MPI_COMM_WORLD);
 
         /* Generate the 2LPT potential grid */
-        generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2, &ptdat,
-                           &cosmo, z_start);
+        generate_2lpt_grid(&lpt_potential, &temp1, &temp2, &lpt_potential_2,
+                           &ptdat, &cosmo, z_start);
 
         /* Free working memory used in the 2LPT calculation */
         free_local_grid(&temp1);
@@ -240,10 +271,12 @@ int main(int argc, char *argv[]) {
         create_local_buffers(&lpt_potential);
         create_local_buffers(&lpt_potential_2);
 
-        /* Generate a particle lattice */
+        /* Generate a particle lattice for the dark matter */
         generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
-                                  particles, &cosmo, &us, &pcs, X0, NX, z_start,
-                                  f_asymptotic);
+                                  particles, &cosmo, &us, &pcs, local_partnum,
+                                  X0, NX, z_start, f_asymptotic);
+
+        local_partnum += local_cdm_num;
 
         /* We are done with the LPT potentials */
         free_local_grid(&lpt_potential);
@@ -251,18 +284,6 @@ int main(int argc, char *argv[]) {
 
         /* Timer */
         timer_stop(rank, &ics_timer, "Generating the particle lattice took ");
-
-        /* Generate neutrino particles */
-        if (N_nu > 0) {
-            generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
-                               local_partnum, local_neutrino_num, boxlen,
-                               X0, NX, N, z_start, &seed);
-
-            local_partnum += local_neutrino_num;
-
-            /* Timer */
-            timer_stop(rank, &ics_timer, "Generating neutrinos took ");
-        }
     }
 
     /* The gravity mesh can be a different size than the particle lattice */

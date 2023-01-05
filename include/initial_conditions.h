@@ -26,7 +26,7 @@
 #include "../include/distributed_grid.h"
 #include "../include/particle.h"
 
-int generate_potential_grid(struct distributed_grid *dgrid, rng_state *seed,
+int generate_potential_grid(struct distributed_grid *dgrid, long int Seed,
                             char fix_modes, char invert_modes,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start);
@@ -42,16 +42,27 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
-                              long long X0, long long NX, double z_start,
+                              long long particle_offset, long long X0,
+                              long long NX, double z_start,
                               double f_asymptotic);
 int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct cosmology_tables *ctabs, struct units *us,
                        struct physical_consts *pcs, long long int N_nupart,
-                       long long local_partnum, long long local_neutrino_num,
-                       double boxlen, long long X0, long long NX, long long N,
+                       long long particle_offset, long long local_cdm_num,
+                       long long local_neutrino_num, double boxlen,
+                       long long X0, long long NX, long long N,
                        double z_start, rng_state *state);
 int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
                         struct cosmology_tables *ctabs, struct units *us,
                         struct physical_consts *pcs, double z_start,
                         double z_target, double *f_asymptotic);
+int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data *ptdat,
+                            struct params *pars, char fix_modes, char invert_modes,
+                            struct particle *parts, struct cosmology *cosmo,
+                            struct cosmology_tables *ctabs, struct units *us,
+                            struct physical_consts *pcs, long long int N_nupart,
+                            long long local_partnum, long long max_partnum,
+                            long long local_neutrino_num, double boxlen,
+                            long long X0, long long NX, long long N,
+                            double z_start, long int Seed);
 #endif
