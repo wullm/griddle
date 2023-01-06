@@ -119,12 +119,23 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, lon
         const long int index_a = cl[local_offset1 + a];
         const IntPosType *xa = parts[index_a].x;
 
+#ifdef WITH_PARTTYPE
+        /* Don't link neutrinos */
+        if (parts[index_a].type == 6) continue;
+#endif
+
         /* If we are linking within the same cell, only check all pairs once */
         long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
 
         for (long int b = 0; b < max_check; b++) {
             const long int index_b = cl[local_offset2 + b];
             const IntPosType *xb = parts[index_b].x;
+
+#ifdef WITH_PARTTYPE
+            /* Don't link neutrinos */
+            if (parts[index_b].type == 6) continue;
+#endif
+
             if (should_link(xa, xb, int_to_pos_fac, linking_length_2)) {
                 links++;
                 union_roots(fof_parts, index_a, index_b);
@@ -281,6 +292,14 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     const long long int max_block_width = Ng / MPI_Rank_Count + ((Ng % MPI_Rank_Count) ? 1 : 0); //rounded up
     const double int_block_width = max_block_width * (boxlen / Ng * pos_to_int_fac);
     const double int_to_rank_fac = 1.0 / int_block_width;
+
+#ifndef WITH_MASSES
+    /* Compute the critical density */
+    const double H_0 = cosmo->h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit_0 = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
+    const double part_mass = rho_crit_0 * Omega_m * pow(boxlen / Np, 3);
+#endif
 
     /* Find the maximum number of particles across all ranks */
     long int max_partnum_global;
@@ -815,11 +834,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         if (h >= 0) {
 #ifdef WITH_MASSES
-            /* TODO: decide what to do about the masses */
-            // double mass = fof_parts[i].m;
-            double mass = 1.0;
+            double mass = parts[i].m;
 #else
-            double mass = 1.0;
+            double mass = part_mass;
 #endif
 
             /* Friends-of-friends mass */
@@ -941,11 +958,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
                 if (shrink_finished[h]) continue;
 
 #ifdef WITH_MASSES
-                /* TODO: decide what to do about the masses */
-                // double mass = fof_parts[i].m;
-                double mass = 1.0;
+                double mass = parts[i].m;
 #else
-                double mass = 1.0;
+                double mass = part_mass;
 #endif
 
                 /* Compute the offset from the shrinking sphere centre of mass */

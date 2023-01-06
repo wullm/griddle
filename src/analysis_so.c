@@ -611,7 +611,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double inv_fac = 1.0 / dens_fac;
 #ifndef WITH_MASSES
     const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
-    const double part_mass = rho_crit * Omega_m * pow(boxlen / Np, 3);
+    const double part_mass = rho_crit_0 * Omega_m * pow(boxlen / Np, 3);
 #endif
 
     /* Densitty threshold w.r.t. the critical density */
@@ -1024,7 +1024,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
                 if (r2 < SO_search_radius_2) {
+#ifdef WITH_MASSES
                     so_parts[part_counter].m = parts[index_a].m;
+#else
+                    so_parts[part_counter].m = part_mass;
+#endif
                     so_parts[part_counter].r = sqrtf(r2);
                     part_counter++;
                 }
