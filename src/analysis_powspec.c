@@ -165,7 +165,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the inverse CIC kernel */
-    GridFloatType *sinc_tab = malloc(N * sizeof(GridFloatType));
+    double *sinc_tab = malloc(N * sizeof(double));
     for (int x = 0; x < N; x++) {
         double kx = (x > N/2) ? (x - N) * dk : x * dk;
         sinc_tab[x] = 1.0 / sinc(0.5 * kx * grid_fac);
@@ -174,7 +174,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     timer_stop(rank, &run_timer, "Creating look-up table took ");
 
     /* Apply the inverse CIC kernel (note that x and y are now transposed) */
-    GridFloatType cx, cy, cz, ctot;
+    double cx, cy, cz, ctot;
     for (int y = Y0; y < Y0 + NY; y++) {
         cy = sinc_tab[y];
 
@@ -187,7 +187,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                 ctot = cx * cy * cz;
                 ctot = ctot * ctot;
 
-                GridComplexType kern = fft_factor * ctot;
+                double kern = fft_factor * ctot;
                 fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
             }
         }

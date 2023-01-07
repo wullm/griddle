@@ -166,7 +166,7 @@ int compute_potential(struct distributed_grid *dgrid,
     GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the cosines */
-    GridFloatType *cos_tab = malloc(N * sizeof(GridFloatType));
+    double *cos_tab = malloc(N * sizeof(double));
     for (int x = 0; x < N; x++) {
         double kx = (x > N/2) ? (x - N) * dk : x * dk;
         cos_tab[x] = cos(kx * grid_fac);
@@ -175,7 +175,7 @@ int compute_potential(struct distributed_grid *dgrid,
     timer_stop(rank, &run_timer, "Creating look-up table took ");
 
     /* Apply the inverse Poisson kernel (note that x and y are now transposed) */
-    GridFloatType cx, cy, cz, ctot;
+    double cx, cy, cz, ctot;
     for (int y = Y0; y < Y0 + NY; y++) {
         cy = cos_tab[y];
 
@@ -188,7 +188,7 @@ int compute_potential(struct distributed_grid *dgrid,
                 ctot = cx + cy + cz;
 
                 if (ctot != 3.0) {
-                    GridComplexType kern = overall_fac / (ctot - 3.0);
+                    double kern = overall_fac / (ctot - 3.0);
                     fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
                 }
             }
