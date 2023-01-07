@@ -22,6 +22,8 @@
 
 #define DEFAULT_STRING_LENGTH 150
 
+#include "mass_deposit.h"
+
 struct params {
     /* MPI rank (generated automatically) */
     int rank;
@@ -90,12 +92,15 @@ struct params {
     /* Power spectrum (for on-the-fly analysis) parameters */
     int PowerSpectrumBins;
     int PositionDependentSplits;
+    char *PowerSpectrumTypes;
 };
 
 int readParams(struct params *parser, const char *fname);
 int cleanParams(struct params *parser);
 int parseArrayString(char *string, double **array, int *length);
+int parseCharArrayString(char *string, char ***array, int *length);
 int parseOutputList(char *string, double **output_list, int *num_outputs,
                     double a_begin, double a_end);
+int parseGridTypeList(char *string, enum grid_type **type_list, int *num_types);
 
 #endif

@@ -27,6 +27,8 @@
 #include "../include/fft_kernels.h"
 #include "../include/message.h"
 
+const char *grid_type_names[num_grid_types] = {"all", "cb", "nu"};
+
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum, enum grid_type gtype) {
 

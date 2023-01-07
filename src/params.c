@@ -99,6 +99,8 @@ int readParams(struct params *pars, const char *fname) {
      /* Power spectrum (for on-the-fly analysis) parameters */
      pars->PowerSpectrumBins =  ini_getl("PowerSpectra", "PowerSpectrumBins", 50, fname);
      pars->PositionDependentSplits =  ini_getl("PowerSpectra", "PositionDependentSplits", 8, fname);
+     pars->PowerSpectrumTypes = malloc(len);
+     ini_gets("PowerSpectra", "Types", "all", pars->PowerSpectrumTypes, len, fname);
 
      return 0;
 }
@@ -113,6 +115,7 @@ int cleanParams(struct params *pars) {
     free(pars->SnapshotBaseName);
     free(pars->CatalogueBaseName);
     free(pars->SnipBaseName);
+    free(pars->PowerSpectrumTypes);
 
     return 0;
 }
@@ -133,7 +136,7 @@ int parseArrayString(char *string, double **array, int *length) {
     char copy[DEFAULT_STRING_LENGTH];
     sprintf(copy, "%s", string);
 
-    /* Count the number of values*/
+    /* Count the number of values */
     char *token = strtok(string, delimiters);
     int count = 0;
     while (token != NULL) {
@@ -185,6 +188,91 @@ int parseOutputList(char *string, double **output_list, int *num_outputs,
         printf("The last output should be before the end of the simulation.\n");
         exit(1);
     }
+
+    return 0;
+}
+
+int parseCharArrayString(char *string, char ***array, int *length) {
+    /* Check that there is anything there */
+    if (strlen(string) <= 0) {
+        *length = 0;
+        *array = NULL;
+        return 0;
+    }
+
+    /* Permissible delimiters */
+    char delimiters[] = " ,\t\n";
+
+    /* Make a copy of the string before it gets modified */
+    char copy[DEFAULT_STRING_LENGTH];
+    sprintf(copy, "%s", string);
+
+    /* Count the number of values */
+    char *token = strtok(string, delimiters);
+    int count = 0;
+    while (token != NULL) {
+        count++;
+        token = strtok(NULL, delimiters);
+    }
+
+    *length = count;
+
+    if (count == 0)
+        return 0;
+
+    /* Allocate memory and return the length */
+    *array = calloc(count, sizeof(char*));
+    int offset = 0;
+
+    /* Parse the original string again */
+    token = strtok(copy, delimiters);
+    for (int i = 0; i < count; i++) {
+        char value[DEFAULT_STRING_LENGTH];
+        int len;
+
+        /* Parse the sub-string */
+        sscanf(token, "%s", value);
+        token = strtok(NULL, delimiters);
+        len = strlen(value);
+
+        /* Insert it back into the input string and terminate it with null */
+        strcpy(string + offset, value);
+        string[offset + len + 1] = '\0';
+
+        /* Store and then increment the pointer */
+        (*array)[i] = string + offset;
+        offset += len + 1;
+    }
+
+    return 0;
+}
+
+int parseGridTypeList(char *string, enum grid_type **type_list, int *num_types) {
+    /* Parse the grid types */
+    char **types_strings = NULL;
+    parseCharArrayString(string, &types_strings, num_types);
+
+    if (*num_types < 1)
+        return 0;
+
+    /* Parse the requested grid types */
+    *type_list = malloc(*num_types * sizeof(enum grid_type));
+    for (int i = 0; i < *num_types; i++) {
+        /* Compare with possible grid types */
+        int match_found = 0;
+        for (int j = 0; j < num_grid_types; j++) {
+            if (strcmp(types_strings[i], grid_type_names[j]) == 0) {
+                (*type_list)[i] = j;
+                match_found = 1;
+            }
+        }
+
+        if (!match_found) {
+            printf("Error: unknown power spectrum type: %s!\n", types_strings[i]);
+            exit(1);
+        }
+    }
+    free(types_strings);
 
     return 0;
 }

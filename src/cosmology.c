@@ -60,8 +60,11 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
         /* Allocate arrays for neutrino properties */
         cosmo->M_nu = malloc(cosmo->N_nu * sizeof(double));
         cosmo->deg_nu = malloc(cosmo->N_nu * sizeof(double));
-        cosmo->c_s_nu = malloc(cosmo->N_nu * sizeof(double));
-        bzero(cosmo->c_s_nu, cosmo->N_nu * sizeof(double));
+
+        /* Further neutrino properties will be set later */
+        cosmo->c_s_nu = calloc(cosmo->N_nu, sizeof(double));
+        cosmo->f_nu_0 = calloc(cosmo->N_nu, sizeof(double));
+        cosmo->Omega_nu_0 = calloc(cosmo->N_nu, sizeof(double));
 
         /* Prepare reading the strings of comma-separated lists */
         int charlen = 100;
@@ -114,6 +117,7 @@ int cleanCosmology(struct cosmology *cosmo) {
         free(cosmo->deg_nu);
         free(cosmo->c_s_nu);
         free(cosmo->f_nu_0);
+        free(cosmo->Omega_nu_0);
     }
     return 0;
 }
@@ -398,15 +402,13 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     const double Omega_nu_tot_0 = strooklat_interp(&spline, Omega_nu_tot, 1.0);
 
     /* The neutrino density per species at z = 0 */
-    double *Omega_nu_0 = malloc(N_nu * sizeof(double));
     for (int i = 0; i < N_nu; i++) {
-        Omega_nu_0[i] = strooklat_interp(&spline, tab->Omega_nu + i * size, 1.0);
+        c->Omega_nu_0[i] = strooklat_interp(&spline, tab->Omega_nu + i * size, 1.0);
     }
 
     /* Neutrino density fractions per species at z = 0 */
-    c->f_nu_0 = malloc(N_nu * sizeof(double));
     for (int i = 0; i < N_nu; i++) {
-        c->f_nu_0[i] = Omega_nu_0[i] / (Omega_cdm + Omega_b + Omega_nu_tot_0);
+        c->f_nu_0[i] = c->Omega_nu_0[i] / (Omega_cdm + Omega_b + Omega_nu_tot_0);
     }
 
     /* Close the universe */
@@ -494,7 +496,6 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     free(Omega_r);
     free(Omega_m);
     free(Omega_nu_tot);
-    free(Omega_nu_0);
     free(w_nu);
     free(dHdloga);
     free(E2a);

@@ -335,29 +335,51 @@ int main(int argc, char *argv[]) {
     message(rank, "Exporting halo catalogues %d times.\n", num_outputs_halos);
     message(rank, "\n");
 
+    /* Parse the power spectrum types */
+    enum grid_type *powspec_types = NULL;
+    int powspec_types_num;
+    parseGridTypeList(pars.PowerSpectrumTypes, &powspec_types, &powspec_types_num);
+
+    if (powspec_types_num > 0) {
+        message(rank, "Power spectrum types: ");
+        for (int i = 0; i < powspec_types_num; i++) {
+            message(rank, "%s%s", grid_type_names[powspec_types[i]], (i < powspec_types_num - 1) ? ", " : "\n");
+        }
+        message(rank, "\n");
+    }
+
     /* Check if there should be an output at the start */
     if (num_outputs_power > 0 && output_list_power[0] == a_begin) {
         /* Timer */
         struct timepair powspec_timer;
         timer_start(rank, &powspec_timer);
 
-        message(rank, "Starting power spectrum calculation.\n");
+        for (int i = 0; i < powspec_types_num; i++) {
+            message(rank, "Starting power spectrum calculation (%s).\n",
+                          grid_type_names[powspec_types[i]]);
 
-        /* Initiate mass deposition (CDM + baryons only) */
-        mass_deposition(&mass, particles, local_partnum, cb_mass);
-        timer_stop(rank, &powspec_timer, "Computing mass density took ");
+            /* Initiate mass deposition */
+            mass_deposition(&mass, particles, local_partnum, powspec_types[i]);
+            timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
-        /* Merge the buffers with the main grid */
-        add_local_buffers(&mass);
-        timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+            /* Merge the buffers with the main grid */
+            add_local_buffers(&mass);
+            timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
-        analysis_posdep(&mass, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars);
-        timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+            /* Compute position-dependent power spectra */
+            if (powspec_types[i] == all_mass) {
+                analysis_posdep(&mass, /* output_num = */ 0, a_begin, &us, &pcs,
+                                &cosmo, &pars);
+                timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+            }
 
-        analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us, &pcs, &cosmo, &pars);
-        timer_stop(rank, &powspec_timer, "Global power spectra took ");
+            /* Compute global power spectra */
+            analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us,
+                             &pcs, &cosmo, &pars, powspec_types[i]);
+            timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
-        message(rank, "\n");
+            message(rank, "\n");
+        }
     }
 
     if (num_outputs_halos > 0 && output_list_halos[0] == a_begin) {
@@ -580,27 +602,34 @@ int main(int argc, char *argv[]) {
                 timer_start(rank, &powspec_timer);
 
                 message(rank, "\n");
-                message(rank, "Starting power spectrum calculation at a = %g.\n", output_list_power[j]);
 
-                /* Exchange particles before attempting a mass deposition */
-                exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
-                timer_stop(rank, &powspec_timer, "Exchanging particles took ");
+                for (int i = 0; i < powspec_types_num; i++) {
+                    message(rank, "Starting power spectrum calculation at a = %g (%s).\n",
+                                  output_list_power[j], grid_type_names[powspec_types[i]]);
 
-                /* Initiate mass deposition (CDM + baryons only) */
-                mass_deposition(&mass, particles, local_partnum, cb_mass);
-                timer_stop(rank, &powspec_timer, "Computing mass density took ");
+                    /* Exchange particles before attempting a mass deposition */
+                    exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+                    timer_stop(rank, &powspec_timer, "Exchanging particles took ");
 
-                /* Merge the buffers with the main grid */
-                add_local_buffers(&mass);
-                timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+                    /* Initiate mass deposition */
+                    mass_deposition(&mass, particles, local_partnum, powspec_types[i]);
+                    timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
-                analysis_posdep(&mass, /* output_num = */ j, output_list_power[j], &us, &pcs, &cosmo, &pars);
-                timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+                    /* Merge the buffers with the main grid */
+                    add_local_buffers(&mass);
+                    timer_stop(rank, &powspec_timer, "Communicating buffers took ");
 
-                analysis_powspec(&mass, /* output_num = */ j, output_list_power[j], r2c_mpi, &us, &pcs, &cosmo, &pars);
-                timer_stop(rank, &powspec_timer, "Global power spectra took ");
+                    /* Compute position-dependent power spectra */
+                    if (powspec_types[i] == all_mass) {
+                        analysis_posdep(&mass, /* output_num = */ j, output_list_power[j], &us, &pcs, &cosmo, &pars);
+                        timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+                    }
 
-                message(rank, "\n");
+                    analysis_powspec(&mass, /* output_num = */ j, output_list_power[j], r2c_mpi, &us, &pcs, &cosmo, &pars, powspec_types[i]);
+                    timer_stop(rank, &powspec_timer, "Global power spectra took ");
+
+                    message(rank, "\n");
+                }
             }
         }
 
@@ -680,6 +709,7 @@ int main(int argc, char *argv[]) {
     free(output_list_snap);
     free(output_list_power);
     free(output_list_halos);
+    free(powspec_types);
 
     /* Free the particle lattice */
     free(particles);

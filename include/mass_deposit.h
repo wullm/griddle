@@ -28,8 +28,11 @@
 enum grid_type {
     all_mass,
     cb_mass,
-    nu_mass
+    nu_mass,
+    num_grid_types
 };
+
+extern const char *grid_type_names[num_grid_types];
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum, enum grid_type gtype);

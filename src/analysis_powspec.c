@@ -97,7 +97,8 @@ void calc_cross_powerspec_dist(const struct distributed_grid *dgrid1,
 int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                      double a_scale_factor, FourierPlanType r2c,
                      const struct units *us, const struct physical_consts *pcs,
-                     const struct cosmology *cosmo, struct params *pars) {
+                     const struct cosmology *cosmo, struct params *pars,
+                     enum grid_type gtype) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -112,11 +113,46 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     const int bins = pars->PowerSpectrumBins;
     const long int N = dgrid->N;
 
+    /* Pull out grid constants */
+    const double boxlen = dgrid->boxlen;
+    const double boxvol = boxlen * boxlen * boxlen;
+    const double cell_factor = N / boxlen;
+    const double cell_factor_3 = cell_factor * cell_factor * cell_factor;
+    const double dk = 2 * M_PI / boxlen;
+    const double grid_fac = boxlen / N;
+    const double fft_factor = boxvol / ((double) N * N * N);
+    GridComplexType *fbox = dgrid->fbox;
+
+    /* The critical density at z = 0*/
+    const double h = cosmo->h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double Omega_cb = cosmo->Omega_cdm + cosmo->Omega_b;
+    double Omega_nu_tot_0 = 0;
+    for (int i = 0; i < cosmo->N_nu; i++) {
+        Omega_nu_tot_0 += cosmo->Omega_nu_0[i];
+    }
+    const double Omega_all = Omega_cb + Omega_nu_tot_0;
+
+    /* Determine the background density based on the power spectrum type */
+    double bg_density;
+    if (gtype == all_mass) {
+        bg_density = rho_crit * Omega_all;
+    } else if (gtype == cb_mass) {
+        bg_density = rho_crit * Omega_cb;
+    } else if (gtype == nu_mass) {
+        bg_density = rho_crit * Omega_nu_tot_0;
+    } else {
+        printf("Error: power spectrum type %d not implemented\n", gtype);
+        exit(1);
+    }
+
     /* Accumulate the total mass in the grid */
     double mass_tot_local = 0.;
     for (long int i = 0; i < dgrid->local_real_size; i++) {
         mass_tot_local += dgrid->box[i];
     }
+    mass_tot_local /= cell_factor_3;
 
     /* Communicate the total mass across all ranks */
     double mass_tot_global;
@@ -124,16 +160,15 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                   MPI_SUM, MPI_COMM_WORLD);
 
     /* Turn the mass grid into an overdensity grid */
-    double avg_mass = mass_tot_global / ((double) N * N * N);
     for (long int i = 0; i < dgrid->local_real_size; i++) {
-        dgrid->box[i] = dgrid->box[i] / avg_mass - 1.;
+        dgrid->box[i] = dgrid->box[i] / bg_density - 1.;
     }
 
     /* Prepare memory for the power spectrum calculation */
     double *k_in_bins = calloc(bins, sizeof(double));
     double *power_in_bins = calloc(bins, sizeof(double));
     int *obs_in_bins = calloc(bins, sizeof(int));
-    
+
     /* Execute the Fourier transform */
     fft_execute(r2c);
 
@@ -155,14 +190,6 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
     assert(NX == NY);
     assert(X0 == Y0);
 #endif
-
-    /* Pull out other grid constants */
-    const double boxlen = dgrid->boxlen;
-    const double boxvol = boxlen * boxlen * boxlen;
-    const double dk = 2 * M_PI / boxlen;
-    const double grid_fac = boxlen / N;
-    const double fft_factor = boxvol / ((double) N * N * N);
-    GridComplexType *fbox = dgrid->fbox;
 
     /* Make a look-up table for the inverse CIC kernel */
     double *sinc_tab = malloc(N * sizeof(double));
@@ -265,16 +292,23 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
         const double P_unit = 1.0 / (k_unit * k_unit * k_unit);
         const double k_unit_Mpc = MPC_METRES * k_unit;
         const double P_unit_Mpc = 1.0 / (k_unit_Mpc * k_unit_Mpc * k_unit_Mpc);
+        const double rho_unit = us->UnitMassKilogram / pow(us->UnitLengthMetres, 3);
+
+        /* The type of power spectrum (e.g. all mass, dark matter, neutrinos) */
+        const char *gtype_string = grid_type_names[gtype];
 
         /* Create a file to write the power spectrum data */
         char fname[50];
-        sprintf(fname, "power_%04d.txt", output_num);
+        sprintf(fname, "power_%s_%04d.txt", gtype_string, output_num);
         FILE *f = fopen(fname, "w");
 
         /* Write the response data */
+        fprintf(f, "# Power spectrum type: %s\n", gtype_string);
         fprintf(f, "# a = %g, z = %g, N = %ld\n", a_scale_factor, 1. / a_scale_factor - 1., dgrid->N);
         fprintf(f, "# k in units of U_L^-1 = %g m^-1 = %g Mpc^-1\n", k_unit, k_unit_Mpc);
         fprintf(f, "# P in units of U_L^3 = %g m^3 = %g Mpc^3\n", P_unit, P_unit_Mpc);
+        fprintf(f, "# Background density = %g U_M / U_L^3 = %g kg / m^3\n", bg_density, bg_density * rho_unit);
+        fprintf(f, "# Mass from particles = %g U_M / U_L^3 = %g kg / m^3\n", mass_tot_global / boxvol, mass_tot_global / boxvol * rho_unit);
         fprintf(f, "# k P obs\n");
         for (int j = 0; j < nonzero_bins; j++) {
             fprintf(f, "%g %g %d\n", valid_k[j], valid_power[j], valid_obs[j]);

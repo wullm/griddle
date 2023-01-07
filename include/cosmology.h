@@ -37,6 +37,7 @@ struct cosmology {
     double *deg_nu;
     double *c_s_nu;
     double *f_nu_0;
+    double *Omega_nu_0;
     double T_nu_0;
     double T_CMB_0;
     double w0;

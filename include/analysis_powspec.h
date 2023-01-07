@@ -27,10 +27,12 @@
 #include "params.h"
 #include "cosmology.h"
 #include "distributed_grid.h"
+#include "mass_deposit.h"
 
 int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                      double a_scale_factor, FourierPlanType r2c,
                      const struct units *us, const struct physical_consts *pcs,
-                     const struct cosmology *cosmo, struct params *pars);
+                     const struct cosmology *cosmo, struct params *pars,
+                     enum grid_type gtype);
 
 #endif
