@@ -320,6 +320,52 @@ int main(int argc, char *argv[]) {
     timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
     message(rank, "\n");
 
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
+    /* Conversion factor for neutrino momenta */
+    const double neutrino_qfac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
+
+    /* Create a file with neutrino weight information for each step */
+    char fname_nu_info[50] = "neutrino_weights_info.txt";
+    double neutrino_weights_sq_mean = 0.;
+    double nu_shot_factor = 1.0;
+
+    if (N_nu > 0) {
+        /* Create the file */
+        if (rank == 0) {
+            FILE *f = fopen(fname_nu_info, "w");
+            fprintf(f, "# Step a z <w> <w^2> <q> number\n");
+            fclose(f);
+        }
+
+        /* Accumulate the neutrino weights */
+        long int neutrino_count_local = 0;
+        double weights_sq_sum_local = 0.;
+
+        for (long long i = 0; i < local_partnum; i++) {
+            struct particle *p = &particles[i];
+            if (p->type == 6) {
+                neutrino_count_local++;
+                weights_sq_sum_local += p->w * p->w;
+            }
+        }
+
+        /* Collect neutrino weight information from all ranks */
+        long int neutrino_count_global;
+        double weights_sq_sum_global;
+        MPI_Reduce(&neutrino_count_local, &neutrino_count_global, 1,
+                   MPI_LONG, MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
+        MPI_Reduce(&weights_sq_sum_local, &weights_sq_sum_global, 1,
+                   MPI_DOUBLE, MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
+
+        /* Communicate the mean squared weight */
+        neutrino_weights_sq_mean = weights_sq_sum_global / neutrino_count_global;
+        MPI_Bcast(&neutrino_weights_sq_mean, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        nu_shot_factor = neutrino_weights_sq_mean;
+    }
+#else
+    const double nu_shot_factor = 1.0;
+#endif
+
     /* Determine the output times for various output types */
     double *output_list_snap, *output_list_power, *output_list_halos;
     int num_outputs_snap, num_outputs_power, num_outputs_halos;
@@ -373,9 +419,12 @@ int main(int argc, char *argv[]) {
                 timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
             }
 
+            /* Compute the level of shot noise */
+            const double shot_noise = calc_shot_noise(boxlen, N, N_nu, nu_shot_factor, powspec_types[i]);
+
             /* Compute global power spectra */
             analysis_powspec(&mass, /* output_num = */ 0, a_begin, r2c_mpi, &us,
-                             &pcs, &cosmo, &pars, powspec_types[i]);
+                             &pcs, &cosmo, &pars, powspec_types[i], shot_noise);
             timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
             message(rank, "\n");
@@ -481,8 +530,11 @@ int main(int argc, char *argv[]) {
                             strooklat_interp(&spline_bg_a, ctabs.drift_factors, a);
 
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
-        /* Conversion factor for neutrino momenta */
-        const double neutrino_qfac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
+        /* Accumulate the neutrino weights */
+        long int neutrino_count_local = 0;
+        double weights_sum_local = 0.;
+        double weights_sq_sum_local = 0.;
+        double neutrino_q_sum_local = 0.;
 #endif
 
         message(rank, "Step %d at z = %g\n", ITER, z);
@@ -575,6 +627,11 @@ int main(int argc, char *argv[]) {
                 double fi = fermi_dirac_density(qi);
 
                 p->w = 1.0 - f / fi;
+
+                neutrino_count_local++;
+                weights_sum_local += p->w;
+                weights_sq_sum_local += p->w * p->w;
+                neutrino_q_sum_local += q;
             }
 #endif
 
@@ -586,6 +643,40 @@ int main(int argc, char *argv[]) {
 
         /* Timer */
         timer_stop(rank, &run_timer, "Evolving particles took ");
+
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
+        if (N_nu > 0) {
+            /* Collect neutrino weight information from all ranks */
+            long int neutrino_count_global;
+            double local_quantities[3] = {weights_sum_local,
+                                          weights_sq_sum_local,
+                                          neutrino_q_sum_local};
+            double global_quantities[3];
+            MPI_Reduce(&neutrino_count_local, &neutrino_count_global, 1,
+                       MPI_LONG, MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
+            MPI_Reduce(local_quantities, global_quantities, 3, MPI_DOUBLE,
+                       MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
+
+            /* Print it to a file */
+            if (rank == 0) {
+                double weights_mean = global_quantities[0] / neutrino_count_global;
+                double weights_sq_mean = global_quantities[1] / neutrino_count_global;
+                double neutrino_q_mean = global_quantities[2] / neutrino_count_global;
+
+                neutrino_weights_sq_mean = weights_sq_mean;
+
+                FILE *f = fopen(fname_nu_info, "a");
+                fprintf(f, "%d %g %g %g %g %g %ld\n", ITER, a, z, weights_mean, weights_sq_mean, neutrino_q_mean, neutrino_count_global);
+                fclose(f);
+            }
+
+            /* Communicate the mean squared weight */
+            MPI_Bcast(&neutrino_weights_sq_mean, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            nu_shot_factor = neutrino_weights_sq_mean;
+
+            timer_stop(rank, &run_timer, "Writing neutrino information took ");
+        }
+#endif
 
         /* Should there be a power spectrum output? */
         for (int j = 0; j < num_outputs_power; j++) {
@@ -625,7 +716,10 @@ int main(int argc, char *argv[]) {
                         timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
                     }
 
-                    analysis_powspec(&mass, /* output_num = */ j, output_list_power[j], r2c_mpi, &us, &pcs, &cosmo, &pars, powspec_types[i]);
+                    /* Compute the level of shot noise */
+                    const double shot_noise = calc_shot_noise(boxlen, N, N_nu, nu_shot_factor, powspec_types[i]);
+
+                    analysis_powspec(&mass, /* output_num = */ j, output_list_power[j], r2c_mpi, &us, &pcs, &cosmo, &pars, powspec_types[i], shot_noise);
                     timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
                     message(rank, "\n");

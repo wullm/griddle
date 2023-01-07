@@ -29,10 +29,12 @@
 #include "distributed_grid.h"
 #include "mass_deposit.h"
 
+double calc_shot_noise(double boxlen, long int N_cb, long int N_nu,
+                       double nu_factor, enum grid_type gtype);
 int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                      double a_scale_factor, FourierPlanType r2c,
                      const struct units *us, const struct physical_consts *pcs,
                      const struct cosmology *cosmo, struct params *pars,
-                     enum grid_type gtype);
+                     enum grid_type gtype, double shot_noise);
 
 #endif

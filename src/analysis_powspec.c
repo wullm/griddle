@@ -34,6 +34,29 @@
 #include "../include/fft_kernels.h"
 #include "../include/strooklat.h"
 
+double calc_shot_noise(double boxlen, long int N_cb, long int N_nu,
+                       double nu_factor, enum grid_type gtype) {
+
+    /* Compute the level of shot noise */
+    const double boxvol = boxlen * boxlen * boxlen;
+    const double shot_noise_cb = (N_cb > 0) ? boxvol / ((double) N_cb * N_cb * N_cb) : 0.;
+    const double shot_noise_nu = (N_nu > 0) ? nu_factor * boxvol / ((double) N_nu * N_nu * N_nu) : 0.;
+
+    double shot_noise;
+    if (gtype == all_mass) {
+        shot_noise = shot_noise_cb + shot_noise_nu;
+    } else if (gtype == cb_mass) {
+        shot_noise = shot_noise_cb;
+    } else if (gtype == nu_mass) {
+        shot_noise = shot_noise_nu;
+    } else {
+        printf("Error: power spectrum type %d not implemented\n", gtype);
+        exit(1);
+    }
+
+    return shot_noise;
+}
+
 void calc_cross_powerspec_dist(const struct distributed_grid *dgrid1,
                                const struct distributed_grid *dgrid2,
                                int Y0, int NY, int bins, double *k_in_bins,
@@ -98,7 +121,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
                      double a_scale_factor, FourierPlanType r2c,
                      const struct units *us, const struct physical_consts *pcs,
                      const struct cosmology *cosmo, struct params *pars,
-                     enum grid_type gtype) {
+                     enum grid_type gtype, double shot_noise) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -309,9 +332,9 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
         fprintf(f, "# P in units of U_L^3 = %g m^3 = %g Mpc^3\n", P_unit, P_unit_Mpc);
         fprintf(f, "# Background density = %g U_M / U_L^3 = %g kg / m^3\n", bg_density, bg_density * rho_unit);
         fprintf(f, "# Mass from particles = %g U_M / U_L^3 = %g kg / m^3\n", mass_tot_global / boxvol, mass_tot_global / boxvol * rho_unit);
-        fprintf(f, "# k P obs\n");
+        fprintf(f, "# k P shot_noise obs\n");
         for (int j = 0; j < nonzero_bins; j++) {
-            fprintf(f, "%g %g %d\n", valid_k[j], valid_power[j], valid_obs[j]);
+            fprintf(f, "%g %g %g %d\n", valid_k[j], valid_power[j], shot_noise, valid_obs[j]);
         }
 
         /* Close the file */
