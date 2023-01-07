@@ -38,6 +38,7 @@ struct ode_params {
     double k;
     double f_b;
     double *c_s_nu;
+    double *f_nu_0;
     double c_light;
     int N_nu;
 };
@@ -61,11 +62,9 @@ int func (double log_a, const double y[], double f[], void *params) {
     const double H = strooklat_interp(spline, tab->Hvec, a);
 
     /* Non-relativistic neutrino density fractions */
-    double f_nu_nr_tot = 0.;
-    double f_nu_nr[N_nu];
+    double f_nu_tot_0 = 0.;
     for (int i = 0; i < N_nu; i++) {
-        f_nu_nr[i] = strooklat_interp(spline, tab->f_nu_nr + i * tab->size, a);
-        f_nu_nr_tot += f_nu_nr[i];
+        f_nu_tot_0 += p->f_nu_0[i];
     }
 
     /* Neutrino free-streaming scales (squared) */
@@ -82,21 +81,21 @@ int func (double log_a, const double y[], double f[], void *params) {
     /* The weighted total neutrino density perturbation */
     double D_nu_tot = 0.;
     for (int i = 0; i < N_nu; i++) {
-        D_nu_tot += y[4 + 2 * i] * f_nu_nr[i] / f_nu_nr_tot;
+        D_nu_tot += y[4 + 2 * i] * p->f_nu_0[i] / f_nu_tot_0;
     }
 
     /* Now we can write down the ODE */
 
     /* CDM */
     f[0] = -y[1];
-    f[1] = A * y[1] + B * ((1.0 - f_nu_nr_tot) * D_cb + f_nu_nr_tot * D_nu_tot);
+    f[1] = A * y[1] + B * ((1.0 - f_nu_tot_0) * D_cb + f_nu_tot_0 * D_nu_tot);
     /* Baryons */
     f[2] = -y[3];
-    f[3] =  A * y[3] + B * ((1.0 - f_nu_nr_tot) * D_cb + f_nu_nr_tot * D_nu_tot);
+    f[3] =  A * y[3] + B * ((1.0 - f_nu_tot_0) * D_cb + f_nu_tot_0 * D_nu_tot);
     /* Neutrinos */
     for (int i = 0; i < N_nu; i++) {
         f[4 + 2 * i] = -y[5 + 2 * i];
-        f[5 + 2 * i] = A * y[5 + 2 * i] + B * ((1.0 - f_nu_nr_tot) * D_cb + f_nu_nr_tot * D_nu_tot - (k * k) / k_fs2[i] * y[4 + 2 * i]);
+        f[5 + 2 * i] = A * y[5 + 2 * i] + B * ((1.0 - f_nu_tot_0) * D_cb + f_nu_tot_0 * D_nu_tot - (k * k) / k_fs2[i] * y[4 + 2 * i]);
     }
 
     return GSL_SUCCESS;
@@ -124,6 +123,7 @@ void prepare_fluid_integrator(struct cosmology *c, struct units *us,
     odep.f_b = c->Omega_b / (c->Omega_cdm + c->Omega_b);
     odep.N_nu = c->N_nu;
     odep.c_s_nu = c->c_s_nu;
+    odep.f_nu_0 = c->f_nu_0;
     odep.c_light = pcs->SpeedOfLight;
 
     /* Check if the sounds speeds have been set */

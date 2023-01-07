@@ -113,6 +113,7 @@ int cleanCosmology(struct cosmology *cosmo) {
         free(cosmo->M_nu);
         free(cosmo->deg_nu);
         free(cosmo->c_s_nu);
+        free(cosmo->f_nu_0);
     }
     return 0;
 }
@@ -402,6 +403,12 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
         Omega_nu_0[i] = strooklat_interp(&spline, tab->Omega_nu + i * size, 1.0);
     }
 
+    /* Neutrino density fractions per species at z = 0 */
+    c->f_nu_0 = malloc(N_nu * sizeof(double));
+    for (int i = 0; i < N_nu; i++) {
+        c->f_nu_0[i] = Omega_nu_0[i] / (Omega_cdm + Omega_b + Omega_nu_tot_0);
+    }
+
     /* Close the universe */
     const double Omega_lambda = 1.0 - Omega_nu_tot_0 - Omega_k - Omega_ur - Omega_CMB - Omega_cdm - Omega_b;
     const double w0 = c->w0;
@@ -469,14 +476,17 @@ void integrate_cosmology_tables(struct cosmology *c, struct units *us,
     /* Free the GSL workspace */
     gsl_integration_workspace_free(workspace);
 
-    /* Now, create the A and B functions */
+    /* Now, create the A and B functions for back-scaling */
     tab->Avec = malloc(size * sizeof(double));
     tab->Bvec = malloc(size * sizeof(double));
 
     for (int i=0; i<size; i++) {
+        /* For the purpose of backscaling use Omega_m at z = 0, since we
+         * are using constant neutrino particle masses */
+        double Omega_m_0 = Omega_cdm + Omega_b + Omega_nu_tot_0;
         double a = tab->avec[i];
         tab->Avec[i] = -(2.0 + dHdloga[i] / tab->Hvec[i]);
-        tab->Bvec[i] = -1.5 * Omega_m[i] / (a * a * a) / E2a[i];
+        tab->Bvec[i] = -1.5 * Omega_m_0 / (a * a * a) / E2a[i];
     }
 
     /* Clean up arrays */
