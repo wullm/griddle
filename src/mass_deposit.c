@@ -174,8 +174,7 @@ int compute_potential(struct distributed_grid *dgrid,
 
         double inv_sinc = 1.0 / sinc(0.5 * kx * grid_fac);
         double inv_sinc2 = inv_sinc * inv_sinc;
-        double inv_sinc4 = inv_sinc2 * inv_sinc2;
-        sinc_tab[x] = inv_sinc4;
+        sinc_tab[x] = inv_sinc2;
     }
 
     timer_stop(rank, &run_timer, "Creating look-up tables took ");
