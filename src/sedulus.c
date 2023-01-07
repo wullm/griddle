@@ -273,7 +273,7 @@ int main(int argc, char *argv[]) {
         create_local_buffers(&lpt_potential_2);
 
         /* Generate a particle lattice for the dark matter */
-        generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat, &ptpars,
+        generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat,
                                   particles, &cosmo, &us, &pcs, local_partnum,
                                   X0, NX, z_start, f_asymptotic);
 

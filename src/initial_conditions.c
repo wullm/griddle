@@ -314,7 +314,6 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
 int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct distributed_grid *lpt_potential_2,
                               struct perturb_data *ptdat,
-                              struct perturb_params *ptpars,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
                               long long particle_offset, long long X0,
@@ -343,8 +342,15 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
     const double vel_fact = a_start * a_start * f_start * H_start;
 
+    /* The 2LPT neutrino correction factor (2202.00670) */
+    double f_nu_tot_0 = 0.;
+    for (int i = 0; i < cosmo->N_nu; i++) {
+        f_nu_tot_0 += cosmo->f_nu_0[i];
+    }
+    const double factor_nu_2lpt = 1.0 + (4. / 35.) * f_nu_tot_0;
+
     /* The 2LPT factor */
-    const double factor_2lpt = 3. / 7.;
+    const double factor_2lpt = 3. / 7. * factor_nu_2lpt;
     const double factor_vel_2lpt = factor_2lpt * 2.0;
 
     /* Grid constants */
@@ -356,8 +362,8 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double h = cosmo->h;
     const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
     const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
-    const double Omega_m = ptpars->Omega_m;
-    const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
+    const double Omega_cb = cosmo->Omega_cdm + cosmo->Omega_b;
+    const double part_mass = rho_crit * Omega_cb * pow(boxlen / N, 3);
 #endif
 
     /* Position factors */
