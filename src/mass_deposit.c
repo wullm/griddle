@@ -165,30 +165,42 @@ int compute_potential(struct distributed_grid *dgrid,
     const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
     GridComplexType *fbox = dgrid->fbox;
 
-    /* Make a look-up table for the cosines */
+    /* Make look-up tables for the cosines and inverse sincs */
     double *cos_tab = malloc(N * sizeof(double));
+    double *sinc_tab = malloc(N * sizeof(double));
     for (int x = 0; x < N; x++) {
         double kx = (x > N/2) ? (x - N) * dk : x * dk;
         cos_tab[x] = cos(kx * grid_fac);
+
+        double inv_sinc = 1.0 / sinc(0.5 * kx * grid_fac);
+        double inv_sinc2 = inv_sinc * inv_sinc;
+        double inv_sinc4 = inv_sinc2 * inv_sinc2;
+        sinc_tab[x] = inv_sinc4;
     }
 
-    timer_stop(rank, &run_timer, "Creating look-up table took ");
+    timer_stop(rank, &run_timer, "Creating look-up tables took ");
 
-    /* Apply the inverse Poisson kernel (note that x and y are now transposed) */
+    /* Apply the inverse Poisson and CIC kernels (note that x and y are now
+     * transposed) */
     double cx, cy, cz, ctot;
+    double sx, sy, sz, stot;
     for (int y = Y0; y < Y0 + NY; y++) {
-        cy = cos_tab[y];
+        cy = cos_tab[y]; // Poisson
+        sy = sinc_tab[y]; // CIC
 
         for (int x = 0; x < N; x++) {
-            cx = cos_tab[x];
+            cx = cos_tab[x]; // Poisson
+            sx = sinc_tab[x]; // CIC
 
             for (int z = 0; z <= N / 2; z++) {
-                cz = cos_tab[z];
+                cz = cos_tab[z]; // Poisson
+                sz = sinc_tab[z]; // CIC
 
-                ctot = cx + cy + cz;
+                ctot = cx + cy + cz; // Poisson
+                stot = sx * sy * sz; // CIC
 
                 if (ctot != 3.0) {
-                    double kern = overall_fac / (ctot - 3.0);
+                    double kern = overall_fac / (ctot - 3.0) * stot;
                     fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
                 }
             }
@@ -197,8 +209,9 @@ int compute_potential(struct distributed_grid *dgrid,
 
     timer_stop(rank, &run_timer, "Inverse poisson kernel took ");
 
-    /* Free the look-up table */
+    /* Free the look-up tables */
     free(cos_tab);
+    free(sinc_tab);
 
     /* Carry out the backward Fourier transform */
     // fft_c2r_dg(dgrid);
