@@ -406,7 +406,7 @@ int main(int argc, char *argv[]) {
     const double h = cosmo.h;
     const double H_0 = h * 100 * KM_METRES / MPC_METRES * us.UnitTimeSeconds;
     const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs.GravityG);
-    const double Omega_m = ptpars.Omega_m;
+    const double Omega_m = cosmo.Omega_cdm + cosmo.Omega_b;
     const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
 #endif
 
