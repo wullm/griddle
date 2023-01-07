@@ -738,6 +738,13 @@ int readSnapshot(struct params *pars, struct units *us,
     free(ids_data);
 #endif
 
+#ifdef WITH_PARTTYPE
+    /* Set particle types */
+    for (int i = 0; i < local_partnum; i++) {
+        particles[i].type = 1; // cdm
+    }
+#endif
+
     /* Close the particle group */
     H5Gclose(h_grp);
 
