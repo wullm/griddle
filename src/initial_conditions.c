@@ -400,9 +400,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[2] = pos_to_int_fac * x[2];
 
                 /* Set the velocities */
-                part->v[0] -= vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
-                part->v[1] -= vel_fact * (dx[1] + factor_vel_2lpt * dx2[1]);
-                part->v[2] -= vel_fact * (dx[2] + factor_vel_2lpt * dx2[2]);
+                part->v[0] = -vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
+                part->v[1] = -vel_fact * (dx[1] + factor_vel_2lpt * dx2[1]);
+                part->v[2] = -vel_fact * (dx[2] + factor_vel_2lpt * dx2[2]);
 #ifdef WITH_MASSES
                 part->m = part_mass;
 #endif

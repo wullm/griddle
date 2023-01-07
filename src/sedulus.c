@@ -584,7 +584,7 @@ int main(int argc, char *argv[]) {
 
                 /* Exchange particles before attempting a mass deposition */
                 exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
-                timer_stop(rank, &run_timer, "Exchanging particles took ");
+                timer_stop(rank, &powspec_timer, "Exchanging particles took ");
 
                 /* Initiate mass deposition (CDM + baryons only) */
                 mass_deposition(&mass, particles, local_partnum, cb_mass);

@@ -173,7 +173,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
 
     timer_stop(rank, &run_timer, "Creating look-up table took ");
 
-    /* Apply the inverse Poisson kernel (note that x and y are now transposed) */
+    /* Apply the inverse CIC kernel (note that x and y are now transposed) */
     GridFloatType cx, cy, cz, ctot;
     for (int y = Y0; y < Y0 + NY; y++) {
         cy = sinc_tab[y];
