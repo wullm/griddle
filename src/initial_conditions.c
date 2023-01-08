@@ -44,7 +44,7 @@ int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
     const int k_size = ptdat->k_size;
     const int tau_size = ptdat->tau_size;
 
-    /* Find the transfer function index for CDM, baryons, neutrinos */
+    /* Find the density transfer function index for CDM, baryons, neutrinos */
     int index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
     int index_b = findTitle(ptdat->titles, "d_b", ptdat->n_functions);
     int *index_ncdm = malloc(cosmo->N_nu * sizeof(int));
@@ -53,6 +53,10 @@ int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
         sprintf(nu_title, "d_ncdm[%d]", i);
         index_ncdm[i] = findTitle(ptdat->titles, nu_title, ptdat->n_functions);
     }
+
+    /* Find the energy flux transfer function index for CDM and baryons */
+    int index_t_cdm = findTitle(ptdat->titles, "t_cdm", ptdat->n_functions);
+    int index_t_b = findTitle(ptdat->titles, "t_b", ptdat->n_functions);
 
     /* The baryon fraction of CDM + baryons */
     const double f_b = cosmo->Omega_b / (cosmo->Omega_b + cosmo->Omega_cdm);
@@ -64,6 +68,10 @@ int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
     for (int i = 0; i < cosmo->N_nu; i++) {
         tf_ncdm[i] = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_ncdm[i];
     }
+
+    /* Pointer to the energy flux transfer functions */
+    double *tf_t_cdm = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_t_cdm;
+    double *tf_t_b = ptdat->delta + (ptdat->tau_size * ptdat->k_size) * index_t_b;
 
     /* Create interpolation splines for redshifts and wavenumbers */
     struct strooklat spline_z = {ptdat->redshift, ptdat->tau_size};
@@ -158,6 +166,22 @@ int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
         for (int j = 0; j < tau_size; j++) {
             tf_cdm[k_size * j + i] = d_cb_scaled;
         }
+
+        /* Obtain the energy flux around z_start by interpolating */
+        double t_c = strooklat_interp_2d(&spline_z, &spline_k, tf_t_cdm, z_start, ptdat->k[i]);
+        double t_b = strooklat_interp_2d(&spline_z, &spline_k, tf_t_b, z_start, ptdat->k[i]);
+
+        /* We want to use the linear theory growth rate at z = z_start, so
+         * we need to keep the ratio theta_i / delta_i */
+        double t_c_scaled = t_c / d_c * d_c_scaled;
+        double t_b_scaled = t_b / d_b * d_b_scaled;
+        double t_cb_scaled = (1.0 - f_b) * t_c_scaled + f_b * t_b_scaled;
+
+        /* Replace the the CDM energy flux transfer function by the scaled
+         * CDM + baryon transfer function. */
+        for (int j = 0; j < tau_size; j++) {
+            tf_t_cdm[k_size * j + i] = t_cb_scaled;
+        }
     }
 
     /* The mean asymptotic growth rate */
@@ -181,11 +205,20 @@ int backscale_transfers(struct perturb_data *ptdat, struct cosmology *cosmo,
 
 int generate_potential_grid(struct distributed_grid *dgrid, long int Seed,
                             char fix_modes, char invert_modes,
+                            enum potential_type type,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start) {
 
     /* Find the transfer function index for CDM */
-    int index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
+    int index_cdm;
+    if (type == density_potential_type) {
+        index_cdm = findTitle(ptdat->titles, "d_cdm", ptdat->n_functions);
+    } else if (type == velocity_potential_type) {
+        index_cdm = findTitle(ptdat->titles, "t_cdm", ptdat->n_functions);
+    } else {
+        printf("Error: potential type not implemented.\n");
+        exit(1);
+    }
 
     /* Generate a complex Hermitian Gaussian random field */
     generate_ngeniclike_grf(dgrid, Seed);
@@ -313,6 +346,7 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
 
 int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct distributed_grid *lpt_potential_2,
+                              struct distributed_grid *velocity_potential,
                               struct perturb_data *ptdat,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
@@ -337,10 +371,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
         f_start = strooklat_interp(&spline_z, ptdat->f_growth, z_start);
     }
 
-    /* The velocity factor a^2Hf (a^2 for the internal velocity variable) */
+    /* The velocity factor aHf */
     const double a_start = 1.0 / (1.0 + z_start);
     const double H_start = strooklat_interp(&spline_z, ptdat->Hubble_H, z_start);
-    const double vel_fact = a_start * a_start * f_start * H_start;
+    const double vel_fact = a_start * f_start * H_start;
 
     /* The 2LPT neutrino correction factor (2202.00670) */
     double f_nu_tot_0 = 0.;
@@ -390,6 +424,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 double dx2[3] = {0,0,0};
                 accelCIC(lpt_potential_2, x, dx2);
 
+                /* The linear theory velocity (~ dx + relativistc corrections) */
+                double v[3] = {0,0,0};
+                accelCIC(velocity_potential, x, v);
+
                 /* CDM */
 #ifdef WITH_PARTTYPE
                 part->type = 1;
@@ -406,9 +444,10 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[2] = pos_to_int_fac * x[2];
 
                 /* Set the velocities */
-                part->v[0] = -vel_fact * (dx[0] + factor_vel_2lpt * dx2[0]);
-                part->v[1] = -vel_fact * (dx[1] + factor_vel_2lpt * dx2[1]);
-                part->v[2] = -vel_fact * (dx[2] + factor_vel_2lpt * dx2[2]);
+                part->v[0] = a_start * (v[0] - vel_fact * factor_vel_2lpt * dx2[0]);
+                part->v[1] = a_start * (v[1] - vel_fact * factor_vel_2lpt * dx2[1]);
+                part->v[2] = a_start * (v[2] - vel_fact * factor_vel_2lpt * dx2[2]);
+
 #ifdef WITH_MASSES
                 part->m = part_mass;
 #endif

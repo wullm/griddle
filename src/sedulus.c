@@ -204,7 +204,6 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &ics_timer, "Reading initial conditions took ");
     } else {
-        message(rank, "Generating initial conditions with 2LPT.\n");
 
         /* Timer */
         struct timepair ics_timer;
@@ -212,6 +211,8 @@ int main(int argc, char *argv[]) {
 
         /* Generate neutrino particles first */
         if (N_nu > 0) {
+            message(rank, "Generating neutrino initial conditions.\n");
+
             generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
                                local_partnum, local_cdm_num, local_neutrino_num,
                                boxlen, X0_nu, NX_nu, z_start, &seed);
@@ -238,13 +239,16 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        message(rank, "Generating initial conditions with 2LPT.\n");
+
         /* Allocate distributed memory arrays for the LPT potential */
         struct distributed_grid lpt_potential;
         alloc_local_grid_with_buffers(&lpt_potential, N, boxlen, buffer_width, MPI_COMM_WORLD);
 
         /* Generate LPT potential grid */
         generate_potential_grid(&lpt_potential, pars.Seed, pars.FixedModes,
-                                pars.InvertedModes, &ptdat, &cosmo, z_start);
+                                pars.InvertedModes, density_potential_type,
+                                &ptdat, &cosmo, z_start);
 
         /* Timer */
         timer_stop(rank, &ics_timer, "Generating the Zel'dovich potential took ");
@@ -272,16 +276,33 @@ int main(int argc, char *argv[]) {
         create_local_buffers(&lpt_potential);
         create_local_buffers(&lpt_potential_2);
 
+        /* Allocate another array for the linear theory velocity field */
+        struct distributed_grid velocity_potential;
+        alloc_local_grid_with_buffers(&velocity_potential, N, boxlen, buffer_width, MPI_COMM_WORLD);
+
+        /* Generate velocity potential */
+        generate_potential_grid(&velocity_potential, pars.Seed, pars.FixedModes,
+                                pars.InvertedModes, velocity_potential_type,
+                                &ptdat, &cosmo, z_start);
+
+        /* Create buffer for the velocity potential */
+        create_local_buffers(&velocity_potential);
+
+        /* Timer */
+        timer_stop(rank, &ics_timer, "Generating the velocity potential took ");
+
         /* Generate a particle lattice for the dark matter */
-        generate_particle_lattice(&lpt_potential, &lpt_potential_2, &ptdat,
-                                  particles, &cosmo, &us, &pcs, local_partnum,
-                                  X0, NX, z_start, f_asymptotic);
+        generate_particle_lattice(&lpt_potential, &lpt_potential_2,
+                                  &velocity_potential, &ptdat, particles,
+                                  &cosmo, &us, &pcs, local_partnum, X0, NX,
+                                  z_start, f_asymptotic);
 
         local_partnum += local_cdm_num;
 
-        /* We are done with the LPT potentials */
+        /* We are done with the LPT and velocity potentials */
         free_local_grid(&lpt_potential);
         free_local_grid(&lpt_potential_2);
+        free_local_grid(&velocity_potential);
 
         /* Timer */
         timer_stop(rank, &ics_timer, "Generating the particle lattice took ");

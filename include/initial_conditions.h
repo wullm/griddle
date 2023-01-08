@@ -26,8 +26,15 @@
 #include "../include/distributed_grid.h"
 #include "../include/particle.h"
 
+enum potential_type {
+    density_potential_type,
+    velocity_potential_type
+};
+
+
 int generate_potential_grid(struct distributed_grid *dgrid, long int Seed,
                             char fix_modes, char invert_modes,
+                            enum potential_type type,
                             struct perturb_data *ptdat,
                             struct cosmology *cosmo, double z_start);
 int generate_2lpt_grid(struct distributed_grid *dgrid,
@@ -38,6 +45,7 @@ int generate_2lpt_grid(struct distributed_grid *dgrid,
                        struct cosmology *cosmo, double z_start);
 int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct distributed_grid *lpt_potential_2,
+                              struct distributed_grid *velocity_potential,
                               struct perturb_data *ptdat,
                               struct particle *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
