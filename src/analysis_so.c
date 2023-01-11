@@ -1038,10 +1038,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
                 if (r2 < SO_search_radius_2) {
 #ifdef WITH_MASSES
-                    so_parts[part_counter].m = parts[index_a].m;
+                    double mass = parts[index_a].m;
 #else
-                    so_parts[part_counter].m = part_mass;
+                    double mass = part_mass;
 #endif
+                    so_parts[part_counter].m = mass;
                     so_parts[part_counter].r = sqrtf(r2);
                     part_counter++;
                 }
