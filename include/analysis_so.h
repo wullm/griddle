@@ -53,6 +53,10 @@ struct so_halo {
     double R_SO;
     /* Radius enclosing the innermost particles that determine the CoM */
     double R_inner;
+    /* Total mass of dark matter SO particles */
+    double mass_dm;
+    /* Total mass of neutrino SO particles */
+    double mass_nu;
     /* Total number of particles within the SO radius */
     int npart_tot;
     /* Home rank of the halo */

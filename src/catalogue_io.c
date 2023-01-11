@@ -268,6 +268,14 @@ int exportCatalogue(const struct params *pars, const struct units *us,
                 /* Centre of Mass velocities (use vector space) */
                 h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
+
+                /* Total dark matter mass (use scalar space) */
+                h_data = H5Dcreate(h_grp, "DarkMatterMass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+                H5Dclose(h_data);
+
+                /* Total neutrino mass (use scalar space) */
+                h_data = H5Dcreate(h_grp, "NeutrinoMass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+                H5Dclose(h_data);
             } else if (t == 0) {
                 /* Shrinking sphere centre (use vector space) */
                 h_data = H5Dcreate(h_grp, "ShrinkingSphereCentre", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
@@ -497,6 +505,8 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     double *coms = malloc(3 * local_num_structures * sizeof(double));
     double *vels = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
+    double *masses_dm = malloc(1 * local_num_structures * sizeof(double));
+    double *masses_nu = malloc(1 * local_num_structures * sizeof(double));
     double *radii = malloc(1 * local_num_structures * sizeof(double));
     double *inner_radii = malloc(1 * local_num_structures * sizeof(double));
     int *nparts = malloc(3 * local_num_structures * sizeof(int));
@@ -516,6 +526,8 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         masses[i] = h->M_SO;
         radii[i] = h->R_SO;
         inner_radii[i] = h->R_inner;
+        masses_dm[i] = h->mass_dm;
+        masses_nu[i] = h->mass_nu;
         /* Unpack the particle numbers */
         nparts[i] = h->npart_tot;
     }
@@ -540,6 +552,18 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
     H5Dclose(h_data);
     free(masses);
+
+    /* Write dark matter mass data (scalar) */
+    h_data = H5Dopen(h_grp, "DarkMatterMass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses_dm);
+    H5Dclose(h_data);
+    free(masses_dm);
+
+    /* Write neutrino mass data (scalar) */
+    h_data = H5Dopen(h_grp, "NeutrinoMass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses_nu);
+    H5Dclose(h_data);
+    free(masses_nu);
 
     /* Write particle number data (scalar) */
     h_data = H5Dopen(h_grp, "ParticleNumber", H5P_DEFAULT);

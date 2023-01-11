@@ -615,6 +615,13 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double part_mass = rho_crit_0 * Omega_m * pow(boxlen / Np, 3);
 #endif
 
+    /* Compute the total neutrino density */
+    double Omega_nu_tot_0 = 0;
+    for (int i = 0; i < cosmo->N_nu; i++) {
+        Omega_nu_tot_0 += cosmo->Omega_nu_0[i];
+    }
+    const double rho_nu_tot_0 = rho_crit_0 * Omega_nu_tot_0;
+
     /* Densitty threshold w.r.t. the critical density */
     const double threshold = pars->SphericalOverdensityThreshold;
 
@@ -812,6 +819,13 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #else
                     double mass = part_mass;
 #endif
+
+#ifdef WITH_PARTTYPE
+                    if (parts[index_a].type == 6) {
+                        mass *= parts[index_a].w;
+                    }
+#endif
+
                     m_ini += mass;
                     npart_ini++;
                 }
@@ -853,6 +867,12 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         double mass = parts[index_a].m;
 #else
                         double mass = part_mass;
+#endif
+
+#ifdef WITH_PARTTYPE
+                        if (parts[index_a].type == 6) {
+                            mass *= parts[index_a].w;
+                        }
 #endif
 
                         sphere_mass += mass;
@@ -907,6 +927,12 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         double mass = parts[index_a].m;
 #else
                         double mass = part_mass;
+#endif
+
+#ifdef WITH_PARTTYPE
+                        if (parts[index_a].type == 6) {
+                            mass *= parts[index_a].w;
+                        }
 #endif
 
                         /* Compute the offset from the current CoM */
@@ -1042,6 +1068,13 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #else
                     double mass = part_mass;
 #endif
+
+#ifdef WITH_PARTTYPE
+                    if (parts[index_a].type == 6) {
+                        mass *= parts[index_a].w;
+                    }
+#endif
+
                     so_parts[part_counter].m = mass;
                     so_parts[part_counter].r = sqrtf(r2);
                     part_counter++;
@@ -1159,9 +1192,23 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #else
                     double mass = part_mass;
 #endif
+
+#ifdef WITH_PARTTYPE
+                    if (parts[index_a].type == 6) {
+                        mass *= parts[index_a].w;
+                    }
+#endif
+
                     /* Accumulate mass in the SO window */
                     halos[i].mass_tot += mass;
                     halos[i].npart_tot++;
+#ifdef WITH_PARTTYPE
+                    if (parts[index_a].type == 1) {
+                        halos[i].mass_dm += mass;
+                    } else if (parts[index_a].type == 6) {
+                        halos[i].mass_nu += mass;
+                    }
+#endif
 
                     /* Also compute CoM quantities if needed */
                     if (halos[i].R_inner == halos[i].R_SO) {
@@ -1217,6 +1264,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].x_com[1] += (*fofs)[i].x_com_inner[1];
             halos[i].x_com[2] += (*fofs)[i].x_com_inner[2];
         }
+
+        /* Add the homogeneous neutrino contribution */
+        double R3 = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO;
+        halos[i].mass_tot += (4./3.) * M_PI * R3 * rho_nu_tot_0;
+        halos[i].mass_nu += (4./3.) * M_PI * R3 * rho_nu_tot_0;
     }
 
     /* Timer */
