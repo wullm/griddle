@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
     const double a_begin = pars.ScaleFactorBegin;
     const double a_end = pars.ScaleFactorEnd;
     const double a_target = pars.ScaleFactorTarget;
-    const double a_factor = 1.0 + pars.ScaleFactorStep;
+    const double a_step = 1.0 + pars.ScaleFactorStep;
     const double z_start = 1.0 / a_begin - 1.0;
     const double z_target = 1.0 / a_target - 1.0;
 
@@ -519,7 +519,8 @@ int main(int argc, char *argv[]) {
     double a = a_begin;
 
     /* Prepare integration */
-    int MAX_ITER = (log(a_end) - log(a_begin))/log(a_factor) + 1;
+    const int MAX_ITER = (log(a_end) - log(a_begin))/log(a_step) + 1;
+    const double a_factor = exp(log(a_end / a_begin) / MAX_ITER);
 
     /* The main loop */
     for (int ITER = 0; ITER < MAX_ITER; ITER++) {
