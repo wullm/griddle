@@ -721,6 +721,12 @@ int main(int argc, char *argv[]) {
                 /* Reversibly drift the particles to the correct time */
                 drift_particles(particles, local_partnum, a, power_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
+
+                /* Reversibly kick neutrino particle weights */
+                if (N_nu > 0) {
+                    kick_weights_only(particles, local_partnum, a, power_drift_dtau, neutrino_qfac, &cosmo, &pcs);
+                    timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
+                }
                 message(rank, "\n");
 
                 for (int i = 0; i < powspec_types_num; i++) {
@@ -758,6 +764,11 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, -power_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
+                if (N_nu > 0) {
+                    kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
+                    timer_stop(rank, &run_timer, "Reversing weight kicks took ");
+                }
+
 #ifdef DEBUG_CHECKS
                 /* Compute position checksum */
                 IntPosType checksum_global_after = position_checksum(particles, local_partnum);
@@ -791,6 +802,13 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, halos_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
+                /* Reversibly kick neutrino particle weights */
+                if (N_nu > 0) {
+                    kick_weights_only(particles, local_partnum, a, halos_drift_dtau, neutrino_qfac, &cosmo, &pcs);
+                    timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
+                }
+                message(rank, "\n");
+
                 /* Free the main grid before engaging the halo finder */
                 free_local_grid(&mass);
 
@@ -806,6 +824,11 @@ int main(int argc, char *argv[]) {
                 /* Reverse the particle drifts */
                 drift_particles(particles, local_partnum, a, -halos_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
+
+                if (N_nu > 0) {
+                    kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
+                    timer_stop(rank, &run_timer, "Reversing weight kicks took ");
+                }
 
 #ifdef DEBUG_CHECKS
                 /* Compute position checksum */
@@ -851,12 +874,24 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, snap_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
+                /* Reversibly kick neutrino particle weights */
+                if (N_nu > 0) {
+                    kick_weights_only(particles, local_partnum, a, snap_kick_dtau, neutrino_qfac, &cosmo, &pcs);
+                    timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
+                }
+                message(rank, "\n");
+
                 exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
                 timer_stop(rank, &run_timer, "Exporting a snapshot took ");
 
                 /* Reverse the particle drifts */
                 drift_particles(particles, local_partnum, a, -snap_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
+
+                if (N_nu > 0) {
+                    kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
+                    timer_stop(rank, &run_timer, "Reversing weight kicks took ");
+                }
 
 #ifdef DEBUG_CHECKS
                 /* Compute position checksum */

@@ -63,3 +63,37 @@ int drift_particles(struct particle *parts, long int local_partnum,
     }                        
     return 0;                        
 }
+
+/* Computing neutrino particle weights using kicked velocities, without
+ * actually changing the velocities to prevent round-off errors and maintain
+ * reversibility */
+int kick_weights_only(struct particle *parts, long int local_partnum,
+                      double a, double kick_dtau, double neutrino_qfac,
+                      const struct cosmology *cosmo,
+                      const struct physical_consts *pcs) {
+
+    /* Drift the particles to the correct time */
+    for (long long i = 0; i < local_partnum; i++) {
+        struct particle *p = &parts[i];
+
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS) && defined(WITH_ACCELERATIONS)
+        if (p->type == 6) {
+            /* Compute the kicked velocity (without changing p->v) */
+            FloatVelType v[3] = {p->v[0] + p->a[0] * kick_dtau,
+                                 p->v[1] + p->a[1] * kick_dtau,
+                                 p->v[2] + p->a[2] * kick_dtau};
+
+            /* Update the particle weights */
+            double m_eV = cosmo->M_nu[(int)p->id % cosmo->N_nu];
+            double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+            double q = sqrt(v2) * neutrino_qfac * m_eV;
+            double qi = neutrino_seed_to_fermi_dirac(p->id);
+            double f = fermi_dirac_density(q);
+            double fi = fermi_dirac_density(qi);
+
+            p->w = 1.0 - f / fi;
+        }
+#endif
+    }
+    return 0;
+}
