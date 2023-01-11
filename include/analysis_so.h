@@ -75,6 +75,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long int num_local_fofs, int output_num, double a_scale_factor,
                 const struct units *us, const struct physical_consts *pcs,
                 const struct cosmology *cosmo, const struct params *pars,
-                const struct cosmology_tables *ctabs);
+                const struct cosmology_tables *ctabs,
+                double dtau_kick, double dtau_drift);
 
 #endif

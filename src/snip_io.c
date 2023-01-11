@@ -199,7 +199,8 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                    long int *cell_offsets, int output_num, double a_scale_factor,
                    CellIntType N_cells, double reduce_factor,
                    int min_part_export_per_halo, long long int local_partnum,
-                   long long int local_halo_num) {
+                   long long int local_halo_num, double dtau_kick,
+                   double dtau_drift) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -315,6 +316,14 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                         vels[particles_total * 3 + 0] = parts[index_a].v[0];
                         vels[particles_total * 3 + 1] = parts[index_a].v[1];
                         vels[particles_total * 3 + 2] = parts[index_a].v[2];
+#ifdef WITH_ACCELERATIONS
+                        /* Kick to the right time */
+                        if (dtau_kick != 0.) {
+                            vels[particles_total * 3 + 0] += parts[index_a].a[0] * dtau_kick;
+                            vels[particles_total * 3 + 1] += parts[index_a].a[1] * dtau_kick;
+                            vels[particles_total * 3 + 2] += parts[index_a].a[2] * dtau_kick;
+                        }
+#endif
                         /* Convert internal velocities to peculiar velocities */
                         vels[particles_total * 3 + 0] /= a_scale_factor;
                         vels[particles_total * 3 + 1] /= a_scale_factor;

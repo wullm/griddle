@@ -38,6 +38,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                    long int *cell_offsets, int output_num, double a_scale_factor,
                    CellIntType N_cells, double reduce_factor,
                    int min_part_export_per_halo, long long int local_partnum,
-                   long long int local_halo_num);
+                   long long int local_halo_num, double dtau_kick,
+                   double dtau_drift);
 
 #endif

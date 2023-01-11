@@ -568,7 +568,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 long int num_local_fofs, int output_num, double a_scale_factor,
                 const struct units *us, const struct physical_consts *pcs,
                 const struct cosmology *cosmo, const struct params *pars,
-                const struct cosmology_tables *ctabs) {
+                const struct cosmology_tables *ctabs,
+                double dtau_kick, double dtau_drift) {
 
     /* Return if there is nothing to do */
     if (total_num_fofs == 0) return 0;
@@ -918,12 +919,24 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
                         const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
+                        /* Particle velocity */
+                        double vx = parts[index_a].v[0];
+                        double vy = parts[index_a].v[1];
+                        double vz = parts[index_a].v[2];
+
+#ifdef WITH_ACCELERATIONS
+                        /* Kick velocities to the right time */
+                        vx += parts[index_a].a[0] * dtau_kick;
+                        vy += parts[index_a].a[1] * dtau_kick;
+                        vz += parts[index_a].a[2] * dtau_kick;
+#endif
+
                         sphere_com[0] += fx * mass;
                         sphere_com[1] += fy * mass;
                         sphere_com[2] += fz * mass;
-                        sphere_vel[0] += parts[index_a].v[0] * mass;
-                        sphere_vel[1] += parts[index_a].v[1] * mass;
-                        sphere_vel[2] += parts[index_a].v[2] * mass;
+                        sphere_vel[0] += vx * mass;
+                        sphere_vel[1] += vy * mass;
+                        sphere_vel[2] += vz * mass;
                         sphere_mass += mass;
                         sphere_npart++;
                     }
@@ -1161,12 +1174,24 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
                         const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
+                        /* Particle velocity */
+                        double vx = parts[index_a].v[0];
+                        double vy = parts[index_a].v[1];
+                        double vz = parts[index_a].v[2];
+
+#ifdef WITH_ACCELERATIONS
+                        /* Kick velocities to the right time */
+                        vx += parts[index_a].a[0] * dtau_kick;
+                        vy += parts[index_a].a[1] * dtau_kick;
+                        vz += parts[index_a].a[2] * dtau_kick;
+#endif
+
                         halos[i].x_com[0] += fx * mass;
                         halos[i].x_com[1] += fy * mass;
                         halos[i].x_com[2] += fz * mass;
-                        halos[i].v_com[0] += parts[index_a].v[0] * mass;
-                        halos[i].v_com[1] += parts[index_a].v[1] * mass;
-                        halos[i].v_com[2] += parts[index_a].v[2] * mass;
+                        halos[i].v_com[0] += vx * mass;
+                        halos[i].v_com[1] += vy * mass;
+                        halos[i].v_com[2] += vz * mass;
                     }
                 }
             } /* End particle loop */
@@ -1213,7 +1238,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         exportSnipshot(pars, us, halos, pcs, parts, cosmo, cell_list, cell_counts,
                        cell_offsets, output_num, a_scale_factor, N_cells,
                        reduce_factor, min_part_export_per_halo, num_localpart,
-                       num_local_fofs);
+                       num_local_fofs, dtau_kick, dtau_drift);
 
         /* Timer */
         timer_stop(rank, &so_timer, "Exporting a halo particle snipshot took ");

@@ -466,7 +466,7 @@ int main(int argc, char *argv[]) {
 
         /* Run the halo finder */
         const double linking_length = pars.LinkingLength * boxlen / N;
-        analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars, &ctabs);
+        analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars, &ctabs,  /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
 
         /* Timer */
         MPI_Barrier(MPI_COMM_WORLD);
@@ -773,8 +773,8 @@ int main(int argc, char *argv[]) {
             if (output_list_halos[j] > a && output_list_halos[j] <= a_next) {
 
                 /* Drift and kick particles to the right time */
-                // double halos_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
-                //                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
+                double halos_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
+                                          strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
                 double halos_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
                                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
 
@@ -796,7 +796,7 @@ int main(int argc, char *argv[]) {
 
                 /* Run the halo finder */
                 const double linking_length = pars.LinkingLength * boxlen / N;
-                analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars, &ctabs);
+                analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars, &ctabs, halos_kick_dtau, halos_drift_dtau);
 
                 /* Timer */
                 MPI_Barrier(MPI_COMM_WORLD);

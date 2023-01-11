@@ -238,14 +238,14 @@ void copy_edge_parts(struct fof_part_exchange_data **dest,
     }
 }
 
-/* TODO, kick and drift particles to the right time */
 int analysis_fof(struct particle *parts, double boxlen, long int Np,
                  long long int Ng, long long int num_localpart,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
                  const struct cosmology *cosmo, struct params *pars,
-                 const struct cosmology_tables *ctabs) {
+                 const struct cosmology_tables *ctabs,
+                 double dtau_kick, double dtau_drift) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -1045,7 +1045,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 
         analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
                     total_halo_num, num_structures, output_num, a_scale_factor,
-                    us, pcs, cosmo, pars, ctabs);
+                    us, pcs, cosmo, pars, ctabs, dtau_kick, dtau_drift);
     }
 
     /* Free the remaining memory */
