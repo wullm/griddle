@@ -771,14 +771,14 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     for (long int i = 0; i < num_local_fofs; i++) {
 
         /* Initially, use the centre of mass of the FOF group */
-        halos[i].x_com[0] = (*fofs)[i].x_com_inner[0];
-        halos[i].x_com[1] = (*fofs)[i].x_com_inner[1];
-        halos[i].x_com[2] = (*fofs)[i].x_com_inner[2];
+        halos[i].x_com_inner[0] = (*fofs)[i].x_com_inner[0];
+        halos[i].x_com_inner[1] = (*fofs)[i].x_com_inner[1];
+        halos[i].x_com_inner[2] = (*fofs)[i].x_com_inner[2];
 
         /* Compute the integer position of the COM */
-        IntPosType com[3] = {halos[i].x_com[0] * pos_to_int_fac,
-                             halos[i].x_com[1] * pos_to_int_fac,
-                             halos[i].x_com[2] * pos_to_int_fac};
+        IntPosType com[3] = {halos[i].x_com_inner[0] * pos_to_int_fac,
+                             halos[i].x_com_inner[1] * pos_to_int_fac,
+                             halos[i].x_com_inner[2] * pos_to_int_fac};
 
         /* First perform a shrinking sphere algorithm to determine the centre */
         const double rfac = pars->ShrinkingSphereRadiusFactor;
@@ -796,8 +796,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         }
 
         /* Determine all cells that overlap with the search radius */
-        find_overlapping_cells(halos[i].x_com, r_ini * 1.01, pos_to_cell_fac,
-                               N_cells, &cells, &num_overlap);
+        find_overlapping_cells(halos[i].x_com_inner, r_ini * 1.01,
+                               pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         /* Loop over cells */
         for (CellIntType c = 0; c < num_overlap; c++) {
@@ -810,6 +810,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             for (long int a = 0; a < local_count; a++) {
                 const long int index_a = cell_list[local_offset + a].offset;
 
+#ifdef WITH_PARTTYPE
+                /* Skip neutrinos in the shrinking sphere algorithm */
+                if (parts[index_a].type == 6) continue;
+#endif
+
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
@@ -818,12 +823,6 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     double mass = parts[index_a].m;
 #else
                     double mass = part_mass;
-#endif
-
-#ifdef WITH_PARTTYPE
-                    if (parts[index_a].type == 6) {
-                        mass *= parts[index_a].w;
-                    }
 #endif
 
                     m_ini += mass;
@@ -859,6 +858,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 for (long int a = 0; a < local_count; a++) {
                     const long int index_a = cell_list[local_offset + a].offset;
 
+#ifdef WITH_PARTTYPE
+                    /* Skip neutrinos in the shrinking sphere algorithm */
+                    if (parts[index_a].type == 6) continue;
+#endif
+
                     const IntPosType *xa = parts[index_a].x;
                     const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
@@ -867,12 +871,6 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         double mass = parts[index_a].m;
 #else
                         double mass = part_mass;
-#endif
-
-#ifdef WITH_PARTTYPE
-                        if (parts[index_a].type == 6) {
-                            mass *= parts[index_a].w;
-                        }
 #endif
 
                         sphere_mass += mass;
@@ -904,8 +902,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
             if (r < r_ini) {
                 /* Determine all cells that overlap with the new search radius */
-                find_overlapping_cells(halos[i].x_com, r * 1.01, pos_to_cell_fac,
-                                       N_cells, &cells, &num_overlap);
+                find_overlapping_cells(halos[i].x_com_inner, r * 1.01,
+                                       pos_to_cell_fac, N_cells, &cells,
+                                       &num_overlap);
             }
 
             /* Loop over cells */
@@ -919,6 +918,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 for (long int a = 0; a < local_count; a++) {
                     const long int index_a = cell_list[local_offset + a].offset;
 
+#ifdef WITH_PARTTYPE
+                    /* Skip neutrinos in the shrinking sphere algorithm */
+                    if (parts[index_a].type == 6) continue;
+#endif
+
                     const IntPosType *xa = parts[index_a].x;
                     const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
@@ -927,12 +931,6 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         double mass = parts[index_a].m;
 #else
                         double mass = part_mass;
-#endif
-
-#ifdef WITH_PARTTYPE
-                        if (parts[index_a].type == 6) {
-                            mass *= parts[index_a].w;
-                        }
 #endif
 
                         /* Compute the offset from the current CoM */
@@ -985,12 +983,12 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             com[2] += sphere_com[2] * pos_to_int_fac;
 
             /* Update the dimensionful CoM and CoM velocity */
-            halos[i].x_com[0] = com[0] * int_to_pos_fac;
-            halos[i].x_com[1] = com[1] * int_to_pos_fac;
-            halos[i].x_com[2] = com[2] * int_to_pos_fac;
-            halos[i].v_com[0] = sphere_vel[0];
-            halos[i].v_com[1] = sphere_vel[1];
-            halos[i].v_com[2] = sphere_vel[2];
+            halos[i].x_com_inner[0] = com[0] * int_to_pos_fac;
+            halos[i].x_com_inner[1] = com[1] * int_to_pos_fac;
+            halos[i].x_com_inner[2] = com[2] * int_to_pos_fac;
+            halos[i].v_com_inner[0] = sphere_vel[0];
+            halos[i].v_com_inner[1] = sphere_vel[1];
+            halos[i].v_com_inner[2] = sphere_vel[2];
             halos[i].R_inner = r;
 
             /* Iterate the shrinking sphere algorithm */
@@ -1008,7 +1006,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         /* Determine all cells that overlap with the search radius */
         const double SO_search_radius = fmax(min_radius, (*fofs)[i].radius_fof * 1.1) - dx_com;
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
-        find_overlapping_cells(halos[i].x_com, SO_search_radius,
+        find_overlapping_cells(halos[i].x_com_inner, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
 
         if (SO_search_radius <= 0) {
@@ -1157,13 +1155,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
          * algorithm failed (R_inner == 0) or if the inner radius is larger
          * than the SO radius. */
         if (halos[i].R_inner == 0. || halos[i].R_inner >= halos[i].R_SO) {
-            /* Reset the CoM quantities */
-            halos[i].x_com[0] = 0.;
-            halos[i].x_com[1] = 0.;
-            halos[i].x_com[2] = 0.;
-            halos[i].v_com[0] = 0.;
-            halos[i].v_com[1] = 0.;
-            halos[i].v_com[2] = 0.;
+            /* Reset the inner radius */
             halos[i].R_inner = halos[i].R_SO;
 
             /* Compute the CoM relative to the (integer) FOF CoM */
@@ -1210,37 +1202,45 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     }
 #endif
 
-                    /* Also compute CoM quantities if needed */
-                    if (halos[i].R_inner == halos[i].R_SO) {
-                        /* Compute the offset from the current CoM */
-                        const IntPosType dx = xa[0] - com[0];
-                        const IntPosType dy = xa[1] - com[1];
-                        const IntPosType dz = xa[2] - com[2];
+                    /* Compute the offset from the current CoM */
+                    const IntPosType dx = xa[0] - com[0];
+                    const IntPosType dy = xa[1] - com[1];
+                    const IntPosType dz = xa[2] - com[2];
 
-                        /* Enforce boundary conditions and convert to physical lengths */
-                        const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
-                        const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
-                        const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
+                    /* Enforce boundary conditions and convert to physical lengths */
+                    const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);
+                    const double fy = (dy < -dy) ? dy * int_to_pos_fac : -((-dy) * int_to_pos_fac);
+                    const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
-                        /* Particle velocity */
-                        double vx = parts[index_a].v[0];
-                        double vy = parts[index_a].v[1];
-                        double vz = parts[index_a].v[2];
+                    /* Particle velocity */
+                    double vx = parts[index_a].v[0];
+                    double vy = parts[index_a].v[1];
+                    double vz = parts[index_a].v[2];
 
 #ifdef WITH_ACCELERATIONS
-                        /* Kick velocities to the right time */
-                        vx += parts[index_a].a[0] * dtau_kick;
-                        vy += parts[index_a].a[1] * dtau_kick;
-                        vz += parts[index_a].a[2] * dtau_kick;
+                    /* Kick velocities to the right time */
+                    vx += parts[index_a].a[0] * dtau_kick;
+                    vy += parts[index_a].a[1] * dtau_kick;
+                    vz += parts[index_a].a[2] * dtau_kick;
 #endif
 
-                        halos[i].x_com[0] += fx * mass;
-                        halos[i].x_com[1] += fy * mass;
-                        halos[i].x_com[2] += fz * mass;
-                        halos[i].v_com[0] += vx * mass;
-                        halos[i].v_com[1] += vy * mass;
-                        halos[i].v_com[2] += vz * mass;
+                    halos[i].x_com[0] += fx * mass;
+                    halos[i].x_com[1] += fy * mass;
+                    halos[i].x_com[2] += fz * mass;
+                    halos[i].v_com[0] += vx * mass;
+                    halos[i].v_com[1] += vy * mass;
+                    halos[i].v_com[2] += vz * mass;
+
+#ifdef WITH_PARTTYPE
+                    if (parts[index_a].type == 1) {
+                        halos[i].x_com_dm[0] += fx * mass;
+                        halos[i].x_com_dm[1] += fy * mass;
+                        halos[i].x_com_dm[2] += fz * mass;
+                        halos[i].v_com_dm[0] += vx * mass;
+                        halos[i].v_com_dm[1] += vy * mass;
+                        halos[i].v_com_dm[2] += vz * mass;
                     }
+#endif
                 }
             } /* End particle loop */
         } /* End cell loop */
@@ -1251,21 +1251,43 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Finalize CoM quantities if needed */
     for (long int i = 0; i < num_local_fofs; i++) {
+        /* Finalize centre of mass of all SO particles */
+        if (halos[i].mass_tot != 0.) {
+            halos[i].x_com[0] /= halos[i].mass_tot;
+            halos[i].x_com[1] /= halos[i].mass_tot;
+            halos[i].x_com[2] /= halos[i].mass_tot;
+            halos[i].v_com[0] /= halos[i].mass_tot;
+            halos[i].v_com[1] /= halos[i].mass_tot;
+            halos[i].v_com[2] /= halos[i].mass_tot;
+        }
+        halos[i].x_com[0] += (*fofs)[i].x_com_inner[0];
+        halos[i].x_com[1] += (*fofs)[i].x_com_inner[1];
+        halos[i].x_com[2] += (*fofs)[i].x_com_inner[2];
+
+        /* Finalize centre of mass of all dark matter SO particles */
+        if (halos[i].mass_dm != 0.) {
+            halos[i].x_com_dm[0] /= halos[i].mass_dm;
+            halos[i].x_com_dm[1] /= halos[i].mass_dm;
+            halos[i].x_com_dm[2] /= halos[i].mass_dm;
+            halos[i].v_com_dm[0] /= halos[i].mass_dm;
+            halos[i].v_com_dm[1] /= halos[i].mass_dm;
+            halos[i].v_com_dm[2] /= halos[i].mass_dm;
+        }
+        halos[i].x_com_dm[0] += (*fofs)[i].x_com_inner[0];
+        halos[i].x_com_dm[1] += (*fofs)[i].x_com_inner[1];
+        halos[i].x_com_dm[2] += (*fofs)[i].x_com_inner[2];
+
+        /* Update the inner centre of mass if the shrinking sphere failed */
         if (halos[i].R_inner == halos[i].R_SO) {
-            if (halos[i].mass_tot > 0.) {
-                halos[i].x_com[0] /= halos[i].mass_tot;
-                halos[i].x_com[1] /= halos[i].mass_tot;
-                halos[i].x_com[2] /= halos[i].mass_tot;
-                halos[i].v_com[0] /= halos[i].mass_tot;
-                halos[i].v_com[1] /= halos[i].mass_tot;
-                halos[i].v_com[2] /= halos[i].mass_tot;
-            }
-            halos[i].x_com[0] += (*fofs)[i].x_com_inner[0];
-            halos[i].x_com[1] += (*fofs)[i].x_com_inner[1];
-            halos[i].x_com[2] += (*fofs)[i].x_com_inner[2];
+            halos[i].x_com_inner[0] = halos[i].x_com_dm[0];
+            halos[i].x_com_inner[1] = halos[i].x_com_dm[1];
+            halos[i].x_com_inner[2] = halos[i].x_com_dm[2];
+            halos[i].v_com_inner[0] = halos[i].v_com_dm[0];
+            halos[i].v_com_inner[1] = halos[i].v_com_dm[1];
+            halos[i].v_com_inner[2] = halos[i].v_com_dm[2];
         }
 
-        /* Add the homogeneous neutrino contribution */
+        /* Add the homogeneous neutrino contributions */
         double R3 = halos[i].R_SO * halos[i].R_SO * halos[i].R_SO;
         halos[i].mass_tot += (4./3.) * M_PI * R3 * rho_nu_tot_0;
         halos[i].mass_nu += (4./3.) * M_PI * R3 * rho_nu_tot_0;

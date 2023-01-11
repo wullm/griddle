@@ -41,9 +41,13 @@ struct so_part_data {
 struct so_halo {
     /* Global ID of the halo (matches the corresponding FOF halo) */
     long int global_id;
-    /* Centre of mass of the innermost SO particles (up to R_inner) */
+    /* Shrinking sphere centre of mass (dark matter particles up to R_inner) */
+    double x_com_inner[3];
+    /* Shrinking sphere centre of mass velocity */
+    double v_com_inner[3];
+    /* Centre of mass of all SO particles */
     double x_com[3];
-    /* Centre of mass velocity of the innermost SO particles */
+    /* Centre of mass velocity of all SO particles */
     double v_com[3];
     /* Total mass of the SO particles */
     double mass_tot; // ( = M_SO up to errors)
@@ -57,6 +61,10 @@ struct so_halo {
     double mass_dm;
     /* Total mass of neutrino SO particles */
     double mass_nu;
+    /* Centre of mass of all dark matter SO particles */
+    double x_com_dm[3];
+    /* Centre of mass velocity of all dark matter SO particles */
+    double v_com_dm[3];
     /* Total number of particles within the SO radius */
     int npart_tot;
     /* Home rank of the halo */

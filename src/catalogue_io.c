@@ -247,6 +247,10 @@ int exportCatalogue(const struct params *pars, const struct units *us,
             h_data = H5Dcreate(h_grp, "CentreOfMass", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
             H5Dclose(h_data);
 
+            /* Shrinking sphere centre (use vector space) */
+            h_data = H5Dcreate(h_grp, "ShrinkingSphereCentre", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+            H5Dclose(h_data);
+
             /* Total mass (use scalar space) */
             h_data = H5Dcreate(h_grp, "Mass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
             H5Dclose(h_data);
@@ -269,16 +273,24 @@ int exportCatalogue(const struct params *pars, const struct units *us,
                 h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
 
+                /* Shrinking sphere centre velocity (use vector space) */
+                h_data = H5Dcreate(h_grp, "ShrinkingSphereVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+                H5Dclose(h_data);
+
+                /* Dark matter centres of mass (use vector space) */
+                h_data = H5Dcreate(h_grp, "DarkMatterCentreOfMass", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+                H5Dclose(h_data);
+
+                /* Dark matter centre of mass velocities (use vector space) */
+                h_data = H5Dcreate(h_grp, "DarkMatterCentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+                H5Dclose(h_data);
+
                 /* Total dark matter mass (use scalar space) */
                 h_data = H5Dcreate(h_grp, "DarkMatterMass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
                 H5Dclose(h_data);
 
                 /* Total neutrino mass (use scalar space) */
                 h_data = H5Dcreate(h_grp, "NeutrinoMass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-                H5Dclose(h_data);
-            } else if (t == 0) {
-                /* Shrinking sphere centre (use vector space) */
-                h_data = H5Dcreate(h_grp, "ShrinkingSphereCentre", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
             }
             
@@ -354,7 +366,7 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     /* Unpack the halo data into contiguous arrays */
     long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
     double *coms = malloc(3 * local_num_structures * sizeof(double));
-    double *shrink_xs = malloc(3 * local_num_structures * sizeof(double));
+    double *coms_inner = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
     double *radii = malloc(1 * local_num_structures * sizeof(double));
     int *nparts = malloc(3 * local_num_structures * sizeof(int));
@@ -367,9 +379,9 @@ int exportCatalogue(const struct params *pars, const struct units *us,
         coms[i * 3 + 1] = h->x_com[1];
         coms[i * 3 + 2] = h->x_com[2];
         /* Unpack the shrinking sphere coordinates */
-        shrink_xs[i * 3 + 0] = h->x_com_inner[0];
-        shrink_xs[i * 3 + 1] = h->x_com_inner[1];
-        shrink_xs[i * 3 + 2] = h->x_com_inner[2];
+        coms_inner[i * 3 + 0] = h->x_com_inner[0];
+        coms_inner[i * 3 + 1] = h->x_com_inner[1];
+        coms_inner[i * 3 + 2] = h->x_com_inner[2];
         /* Unpack the masses and radii */
         masses[i] = h->mass_fof;
         radii[i] = h->radius_fof;
@@ -412,9 +424,9 @@ int exportCatalogue(const struct params *pars, const struct units *us,
 
     /* Write centre of mass data (vector) */
     h_data = H5Dopen(h_grp, "ShrinkingSphereCentre", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, shrink_xs);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, coms_inner);
     H5Dclose(h_data);
-    free(shrink_xs);
+    free(coms_inner);
 
     /* Close the group */
     H5Gclose(h_grp);
@@ -503,7 +515,11 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     /* Unpack the halo data into contiguous arrays */
     long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
     double *coms = malloc(3 * local_num_structures * sizeof(double));
+    double *coms_inner = malloc(3 * local_num_structures * sizeof(double));
+    double *coms_dm = malloc(3 * local_num_structures * sizeof(double));
     double *vels = malloc(3 * local_num_structures * sizeof(double));
+    double *vels_inner = malloc(3 * local_num_structures * sizeof(double));
+    double *vels_dm = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
     double *masses_dm = malloc(1 * local_num_structures * sizeof(double));
     double *masses_nu = malloc(1 * local_num_structures * sizeof(double));
@@ -518,16 +534,32 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         coms[i * 3 + 0] = h->x_com[0];
         coms[i * 3 + 1] = h->x_com[1];
         coms[i * 3 + 2] = h->x_com[2];
+        /* Unpack the shrinking sphere coordinates */
+        coms_inner[i * 3 + 0] = h->x_com_inner[0];
+        coms_inner[i * 3 + 1] = h->x_com_inner[1];
+        coms_inner[i * 3 + 2] = h->x_com_inner[2];
+        /* Unpack the dark matter CoM coordinates */
+        coms_dm[i * 3 + 0] = h->x_com_dm[0];
+        coms_dm[i * 3 + 1] = h->x_com_dm[1];
+        coms_dm[i * 3 + 2] = h->x_com_dm[2];
         /* Unpack the CoM velocities */
         vels[i * 3 + 0] = h->v_com[0];
         vels[i * 3 + 1] = h->v_com[1];
         vels[i * 3 + 2] = h->v_com[2];
+        /* Unpack the shrinking sphere velocities */
+        vels_inner[i * 3 + 0] = h->v_com_inner[0];
+        vels_inner[i * 3 + 1] = h->v_com_inner[1];
+        vels_inner[i * 3 + 2] = h->v_com_inner[2];
+        /* Unpack the dark matter CoM velocities */
+        vels_dm[i * 3 + 0] = h->v_com_dm[0];
+        vels_dm[i * 3 + 1] = h->v_com_dm[1];
+        vels_dm[i * 3 + 2] = h->v_com_dm[2];
         /* Unpack the SO masses and radii */
         masses[i] = h->M_SO;
-        radii[i] = h->R_SO;
-        inner_radii[i] = h->R_inner;
         masses_dm[i] = h->mass_dm;
         masses_nu[i] = h->mass_nu;
+        radii[i] = h->R_SO;
+        inner_radii[i] = h->R_inner;
         /* Unpack the particle numbers */
         nparts[i] = h->npart_tot;
     }
@@ -547,6 +579,36 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dclose(h_data);
     free(coms);
 
+    /* Write innermost centre of mass data (vector) */
+    h_data = H5Dopen(h_grp, "ShrinkingSphereCentre", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, coms_inner);
+    H5Dclose(h_data);
+    free(coms_inner);
+
+    /* Write dark matter centre of mass data (vector) */
+    h_data = H5Dopen(h_grp, "DarkMatterCentreOfMass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, coms_dm);
+    H5Dclose(h_data);
+    free(coms_dm);
+
+    /* Write centre of mass velocity data (vector) */
+    h_data = H5Dopen(h_grp, "CentreOfMassVelocity", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
+    H5Dclose(h_data);
+    free(vels);
+
+    /* Write innermost centre of mass velocity data (vector) */
+    h_data = H5Dopen(h_grp, "ShrinkingSphereVelocity", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels_inner);
+    H5Dclose(h_data);
+    free(vels_inner);
+
+    /* Write dark matter centre of mass velocity data (vector) */
+    h_data = H5Dopen(h_grp, "DarkMatterCentreOfMassVelocity", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels_dm);
+    H5Dclose(h_data);
+    free(vels_dm);
+
     /* Write mass data (scalar) */
     h_data = H5Dopen(h_grp, "Mass", H5P_DEFAULT);
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
@@ -565,12 +627,6 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dclose(h_data);
     free(masses_nu);
 
-    /* Write particle number data (scalar) */
-    h_data = H5Dopen(h_grp, "ParticleNumber", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, H5P_DEFAULT, nparts);
-    H5Dclose(h_data);
-    free(nparts);
-
     /* Write radius data (scalar) */
     h_data = H5Dopen(h_grp, "Radius", H5P_DEFAULT);
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, radii);
@@ -583,11 +639,11 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dclose(h_data);
     free(inner_radii);
 
-    /* Write centre of mass velocity data (vector) */
-    h_data = H5Dopen(h_grp, "CentreOfMassVelocity", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
+    /* Write particle number data (scalar) */
+    h_data = H5Dopen(h_grp, "ParticleNumber", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, H5P_DEFAULT, nparts);
     H5Dclose(h_data);
-    free(vels);
+    free(nparts);
 
     /* Close the group */
     H5Gclose(h_grp);
