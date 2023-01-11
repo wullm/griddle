@@ -705,8 +705,8 @@ int main(int argc, char *argv[]) {
                 /* Drift and kick particles to the right time */
                 // double power_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
                 //                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
-                double power_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
-                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+                double power_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.drift_factors, output_list_power[j]) -
+                                           strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next);
 
                 message(rank, "\n");
                 message(rank, "Starting power spectrum calculation at a = %g.\n",
@@ -786,8 +786,8 @@ int main(int argc, char *argv[]) {
                 /* Drift and kick particles to the right time */
                 double halos_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
-                double halos_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
-                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+                double halos_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.drift_factors, output_list_halos[j]) -
+                                           strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next);
 
                 message(rank, "\n");
                 message(rank, "Starting friends-of-friends halo finding at a = %g.\n", output_list_halos[j]);
@@ -856,8 +856,8 @@ int main(int argc, char *argv[]) {
                 /* Drift and kick particles to the right time */
                 double snap_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_snap[j]) -
                                          strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
-                double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_snap[j]) -
-                                          strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+                double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.drift_factors, output_list_snap[j]) -
+                                          strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next);
 
                 /* Free the main grid before writing a full snapshot */
                 free_local_grid(&mass);
