@@ -292,6 +292,10 @@ int exportCatalogue(const struct params *pars, const struct units *us,
                 /* Total neutrino mass (use scalar space) */
                 h_data = H5Dcreate(h_grp, "NeutrinoMass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
                 H5Dclose(h_data);
+
+                /* Total particle mass (use scalar space) */
+                h_data = H5Dcreate(h_grp, "TotalParticleMass", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+                H5Dclose(h_data);
             }
             
             /* Close the group */
@@ -523,6 +527,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     double *masses = malloc(1 * local_num_structures * sizeof(double));
     double *masses_dm = malloc(1 * local_num_structures * sizeof(double));
     double *masses_nu = malloc(1 * local_num_structures * sizeof(double));
+    double *masses_tot = malloc(1 * local_num_structures * sizeof(double));
     double *radii = malloc(1 * local_num_structures * sizeof(double));
     double *inner_radii = malloc(1 * local_num_structures * sizeof(double));
     int *nparts = malloc(3 * local_num_structures * sizeof(int));
@@ -558,6 +563,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         masses[i] = h->M_SO;
         masses_dm[i] = h->mass_dm;
         masses_nu[i] = h->mass_nu;
+        masses_tot[i] = h->mass_tot;
         radii[i] = h->R_SO;
         inner_radii[i] = h->R_inner;
         /* Unpack the particle numbers */
@@ -626,6 +632,12 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses_nu);
     H5Dclose(h_data);
     free(masses_nu);
+
+    /* Write total particle mass data (scalar) */
+    h_data = H5Dopen(h_grp, "TotalParticleMass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses_tot);
+    H5Dclose(h_data);
+    free(masses_tot);
 
     /* Write radius data (scalar) */
     h_data = H5Dopen(h_grp, "Radius", H5P_DEFAULT);
