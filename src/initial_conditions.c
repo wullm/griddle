@@ -688,7 +688,7 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
                                  p->v[2] + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
-            const double rel_drift = relativistic_drift(v, p->type, pcs, a);
+            const double rel_drift = relativistic_drift(v, p, pcs, a);
 
             /* Execute drift */
             p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
