@@ -249,17 +249,6 @@ int exportSnapshot(struct params *pars, struct units *us,
             vels[i * 3 + 0] = p->v[0];
             vels[i * 3 + 1] = p->v[1];
             vels[i * 3 + 2] = p->v[2];
-            /* Drift to the right time */
-            if (dtau_drift != 0.) {
-#ifdef WITH_PARTTYPE
-                const double rel_drift = relativistic_drift(p->v, p->type, pcs, a);
-#else
-                const double rel_drift = 1.0;
-#endif
-                coords[i * 3 + 0] += vels[i * 3 + 0] * dtau_drift * rel_drift;
-                coords[i * 3 + 1] += vels[i * 3 + 1] * dtau_drift * rel_drift;
-                coords[i * 3 + 2] += vels[i * 3 + 2] * dtau_drift * rel_drift;
-            }
 #ifdef WITH_ACCELERATIONS
             /* Kick to the right time */
             if (dtau_kick != 0.) {

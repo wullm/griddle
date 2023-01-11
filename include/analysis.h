@@ -1,6 +1,6 @@
 /*******************************************************************************
  * This file is part of Sedulus.
- * Copyright (c) 2022 Willem Elbers (whe@willemelbers.com)
+ * Copyright (c) 2023 Willem Elbers (whe@willemelbers.com)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -17,29 +17,15 @@
  *
  ******************************************************************************/
 
-#ifndef RELATIVITY_H
-#define RELATIVITY_H
+#ifndef ANALYSIS_H
+#define ANALYSIS_H
 
-#include "units.h"
 #include "particle.h"
+#include "units.h"
 
-/* Relativistic equations of motion (2207.14256) */
-static inline double relativistic_drift(const FloatVelType v[3],
-                                        const struct particle *p,
-                                        const struct physical_consts *pcs,
-                                        double a) {
-#ifdef WITH_PARTTYPE
-    if (p->type == 6) {
-        FloatVelType v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-        FloatVelType ac = a * pcs->SpeedOfLight;
-        FloatVelType ac2 = ac * ac;
-        return ac / sqrt(ac2 + v2);
-    } else {
-        return 1.0;
-    }
-#else
-    return 1.0;
-#endif
-}
+IntPosType position_checksum(const struct particle *parts, long int local_partnum);
+int drift_particles(struct particle *parts, long int local_partnum,
+                    double a, double drift_dtau, double pos_to_int_fac,
+                    const struct physical_consts *pcs);
 
 #endif

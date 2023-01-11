@@ -28,6 +28,8 @@
 
 #include "../include/sedulus.h"
 
+// #define DEBUG_CHECKS
+
 int main(int argc, char *argv[]) {
     /* Initialize MPI for distributed memory parallelization */
     MPI_Init(&argc, &argv);
@@ -622,11 +624,7 @@ int main(int argc, char *argv[]) {
                                  p->v[2] + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
-#ifdef WITH_PARTTYPE
-            const double rel_drift = relativistic_drift(v, p->type, &pcs, a);
-#else
-            const double rel_drift = 1.0;
-#endif
+            const double rel_drift = relativistic_drift(v, p, &pcs, a);
 
             /* Execute drift */
             p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
@@ -707,45 +705,66 @@ int main(int argc, char *argv[]) {
                 /* Drift and kick particles to the right time */
                 // double power_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
                 //                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
-                // double power_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
-                //                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
+                double power_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_power[j]) -
+                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
 
-                /* Timer */
-                struct timepair powspec_timer;
-                timer_start(rank, &powspec_timer);
+                message(rank, "\n");
+                message(rank, "Starting power spectrum calculation at a = %g.\n",
+                              output_list_power[j]);
 
+#ifdef DEBUG_CHECKS
+                /* Compute position checksum */
+                IntPosType checksum_global_before = position_checksum(particles, local_partnum);
+                timer_stop(rank, &run_timer, "Computing checksum took ");
+#endif
+
+                /* Reversibly drift the particles to the correct time */
+                drift_particles(particles, local_partnum, a, power_drift_dtau, pos_to_int_fac, &pcs);
+                timer_stop(rank, &run_timer, "Drifting particles to output time took ");
                 message(rank, "\n");
 
                 for (int i = 0; i < powspec_types_num; i++) {
-                    message(rank, "Starting power spectrum calculation at a = %g (%s).\n",
+                    message(rank, "Working on power spectrum type '%s'.\n",
                                   output_list_power[j], grid_type_names[powspec_types[i]]);
 
                     /* Exchange particles before attempting a mass deposition */
                     exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
-                    timer_stop(rank, &powspec_timer, "Exchanging particles took ");
+                    timer_stop(rank, &run_timer, "Exchanging particles took ");
 
                     /* Initiate mass deposition */
                     mass_deposition(&mass, particles, local_partnum, powspec_types[i]);
-                    timer_stop(rank, &powspec_timer, "Computing mass density took ");
+                    timer_stop(rank, &run_timer, "Computing mass density took ");
 
                     /* Merge the buffers with the main grid */
                     add_local_buffers(&mass);
-                    timer_stop(rank, &powspec_timer, "Communicating buffers took ");
+                    timer_stop(rank, &run_timer, "Communicating buffers took ");
 
                     /* Compute position-dependent power spectra */
                     if (powspec_types[i] == all_mass) {
                         analysis_posdep(&mass, /* output_num = */ j, output_list_power[j], &us, &pcs, &cosmo, &pars);
-                        timer_stop(rank, &powspec_timer, "Position-dependent power spectra took ");
+                        timer_stop(rank, &run_timer, "Position-dependent power spectra took ");
                     }
 
                     /* Compute the level of shot noise */
                     const double shot_noise = calc_shot_noise(boxlen, N, N_nu, nu_shot_factor, powspec_types[i]);
 
                     analysis_powspec(&mass, /* output_num = */ j, output_list_power[j], r2c_mpi, &us, &pcs, &cosmo, &pars, powspec_types[i], shot_noise);
-                    timer_stop(rank, &powspec_timer, "Global power spectra took ");
+                    timer_stop(rank, &run_timer, "Global power spectra took ");
 
                     message(rank, "\n");
                 }
+
+                /* Reverse the particle drifts */
+                drift_particles(particles, local_partnum, a, -power_drift_dtau, pos_to_int_fac, &pcs);
+                timer_stop(rank, &run_timer, "Reversing particle drift took ");
+
+#ifdef DEBUG_CHECKS
+                /* Compute position checksum */
+                IntPosType checksum_global_after = position_checksum(particles, local_partnum);
+                timer_stop(rank, &run_timer, "Computing checksum took ");
+                message(rank, "Checksum: %u -> %u\n", checksum_global_before, checksum_global_after);
+                if (rank == 0) assert(checksum_global_before == checksum_global_after);
+#endif
             }
         }
 
@@ -756,15 +775,21 @@ int main(int argc, char *argv[]) {
                 /* Drift and kick particles to the right time */
                 // double halos_kick_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
                 //                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_half_next);
-                // double halos_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
-                //                            strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
-
-                /* Timer */
-                struct timepair fof_timer;
-                timer_start(rank, &fof_timer);
+                double halos_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_halos[j]) -
+                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
 
                 message(rank, "\n");
                 message(rank, "Starting friends-of-friends halo finding at a = %g.\n", output_list_halos[j]);
+
+#ifdef DEBUG_CHECKS
+                /* Compute position checksum */
+                IntPosType checksum_global_before = position_checksum(particles, local_partnum);
+                timer_stop(rank, &run_timer, "Computing checksum took ");
+#endif
+
+                /* Reversibly drift the particles to the correct time */
+                drift_particles(particles, local_partnum, a, halos_drift_dtau, pos_to_int_fac, &pcs);
+                timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
                 /* Free the main grid before engaging the halo finder */
                 free_local_grid(&mass);
@@ -775,8 +800,20 @@ int main(int argc, char *argv[]) {
 
                 /* Timer */
                 MPI_Barrier(MPI_COMM_WORLD);
-                timer_stop(rank, &fof_timer, "Finding halos took ");
+                timer_stop(rank, &run_timer, "Finding halos took ");
                 message(rank, "\n");
+
+                /* Reverse the particle drifts */
+                drift_particles(particles, local_partnum, a, -halos_drift_dtau, pos_to_int_fac, &pcs);
+                timer_stop(rank, &run_timer, "Reversing particle drift took ");
+
+#ifdef DEBUG_CHECKS
+                /* Compute position checksum */
+                IntPosType checksum_global_after = position_checksum(particles, local_partnum);
+                timer_stop(rank, &run_timer, "Computing checksum took ");
+                message(rank, "Checksum: %u -> %u\n", checksum_global_before, checksum_global_after);
+                if (rank == 0) assert(checksum_global_before == checksum_global_after);
+#endif
 
                 /* Re-allocate the main grid after finishing with the halo finder */
                 alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
@@ -784,7 +821,8 @@ int main(int argc, char *argv[]) {
 
                 /* Re-create the FFT plans */
                 fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
-                timer_stop(rank, &fof_timer, "Recreating Fourier structures took ");
+                timer_stop(rank, &run_timer, "Recreating Fourier structures took ");
+                message(rank, "\n");
             }
         }
 
@@ -798,9 +836,44 @@ int main(int argc, char *argv[]) {
                 double snap_drift_dtau  = strooklat_interp(&spline_bg_a, ctabs.kick_factors, output_list_snap[j]) -
                                           strooklat_interp(&spline_bg_a, ctabs.kick_factors, a_next);
 
+                /* Free the main grid before writing a full snapshot */
+                free_local_grid(&mass);
+
                 message(rank, "Exporting a snapshot at a = %g.\n", output_list_snap[j]);
+
+#ifdef DEBUG_CHECKS
+                /* Compute position checksum */
+                IntPosType checksum_global_before = position_checksum(particles, local_partnum);
+                timer_stop(rank, &run_timer, "Computing checksum took ");
+#endif
+
+                /* Reversibly drift the particles to the correct time */
+                drift_particles(particles, local_partnum, a, snap_drift_dtau, pos_to_int_fac, &pcs);
+                timer_stop(rank, &run_timer, "Drifting particles to output time took ");
+
                 exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
                 timer_stop(rank, &run_timer, "Exporting a snapshot took ");
+
+                /* Reverse the particle drifts */
+                drift_particles(particles, local_partnum, a, -snap_drift_dtau, pos_to_int_fac, &pcs);
+                timer_stop(rank, &run_timer, "Reversing particle drift took ");
+
+#ifdef DEBUG_CHECKS
+                /* Compute position checksum */
+                IntPosType checksum_global_after = position_checksum(particles, local_partnum);
+                timer_stop(rank, &run_timer, "Computing checksum took ");
+                message(rank, "Checksum: %u -> %u\n", checksum_global_before, checksum_global_after);
+                if (rank == 0) assert(checksum_global_before == checksum_global_after);
+#endif
+
+                /* Re-allocate the main grid after writing the snapshot */
+                alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+                mass.momentum_space = 0;
+
+                /* Re-create the FFT plans */
+                fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+                timer_stop(rank, &run_timer, "Recreating Fourier structures took ");
+                message(rank, "\n");
             }
         }
 
