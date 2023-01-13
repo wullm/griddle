@@ -1002,7 +1002,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         long int minpot_index = -1;
 
         /* Check particles within this radius */
-        const double r_check = r / rfac;
+        const double r_check = r_ini;
         const double r2_check = r_check * r_check;
 
         /* Loop over cells */
@@ -1078,6 +1078,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].x_min_pot[0] = x_min_pot[0] * int_to_pos_fac;
             halos[i].x_min_pot[1] = x_min_pot[1] * int_to_pos_fac;
             halos[i].x_min_pot[2] = x_min_pot[2] * int_to_pos_fac;
+            halos[i].v_min_pot[0] = parts[minpot_index].v[0];
+            halos[i].v_min_pot[1] = parts[minpot_index].v[1];
+            halos[i].v_min_pot[2] = parts[minpot_index].v[2];
         }
 
         /* Compute the distance between the shrinking sphere and FOF centres */
