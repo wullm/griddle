@@ -1072,9 +1072,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             }
         }
 
+        /* Store position and velocity of the potential minimum particle */
         if (minpot_index > -1) {
             const IntPosType *x_min_pot = parts[minpot_index].x;
-
             halos[i].x_min_pot[0] = x_min_pot[0] * int_to_pos_fac;
             halos[i].x_min_pot[1] = x_min_pot[1] * int_to_pos_fac;
             halos[i].x_min_pot[2] = x_min_pot[2] * int_to_pos_fac;
@@ -1083,11 +1083,25 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].v_min_pot[2] = parts[minpot_index].v[2];
         }
 
+        /* The integer position of the halo centre */
+        IntPosType centre[3];
+
+        if (pars->UsePotentialMinimumAsCentre && minpot_index > -1) {
+            const IntPosType *x_min_pot = parts[minpot_index].x;
+            centre[0] = x_min_pot[0];
+            centre[1] = x_min_pot[1];
+            centre[2] = x_min_pot[2];
+        } else {
+            centre[0] = com[0];
+            centre[1] = com[1];
+            centre[2] = com[2];
+        }
+
         /* Compute the distance between the shrinking sphere and FOF centres */
         IntPosType fof[3] = {(*fofs)[i].x_com_inner[0] * pos_to_int_fac,
                              (*fofs)[i].x_com_inner[1] * pos_to_int_fac,
                              (*fofs)[i].x_com_inner[2] * pos_to_int_fac};
-        const double dx_com = sqrt(int_to_phys_dist2(com, fof, int_to_pos_fac));
+        const double dx_com = sqrt(int_to_phys_dist2(centre, fof, int_to_pos_fac));
 
         /* Determine all cells that overlap with the search radius */
         const double SO_search_radius = fmax(min_radius, (*fofs)[i].radius_fof * 1.1) - dx_com;
@@ -1115,7 +1129,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
-                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+                const double r2 = int_to_phys_dist2(xa, centre, int_to_pos_fac);
 
                 if (r2 < SO_search_radius_2) {
                     nearby_partnum++;
@@ -1144,7 +1158,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
-                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+                const double r2 = int_to_phys_dist2(xa, centre, int_to_pos_fac);
 
                 if (r2 < SO_search_radius_2) {
 #ifdef WITH_MASSES
@@ -1243,11 +1257,6 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         if (halos[i].R_inner == 0. || halos[i].R_inner >= halos[i].R_SO) {
             /* Reset the inner radius */
             halos[i].R_inner = halos[i].R_SO;
-
-            /* Compute the CoM relative to the (integer) FOF CoM */
-            com[0] = (*fofs)[i].x_com_inner[0] * pos_to_int_fac;
-            com[1] = (*fofs)[i].x_com_inner[1] * pos_to_int_fac;
-            com[2] = (*fofs)[i].x_com_inner[2] * pos_to_int_fac;
         }
 
         /* Loop over cells to compute other SO properties */
@@ -1262,7 +1271,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const long int index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
-                const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+                const double r2 = int_to_phys_dist2(xa, centre, int_to_pos_fac);
 
                 if (r2 < R_SO_2) {
 #ifdef WITH_MASSES
@@ -1288,10 +1297,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     }
 #endif
 
-                    /* Compute the offset from the current CoM */
-                    const IntPosType dx = xa[0] - com[0];
-                    const IntPosType dy = xa[1] - com[1];
-                    const IntPosType dz = xa[2] - com[2];
+                    /* Compute the offset from the FOF CoM */
+                    const IntPosType dx = xa[0] - fof[0];
+                    const IntPosType dy = xa[1] - fof[1];
+                    const IntPosType dz = xa[2] - fof[2];
 
                     /* Enforce boundary conditions and convert to physical lengths */
                     const double fx = (dx < -dx) ? dx * int_to_pos_fac : -((-dx) * int_to_pos_fac);

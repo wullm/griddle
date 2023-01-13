@@ -80,6 +80,7 @@ int readParams(struct params *pars, const char *fname) {
      ini_gets("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname);
 
      /* Halo finding parameters */
+     pars->UsePotentialMinimumAsCentre = ini_getl("HaloFinding", "UsePotentialMinimumAsCentre", 1, fname);
      pars->DoSphericalOverdensities = ini_getl("HaloFinding", "DoSphericalOverdensities", 1, fname);
      pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
      pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);

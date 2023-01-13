@@ -75,6 +75,7 @@ struct params {
     double HaloFindCellNumber;
     double SphericalOverdensityThreshold;
     double SphericalOverdensityMinLookRadius;
+    char UsePotentialMinimumAsCentre;
     int FOFBufferSize;
 
     /* Shrinking sphere parameters */
