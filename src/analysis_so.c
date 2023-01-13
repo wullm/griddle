@@ -997,6 +997,89 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             r *= rfac;
         }
 
+        /* Now find the minimum potential particle */
+        double minpot = 0.0;
+        long int minpot_index = -1;
+
+        /* Check particles within this radius */
+        const double r_check = r / rfac;
+        const double r2_check = r_check * r_check;
+
+        /* Loop over cells */
+        for (CellIntType c1 = 0; c1 < num_overlap; c1++) {
+            /* Find the particle count and offset of the cell */
+            CellIntType cell1 = cells[c1];
+            long int local_count1 = cell_counts[cell1];
+            long int local_offset1 = cell_offsets[cell1];
+
+            /* Loop over particles in the first cell */
+            for (long int a = 0; a < local_count1; a++) {
+                const long int index_a = cell_list[local_offset1 + a].offset;
+
+#ifdef WITH_PARTTYPE
+                /* Skip neutrinos */
+                if (parts[index_a].type == 6) continue;
+#endif
+
+                /* Skip particles outside the shrinking sphere radius */
+                const IntPosType *xa = parts[index_a].x;
+                const double ra2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
+                if (ra2 >= r2_check) continue;
+
+                /* Reset the potential */
+                double potential = 0.0;
+
+                /* Loop over cells */
+                for (CellIntType c2 = 0; c2 < num_overlap; c2++) {
+                    /* Find the particle count and offset of the cell */
+                    CellIntType cell2 = cells[c2];
+                    long int local_count2 = cell_counts[cell2];
+                    long int local_offset2 = cell_offsets[cell2];
+
+                    /* If we are looping over the same cell, only check all pairs once */
+                    long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
+
+                    /* Loop over particles in the second cell */
+                    for (long int b = 0; b < max_check; b++) {
+                        const long int index_b = cell_list[local_offset2 + b].offset;
+
+#ifdef WITH_PARTTYPE
+                        /* Skip neutrinos */
+                        if (parts[index_b].type == 6) continue;
+#endif
+
+                        /* Skip particles outside the shrinking sphere radius */
+                        const IntPosType *xb = parts[index_b].x;
+                        const double rb2 = int_to_phys_dist2(xb, com, int_to_pos_fac);
+                        if (rb2 >= r2_check) continue;
+
+#ifdef WITH_MASSES
+                        double mass = parts[index_b].m;
+#else
+                        double mass = part_mass;
+#endif
+
+                        double r2 = int_to_phys_dist2(xa, xb, int_to_pos_fac);
+
+                        potential -= mass / sqrt(r2);
+                    }
+                }
+
+                if (potential < minpot || minpot_index == -1) {
+                    minpot = potential;
+                    minpot_index = index_a;
+                }
+            }
+        }
+
+        if (minpot_index > -1) {
+            const IntPosType *x_min_pot = parts[minpot_index].x;
+
+            halos[i].x_min_pot[0] = x_min_pot[0] * int_to_pos_fac;
+            halos[i].x_min_pot[1] = x_min_pot[1] * int_to_pos_fac;
+            halos[i].x_min_pot[2] = x_min_pot[2] * int_to_pos_fac;
+        }
+
         /* Compute the distance between the shrinking sphere and FOF centres */
         IntPosType fof[3] = {(*fofs)[i].x_com_inner[0] * pos_to_int_fac,
                              (*fofs)[i].x_com_inner[1] * pos_to_int_fac,
