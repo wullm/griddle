@@ -1036,12 +1036,12 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     long int local_count2 = cell_counts[cell2];
                     long int local_offset2 = cell_offsets[cell2];
 
-                    /* If we are looping over the same cell, only check all pairs once */
-                    long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
-
                     /* Loop over particles in the second cell */
-                    for (long int b = 0; b < max_check; b++) {
+                    for (long int b = 0; b < local_count2; b++) {
                         const long int index_b = cell_list[local_offset2 + b].offset;
+
+                        /* No self interaction */
+                        if (index_a == index_b) continue;
 
 #ifdef WITH_PARTTYPE
                         /* Skip neutrinos */
