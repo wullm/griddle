@@ -300,6 +300,11 @@ int exportSnipshot(const struct params *pars, const struct units *us,
             for (long int a = 0; a < local_count; a++) {
                 const long int index_a = cell_list[local_offset + a].offset;
 
+#ifdef WITH_PARTTYPE
+                /* Skip non-DM particles */
+                if (parts[index_a].type != 1) continue;
+#endif
+
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
 
@@ -606,6 +611,3 @@ int exportSnipshot(const struct params *pars, const struct units *us,
 
     return 0;
 }
-
-
-
