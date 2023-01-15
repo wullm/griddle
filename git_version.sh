@@ -11,8 +11,12 @@ GIT_STATUS=$(git status -bsuno)
 IFS= read -d '' -r < <(sed -e ':a' -e '$!{N;ba' -e '}' -e 's/[&/\]/\\&/g; s/\n/ \\\\n/g' <<<"$GIT_STATUS")
 GIT_STATUS=${REPLY%$'\n'}
 
+# Get a hash for all unstaged changes to known files
+GIT_DIRTY_HASH=$((git add -u && git write-tree && git reset | head -n 0) | cut -c 1-10)
+
 sed -i "s/\"GIT_BRANCH\"/\"$GIT_BRANCH\"/g" include/git_version.h
 sed -i "s/\"GIT_DATE\"/\"$GIT_DATE\"/g" include/git_version.h
 sed -i "s/\"GIT_COMMIT\"/\"$GIT_COMMIT\"/g" include/git_version.h
 sed -i "s/\"GIT_MESSAGE\"/\"$GIT_MESSAGE\"/g" include/git_version.h
 sed -i "s/\"GIT_STATUS\"/\"$GIT_STATUS\"/g" include/git_version.h
+sed -i "s/\"GIT_DIRTY_HASH\"/\"$GIT_DIRTY_HASH\"/g" include/git_version.h

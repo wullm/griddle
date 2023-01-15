@@ -55,6 +55,7 @@ int main(int argc, char *argv[]) {
         message(rank, "\n");
         message(rank, "# GIT branch: %s\n", GIT_BRANCH);
         message(rank, "# GIT commit: %s\n", GIT_COMMIT);
+        message(rank, "# GIT unstaged checksum: %s\n", GIT_DIRTY_HASH);
         message(rank, "# GIT message: %s\n", GIT_MESSAGE);
         message(rank, "# GIT date: %s\n", GIT_DATE);
         message(rank, "# GIT status:\n");

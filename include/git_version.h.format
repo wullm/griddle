@@ -25,5 +25,6 @@
 #define GIT_DATE "GIT_DATE"
 #define GIT_MESSAGE "GIT_MESSAGE"
 #define GIT_STATUS "GIT_STATUS"
+#define GIT_DIRTY_HASH "GIT_DIRTY_HASH"
 
 #endif

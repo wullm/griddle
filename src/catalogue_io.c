@@ -102,6 +102,11 @@ int writeCatalogueAttributes(const struct params *pars, const struct units *us,
     H5Awrite(h_attr, vlstrtype, GIT_COMMIT);
     H5Aclose(h_attr);
 
+    H5Tset_size(vlstrtype, strlen(GIT_DIRTY_HASH));
+    h_attr = H5Acreate1(h_grp, "GitUnstagedChecksum", vlstrtype, h_aspace, H5P_DEFAULT);
+    H5Awrite(h_attr, vlstrtype, GIT_DIRTY_HASH);
+    H5Aclose(h_attr);
+
     H5Tset_size(vlstrtype, strlen(GIT_MESSAGE));
     h_attr = H5Acreate1(h_grp, "GitMessage", vlstrtype, h_aspace, H5P_DEFAULT);
     H5Awrite(h_attr, vlstrtype, GIT_MESSAGE);

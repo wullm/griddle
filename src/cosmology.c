@@ -44,9 +44,9 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
     /* Create a formatted file with the used parameters */
     FILE *f = NULL;
     begin_used_parameter_file("used_cosmology.ini", fname, &f, rank);
+    begin_section("Cosmology", f, rank);
 
     /* Read the basic cosmological parameters */
-    begin_section("Cosmology", f, rank);
     cosmo->h = read_double("Cosmology", "h", 0.70, fname, f, rank);
     cosmo->Omega_b = read_double("Cosmology", "Omega_b", 0.05, fname, f, rank);
     cosmo->Omega_cdm = read_double("Cosmology", "Omega_cdm", 0.25, fname, f, rank);
