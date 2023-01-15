@@ -19,6 +19,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include <hdf5.h>
 #include <assert.h>
 #include <math.h>
@@ -27,83 +29,199 @@
 /* The .ini parser library is minIni */
 #include "../parser/minIni.h"
 
+long read_long(const char *section, const char *key, long default_value,
+               const char *fname, FILE *used_parameters_f, int rank) {
+
+    /* Read the parameter */
+    long value = ini_getl(section, key, default_value, fname);
+
+    /* Print to a formatted parameter file */
+    if (rank == 0) {
+        char parstring[DEFAULT_STRING_LENGTH];
+        sprintf(parstring, "%s = %ld", key, value);
+        if (value == default_value) {
+            fprintf(used_parameters_f, "%-50s # (default)\n", parstring);
+        } else {
+            fprintf(used_parameters_f, "%s\n", parstring);
+        }
+    }
+
+    return value;
+}
+
+double read_double(const char *section, const char *key, double default_value,
+                   const char *fname, FILE *used_parameters_f, int rank) {
+
+    /* Read the parameter */
+    double value = ini_getd(section, key, default_value, fname);
+
+    /* Print to a formatted parameter file */
+    if (rank == 0) {
+        char parstring[DEFAULT_STRING_LENGTH];
+        sprintf(parstring, "%s = %g", key, value);
+        if (value == default_value) {
+            fprintf(used_parameters_f, "%-50s # (default)\n", parstring);
+        } else {
+            fprintf(used_parameters_f, "%s\n", parstring);
+        }
+    }
+
+    return value;
+}
+
+int read_string(const char *section, const char *key, const char *default_value,
+                char *buffer, int buffer_size, const char *fname,
+                FILE *used_parameters_f, int rank) {
+
+    /* Read the parameter */
+    ini_gets(section, key, default_value, buffer, buffer_size, fname);
+
+    /* Print to a formatted parameter file */
+    if (rank == 0) {
+        char parstring[DEFAULT_STRING_LENGTH];
+        sprintf(parstring, "%s = %s", key, buffer);
+        if (strcmp(buffer, default_value) == 0) {
+            fprintf(used_parameters_f, "%-50s # (default)\n", parstring);
+        } else {
+            fprintf(used_parameters_f, "%s\n", parstring);
+        }
+    }
+
+    return 0;
+}
+
 int readParams(struct params *pars, const char *fname) {
-     pars->Seed = ini_getl("Random", "Seed", 1, fname);
-     pars->FixedModes = ini_getl("Random", "FixedModes", 0, fname);
-     pars->InvertedModes = ini_getl("Random", "InvertedModes", 0, fname);
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
-     /* Initial conditions parameters */
-     pars->GenerateICs = ini_getl("InitialConditions", "Generate", 1, fname);
-     pars->DoNewtonianBackscaling = ini_getl("InitialConditions", "DoNewtonianBackscaling", 1, fname);
+    FILE *f = NULL; // formatted output file
 
-     pars->PartGridSize = ini_getl("Simulation", "PartGridSize", 64, fname);
-     pars->MeshGridSize = ini_getl("Simulation", "MeshGridSize", 64, fname);
-     pars->NeutrinosPerDim = ini_getl("Simulation", "NeutrinosPerDim", 0, fname);
-     pars->ForeignBufferSize = ini_getl("Simulation", "ForeignBufferSize", 3000000, fname);
-     pars->BoxLength = ini_getd("Simulation", "BoxLength", 1000.0, fname);
+    if (rank == 0) {
+        /* Get the current time */
+        char timestring[26];
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        struct tm* tm_info = localtime(&tv.tv_sec);
+        strftime(timestring, 26, "%Y-%m-%d %H:%M:%S (%Z)", tm_info);
 
-     pars->ScaleFactorBegin = ini_getd("Simulation", "ScaleFactorBegin", 0.03125, fname);
-     pars->ScaleFactorEnd = ini_getd("Simulation", "ScaleFactorEnd", 1.0, fname);
-     pars->ScaleFactorStep = ini_getd("Simulation", "ScaleFactorStep", 0.05, fname);
-     pars->ScaleFactorTarget = ini_getd("Simulation", "ScaleFactorTarget", 1.0, fname);
+        /* Create a formatted file with the used parameters */
+        f = fopen("used_parameters.ini", "w");
+        fprintf(f, "# Parameters read from '%s'\n", fname);
+        fprintf(f, "# Parameters read at %s\n\n", timestring);
+    }
 
-     pars->DerivativeOrder = ini_getl("Simulation", "DerivativeOrder", 4, fname);
+    /* Prepare string parameters */
+    int len = DEFAULT_STRING_LENGTH;
+    pars->InitialConditionsFile = malloc(len);
+    pars->TransferFunctionsFile = malloc(len);
+    pars->SnapshotTimesString = malloc(len);
+    pars->SnapshotBaseName = malloc(len);
+    pars->PowerSpectrumTimesString = malloc(len);
+    pars->PowerSpectrumTypes = malloc(len);
+    pars->HaloFindingTimesString = malloc(len);
+    pars->CatalogueBaseName = malloc(len);
+    pars->SnipBaseName = malloc(len);
 
-     /* Neutrino parameters */
-     pars->NeutrinoPreIntegration = ini_getl("Neutrino", "PreIntegration", 1, fname);
-     pars->NeutrinoScaleFactorEarly = ini_getd("Neutrino", "ScaleFactorEarly", 0.005, fname);
-     pars->NeutrinoScaleFactorEarlyStep = ini_getd("Neutrino", "ScaleFactorEarlyStep", 0.2, fname);
+    /* Random number generator parameters */
+    if (rank == 0) {
+        fprintf(f, "[Random]\n");
+    }
+    pars->Seed = read_long("Random", "Seed", 1, fname, f, rank);
+    pars->FixedModes = read_long("Random", "FixedModes", 0, fname, f, rank);
+    pars->InvertedModes = read_long("Random", "InvertedModes", 0, fname, f, rank);
 
-     /* Read strings */
-     int len = DEFAULT_STRING_LENGTH;
-     pars->InitialConditionsFile = malloc(len);
-     pars->TransferFunctionsFile = malloc(len);
-     ini_gets("InitialConditions", "File", "", pars->InitialConditionsFile, len, fname);
-     ini_gets("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname);
+    /* Initial conditions parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[InitialConditions]\n");
+    }
+    pars->GenerateICs = read_long("InitialConditions", "Generate", 1, fname, f, rank);
+    pars->DoNewtonianBackscaling = read_long("InitialConditions", "DoNewtonianBackscaling", 1, fname, f, rank);
+    read_string("InitialConditions", "File", "", pars->InitialConditionsFile, len, fname, f, rank);
 
-     /* Output time strings */
-     pars->SnapshotTimesString = malloc(len);
-     pars->PowerSpectrumTimesString = malloc(len);
-     pars->HaloFindingTimesString = malloc(len);
-     ini_gets("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname);
-     ini_gets("PowerSpectra", "OutputTimes", "", pars->PowerSpectrumTimesString, len, fname);
-     ini_gets("HaloFinding", "OutputTimes", "", pars->HaloFindingTimesString, len, fname);
+    /* Transfer funtions parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[TransferFunctions]\n");
+    }
+    read_string("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname, f, rank);
 
-     /* Snapshot parameters */
-     pars->SnapshotBaseName = malloc(len);
-     ini_gets("Snapshots", "BaseName", "snap", pars->SnapshotBaseName, len, fname);
+    /* Simulation parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[Simulation]\n");
+    }
+    pars->PartGridSize = read_long("Simulation", "PartGridSize", 64, fname, f, rank);
+    pars->MeshGridSize = read_long("Simulation", "MeshGridSize", 64, fname, f, rank);
+    pars->NeutrinosPerDim = read_long("Simulation", "NeutrinosPerDim", 0, fname, f, rank);
+    pars->ForeignBufferSize = read_long("Simulation", "ForeignBufferSize", 3000000, fname, f, rank);
+    pars->BoxLength = read_double("Simulation", "BoxLength", 1000.0, fname, f, rank);
+    pars->ScaleFactorBegin = read_double("Simulation", "ScaleFactorBegin", 0.03125, fname, f, rank);
+    pars->ScaleFactorEnd = read_double("Simulation", "ScaleFactorEnd", 1.0, fname, f, rank);
+    pars->ScaleFactorStep = read_double("Simulation", "ScaleFactorStep", 0.05, fname, f, rank);
+    pars->ScaleFactorTarget = read_double("Simulation", "ScaleFactorTarget", 1.0, fname, f, rank);
+    pars->DerivativeOrder = read_long("Simulation", "DerivativeOrder", 4, fname, f, rank);
 
-     /* Halo finding string parameters */
-     pars->CatalogueBaseName = malloc(len);
-     pars->SnipBaseName = malloc(len);
-     ini_gets("HaloFinding", "BaseName", "catalogue", pars->CatalogueBaseName, len, fname);
-     ini_gets("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname);
+    /* Neutrino parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[Neutrino]\n");
+    }
+    pars->NeutrinoPreIntegration = read_long("Neutrino", "PreIntegration", 1, fname, f, rank);
+    pars->NeutrinoScaleFactorEarly = read_double("Neutrino", "ScaleFactorEarly", 0.005, fname, f, rank);
+    pars->NeutrinoScaleFactorEarlyStep = read_double("Neutrino", "ScaleFactorEarlyStep", 0.2, fname, f, rank);
 
-     /* Halo finding parameters */
-     pars->UsePotentialMinimumAsCentre = ini_getl("HaloFinding", "UsePotentialMinimumAsCentre", 1, fname);
-     pars->DoSphericalOverdensities = ini_getl("HaloFinding", "DoSphericalOverdensities", 1, fname);
-     pars->LinkingLength = ini_getd("HaloFinding", "LinkingLength", 0.2, fname);
-     pars->MinHaloParticleNum = ini_getl("HaloFinding", "MinHaloParticleNum", 20, fname);
-     pars->HaloFindCellNumber = ini_getl("HaloFinding", "CellNumber", 256, fname);
-     pars->FOFBufferSize =  ini_getl("HaloFinding", "FOFBufferSize", 10000, fname);
-     pars->SphericalOverdensityThreshold = ini_getd("HaloFinding", "SphericalOverdensityThreshold", 200.0, fname);
-     pars->SphericalOverdensityMinLookRadius = ini_getd("HaloFinding", "SphericalOverdensityMinLookRadius", 10.0, fname);
-     pars->ShrinkingSphereInitialRadius = ini_getd("HaloFinding", "ShrinkingSphereInitialRadius", 0.9, fname);
-     pars->ShrinkingSphereRadiusFactorCoarse = ini_getd("HaloFinding", "ShrinkingSphereRadiusFactorCoarse", 0.75, fname);
-     pars->ShrinkingSphereRadiusFactor = ini_getd("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname);
-     pars->ShrinkingSphereMassFraction = ini_getd("HaloFinding", "ShrinkingSphereMassFraction", 0.01, fname);
-     pars->ShrinkingSphereMinParticleNum = ini_getl("HaloFinding", "ShrinkingSphereMinParticleNum", 100, fname);
-     pars->ExportSnipshots = ini_getl("HaloFinding", "ExportSnipshots", 1, fname);
-     pars->SnipshotReduceFactor =  ini_getd("HaloFinding", "SnipshotReduceFactor", 0.01, fname);
-     pars->SnipshotMinParticleNum =  ini_getl("HaloFinding", "SnipshotMinParticleNum", 5, fname);
+    /* Snapshot parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[Snapshots]\n");
+    }
+    read_string("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname, f, rank);
+    read_string("Snapshots", "BaseName", "snap", pars->SnapshotBaseName, len, fname, f, rank);
 
-     /* Power spectrum (for on-the-fly analysis) parameters */
-     pars->PowerSpectrumBins =  ini_getl("PowerSpectra", "PowerSpectrumBins", 50, fname);
-     pars->PositionDependentSplits =  ini_getl("PowerSpectra", "PositionDependentSplits", 8, fname);
-     pars->PowerSpectrumTypes = malloc(len);
-     ini_gets("PowerSpectra", "Types", "all", pars->PowerSpectrumTypes, len, fname);
+    /* Power spectrum parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[PowerSpectra]\n");
+    }
+    read_string("PowerSpectra", "OutputTimes", "", pars->PowerSpectrumTimesString, len, fname, f, rank);
+    read_string("PowerSpectra", "Types", "all", pars->PowerSpectrumTypes, len, fname, f, rank);
+    pars->PowerSpectrumBins = read_long("PowerSpectra", "PowerSpectrumBins", 50, fname, f, rank);
+    pars->PositionDependentSplits = read_long("PowerSpectra", "PositionDependentSplits", 8, fname, f, rank);
 
-     return 0;
+    /* Halo finding parameters */
+    if (rank == 0) {
+        fprintf(f, "\n");
+        fprintf(f, "[HaloFinding]\n");
+    }
+    read_string("HaloFinding", "OutputTimes", "", pars->HaloFindingTimesString, len, fname, f, rank);
+    read_string("HaloFinding", "BaseName", "catalogue", pars->CatalogueBaseName, len, fname, f, rank);
+    pars->LinkingLength = read_double("HaloFinding", "LinkingLength", 0.2, fname, f, rank);
+    pars->MinHaloParticleNum = read_long("HaloFinding", "MinHaloParticleNum", 20, fname, f, rank);
+    pars->DoSphericalOverdensities = read_long("HaloFinding", "DoSphericalOverdensities", 1, fname, f, rank);
+    pars->FOFBufferSize =  read_long("HaloFinding", "FOFBufferSize", 10000, fname, f, rank);
+    pars->HaloFindCellNumber = read_long("HaloFinding", "CellNumber", 256, fname, f, rank);
+    pars->SphericalOverdensityThreshold = read_double("HaloFinding", "SphericalOverdensityThreshold", 200.0, fname, f, rank);
+    pars->SphericalOverdensityMinLookRadius = read_double("HaloFinding", "SphericalOverdensityMinLookRadius", 10.0, fname, f, rank);
+    pars->ShrinkingSphereInitialRadius = read_double("HaloFinding", "ShrinkingSphereInitialRadius", 0.9, fname, f, rank);
+    pars->ShrinkingSphereRadiusFactorCoarse = read_double("HaloFinding", "ShrinkingSphereRadiusFactorCoarse", 0.75, fname, f, rank);
+    pars->ShrinkingSphereRadiusFactor = read_double("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname, f, rank);
+    pars->ShrinkingSphereMassFraction = read_double("HaloFinding", "ShrinkingSphereMassFraction", 0.01, fname, f, rank);
+    pars->ShrinkingSphereMinParticleNum = read_long("HaloFinding", "ShrinkingSphereMinParticleNum", 100, fname, f, rank);
+    pars->UsePotentialMinimumAsCentre = read_long("HaloFinding", "UsePotentialMinimumAsCentre", 1, fname, f, rank);
+    pars->ExportSnipshots = read_long("HaloFinding", "ExportSnipshots", 1, fname, f, rank);
+    pars->SnipshotReduceFactor =  read_double("HaloFinding", "SnipshotReduceFactor", 0.01, fname, f, rank);
+    pars->SnipshotMinParticleNum =  read_long("HaloFinding", "SnipshotMinParticleNum", 5, fname, f, rank);
+    read_string("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname, f, rank);
+
+    /* Close the formatted parameter file */
+    if (rank == 0) {
+        fclose(f);
+    }
+
+    return 0;
 }
 
 
@@ -111,12 +229,12 @@ int cleanParams(struct params *pars) {
     free(pars->InitialConditionsFile);
     free(pars->TransferFunctionsFile);
     free(pars->SnapshotTimesString);
-    free(pars->PowerSpectrumTimesString);
-    free(pars->HaloFindingTimesString);
     free(pars->SnapshotBaseName);
+    free(pars->PowerSpectrumTimesString);
+    free(pars->PowerSpectrumTypes);
+    free(pars->HaloFindingTimesString);
     free(pars->CatalogueBaseName);
     free(pars->SnipBaseName);
-    free(pars->PowerSpectrumTypes);
 
     return 0;
 }

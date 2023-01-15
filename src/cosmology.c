@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <time.h>
 #include <sys/time.h>
 
 #include <gsl/gsl_integration.h>
@@ -31,29 +32,52 @@
 #include "../include/units.h"
 #include "../include/strooklat.h"
 #include "../include/message.h"
+#include "../include/params.h"
 
 /* The .ini parser library is minIni */
 #include "../parser/minIni.h"
 
 int readCosmology(struct cosmology *cosmo, const char *fname) {
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
+
+    FILE *f = NULL; // formatted output file
+
+    if (rank == 0) {
+        /* Get the current time */
+        char timestring[26];
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        struct tm* tm_info = localtime(&tv.tv_sec);
+        strftime(timestring, 26, "%Y-%m-%d %H:%M:%S (%Z)", tm_info);
+
+        /* Create a formatted file with the used cosmological parameters */
+        f = fopen("used_cosmology.ini", "w");
+        fprintf(f, "# Parameters read from '%s'\n", fname);
+        fprintf(f, "# Parameters read at %s\n\n", timestring);
+        fprintf(f, "[Cosmology]\n");
+    }
+
     /* Read the basic cosmological parameters */
-    cosmo->h = ini_getd("Cosmology", "h", 0.70, fname);
-    cosmo->Omega_b = ini_getd("Cosmology", "Omega_b", 0.05, fname);
-    cosmo->Omega_cdm = ini_getd("Cosmology", "Omega_cdm", 0.25, fname);
-    cosmo->Omega_k = ini_getd("Cosmology", "Omega_k", 0.0, fname);
+    cosmo->h = read_double("Cosmology", "h", 0.70, fname, f, rank);
+    cosmo->Omega_b = read_double("Cosmology", "Omega_b", 0.05, fname, f, rank);
+    cosmo->Omega_cdm = read_double("Cosmology", "Omega_cdm", 0.25, fname, f, rank);
+    cosmo->Omega_k = read_double("Cosmology", "Omega_k", 0.0, fname, f, rank);
 
     /* Power spectrum */
-    cosmo->n_s = ini_getd("Cosmology", "n_s", 0.97, fname);
-    cosmo->A_s = ini_getd("Cosmology", "A_s", 2.215e-9, fname);
-    cosmo->k_pivot = ini_getd("Cosmology", "k_pivot", 0.05, fname);
+    cosmo->n_s = read_double("Cosmology", "n_s", 0.97, fname, f, rank);
+    cosmo->A_s = read_double("Cosmology", "A_s", 2.215e-9, fname, f, rank);
+    cosmo->k_pivot = read_double("Cosmology", "k_pivot", 0.05, fname, f, rank);
 
     /* Neutrinos, radiation, and dark energy */
-    cosmo->N_ur = ini_getd("Cosmology", "N_ur", 3.046, fname);
-    cosmo->N_nu = ini_getl("Cosmology", "N_nu", 0, fname); // beware int
-    cosmo->T_nu_0 = ini_getd("Cosmology", "T_nu_0", 1.951757805, fname);
-    cosmo->T_CMB_0 = ini_getd("Cosmology", "T_CMB_0", 2.7255, fname);
-    cosmo->w0 = ini_getd("Cosmology", "w0", -1.0, fname);
-    cosmo->wa = ini_getd("Cosmology", "wa", 0.0, fname);
+    cosmo->N_ur = read_double("Cosmology", "N_ur", 3.046, fname, f, rank);
+    cosmo->N_nu = read_long("Cosmology", "N_nu", 0, fname, f, rank); // beware int
+    cosmo->T_nu_0 = read_double("Cosmology", "T_nu_0", 1.951757805, fname, f, rank);
+    cosmo->T_CMB_0 = read_double("Cosmology", "T_CMB_0", 2.7255, fname, f, rank);
+    cosmo->w0 = read_double("Cosmology", "w0", -1.0, fname, f, rank);
+    cosmo->wa = read_double("Cosmology", "wa", 0.0, fname, f, rank);
 
     /* Handle separate comma-separted lists of neutrino properties */
     if (cosmo->N_nu > 0) {
@@ -70,8 +94,8 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
         int charlen = 100;
         char M_nu_string[charlen]; // masses
         char deg_nu_string[charlen]; // degeneracies
-        ini_gets("Cosmology", "M_nu", "", M_nu_string, charlen, fname);
-        ini_gets("Cosmology", "deg_nu", "", deg_nu_string, charlen, fname);
+        read_string("Cosmology", "M_nu", "", M_nu_string, charlen, fname, f, rank);
+        read_string("Cosmology", "deg_nu", "", deg_nu_string, charlen, fname, f, rank);
 
         /* Check that the required properties are there */
         if (strlen(M_nu_string) <= 0) {
@@ -106,6 +130,11 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
             printf("Error: number of neutrino masses or degenerarcies != N_nu.\n");
             exit(1);
         }
+    }
+
+    /* Close the used cosmological parameter file */
+    if (rank == 0) {
+        fclose(f);
     }
 
     return 0;

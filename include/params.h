@@ -96,6 +96,14 @@ struct params {
     char *PowerSpectrumTypes;
 };
 
+long read_long(const char *section, const char *key, long default_value,
+               const char *fname, FILE *used_parameters_f, int rank);
+double read_double(const char *section, const char *key, double default_value,
+                   const char *fname, FILE *used_parameters_f, int rank);
+int read_string(const char *section, const char *key, const char *default_value,
+                char *buffer, int buffer_size, const char *fname,
+                FILE *used_parameters_f, int rank);
+
 int readParams(struct params *parser, const char *fname);
 int cleanParams(struct params *parser);
 int parseArrayString(char *string, double **array, int *length);
