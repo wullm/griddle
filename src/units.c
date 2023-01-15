@@ -22,19 +22,35 @@
 #include <assert.h>
 #include <math.h>
 #include "../include/units.h"
+#include "../include/params.h"
 
 /* The .ini parser library is minIni */
 #include "../parser/minIni.h"
 
 int readUnits(struct units *us, const char *fname) {
-    /* Internal units */
-   us->UnitLengthMetres = ini_getd("Units", "UnitLengthMetres", 1.0, fname);
-   us->UnitTimeSeconds = ini_getd("Units", "UnitTimeSeconds", 1.0, fname);
-   us->UnitMassKilogram = ini_getd("Units", "UnitMassKilogram", 1.0, fname);
-   us->UnitTemperatureKelvin = ini_getd("Units", "UnitTemperatureKelvin", 1.0, fname);
-   us->UnitCurrentAmpere = ini_getd("Units", "UnitCurrentAmpere", 1.0, fname);
+    /* Get the dimensions of the cluster */
+    int rank, MPI_Rank_Count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
-     return 0;
+    /* Create a formatted file with the used parameters */
+    FILE *f = NULL;
+    begin_used_parameter_file("used_units.ini", fname, &f, rank);
+
+    /* Internal units */
+    begin_section("Units", f, rank);
+    us->UnitLengthMetres = read_double("Units", "UnitLengthMetres", 1.0, fname, f, rank);
+    us->UnitTimeSeconds = read_double("Units", "UnitTimeSeconds", 1.0, fname, f, rank);
+    us->UnitMassKilogram = read_double("Units", "UnitMassKilogram", 1.0, fname, f, rank);
+    us->UnitTemperatureKelvin = read_double("Units", "UnitTemperatureKelvin", 1.0, fname, f, rank);
+    us->UnitCurrentAmpere = read_double("Units", "UnitCurrentAmpere", 1.0, fname, f, rank);
+
+    /* Close the used parameters file */
+    if (rank == 0) {
+        fclose(f);
+    }
+
+    return 0;
 }
 
 

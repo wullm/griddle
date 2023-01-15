@@ -29,6 +29,34 @@
 /* The .ini parser library is minIni */
 #include "../parser/minIni.h"
 
+
+/* Here used_parameter_fname is the name of the new "used parameters file" that
+ * is being created, while fname is the filename of the input parameter file. */
+void begin_used_parameter_file(const char *used_parameter_fname,
+                               const char *fname, FILE **used_parameters_f,
+                               int rank) {
+    if (rank == 0) {
+        /* Get the current time */
+        char timestring[26];
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        struct tm* tm_info = localtime(&tv.tv_sec);
+        strftime(timestring, 26, "%Y-%m-%d %H:%M:%S (%Z)", tm_info);
+
+        /* Create a formatted file with the used parameters */
+        *used_parameters_f = fopen(used_parameter_fname, "w");
+        fprintf(*used_parameters_f, "# Parameters read from '%s'\n", fname);
+        fprintf(*used_parameters_f, "# Parameters read at %s\n", timestring);
+    }
+}
+
+void begin_section(const char *section, FILE *used_parameters_f, int rank) {
+    /* Print to a formatted parameter file */
+    if (rank == 0) {
+        fprintf(used_parameters_f, "\n[%s]\n", section);
+    }
+}
+
 long read_long(const char *section, const char *key, long default_value,
                const char *fname, FILE *used_parameters_f, int rank) {
 
@@ -96,21 +124,9 @@ int readParams(struct params *pars, const char *fname) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
-    FILE *f = NULL; // formatted output file
-
-    if (rank == 0) {
-        /* Get the current time */
-        char timestring[26];
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        struct tm* tm_info = localtime(&tv.tv_sec);
-        strftime(timestring, 26, "%Y-%m-%d %H:%M:%S (%Z)", tm_info);
-
-        /* Create a formatted file with the used parameters */
-        f = fopen("used_parameters.ini", "w");
-        fprintf(f, "# Parameters read from '%s'\n", fname);
-        fprintf(f, "# Parameters read at %s\n\n", timestring);
-    }
+    /* Create a formatted file with the used parameters */
+    FILE *f = NULL;
+    begin_used_parameter_file("used_parameters.ini", fname, &f, rank);
 
     /* Prepare string parameters */
     int len = DEFAULT_STRING_LENGTH;
@@ -125,34 +141,23 @@ int readParams(struct params *pars, const char *fname) {
     pars->SnipBaseName = malloc(len);
 
     /* Random number generator parameters */
-    if (rank == 0) {
-        fprintf(f, "[Random]\n");
-    }
+    begin_section("Random", f, rank);
     pars->Seed = read_long("Random", "Seed", 1, fname, f, rank);
     pars->FixedModes = read_long("Random", "FixedModes", 0, fname, f, rank);
     pars->InvertedModes = read_long("Random", "InvertedModes", 0, fname, f, rank);
 
     /* Initial conditions parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[InitialConditions]\n");
-    }
+    begin_section("InitialConditions", f, rank);
     pars->GenerateICs = read_long("InitialConditions", "Generate", 1, fname, f, rank);
     pars->DoNewtonianBackscaling = read_long("InitialConditions", "DoNewtonianBackscaling", 1, fname, f, rank);
     read_string("InitialConditions", "File", "", pars->InitialConditionsFile, len, fname, f, rank);
 
     /* Transfer funtions parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[TransferFunctions]\n");
-    }
+    begin_section("TransferFunctions", f, rank);
     read_string("TransferFunctions", "File", "", pars->TransferFunctionsFile, len, fname, f, rank);
 
     /* Simulation parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[Simulation]\n");
-    }
+    begin_section("Simulation", f, rank);
     pars->PartGridSize = read_long("Simulation", "PartGridSize", 64, fname, f, rank);
     pars->MeshGridSize = read_long("Simulation", "MeshGridSize", 64, fname, f, rank);
     pars->NeutrinosPerDim = read_long("Simulation", "NeutrinosPerDim", 0, fname, f, rank);
@@ -165,37 +170,25 @@ int readParams(struct params *pars, const char *fname) {
     pars->DerivativeOrder = read_long("Simulation", "DerivativeOrder", 4, fname, f, rank);
 
     /* Neutrino parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[Neutrino]\n");
-    }
+    begin_section("Neutrino", f, rank);
     pars->NeutrinoPreIntegration = read_long("Neutrino", "PreIntegration", 1, fname, f, rank);
     pars->NeutrinoScaleFactorEarly = read_double("Neutrino", "ScaleFactorEarly", 0.005, fname, f, rank);
     pars->NeutrinoScaleFactorEarlyStep = read_double("Neutrino", "ScaleFactorEarlyStep", 0.2, fname, f, rank);
 
     /* Snapshot parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[Snapshots]\n");
-    }
+    begin_section("Snapshots", f, rank);
     read_string("Snapshots", "OutputTimes", "", pars->SnapshotTimesString, len, fname, f, rank);
     read_string("Snapshots", "BaseName", "snap", pars->SnapshotBaseName, len, fname, f, rank);
 
     /* Power spectrum parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[PowerSpectra]\n");
-    }
+    begin_section("PowerSpectra", f, rank);
     read_string("PowerSpectra", "OutputTimes", "", pars->PowerSpectrumTimesString, len, fname, f, rank);
     read_string("PowerSpectra", "Types", "all", pars->PowerSpectrumTypes, len, fname, f, rank);
     pars->PowerSpectrumBins = read_long("PowerSpectra", "PowerSpectrumBins", 50, fname, f, rank);
     pars->PositionDependentSplits = read_long("PowerSpectra", "PositionDependentSplits", 8, fname, f, rank);
 
     /* Halo finding parameters */
-    if (rank == 0) {
-        fprintf(f, "\n");
-        fprintf(f, "[HaloFinding]\n");
-    }
+    begin_section("HaloFinding", f, rank);
     read_string("HaloFinding", "OutputTimes", "", pars->HaloFindingTimesString, len, fname, f, rank);
     read_string("HaloFinding", "BaseName", "catalogue", pars->CatalogueBaseName, len, fname, f, rank);
     pars->LinkingLength = read_double("HaloFinding", "LinkingLength", 0.2, fname, f, rank);
@@ -224,7 +217,6 @@ int readParams(struct params *pars, const char *fname) {
     return 0;
 }
 
-
 int cleanParams(struct params *pars) {
     free(pars->InitialConditionsFile);
     free(pars->TransferFunctionsFile);
@@ -238,7 +230,6 @@ int cleanParams(struct params *pars) {
 
     return 0;
 }
-
 
 int parseArrayString(char *string, double **array, int *length) {
     /* Check that there is anything there */

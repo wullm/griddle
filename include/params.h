@@ -96,6 +96,10 @@ struct params {
     char *PowerSpectrumTypes;
 };
 
+void begin_used_parameter_file(const char *used_parameter_fname,
+                               const char *fname, FILE **used_parameters_f,
+                               int rank);
+void begin_section(const char *section, FILE *used_parameters_f, int rank);
 long read_long(const char *section, const char *key, long default_value,
                const char *fname, FILE *used_parameters_f, int rank);
 double read_double(const char *section, const char *key, double default_value,

@@ -23,8 +23,6 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include <time.h>
-#include <sys/time.h>
 
 #include <gsl/gsl_integration.h>
 
@@ -43,24 +41,12 @@ int readCosmology(struct cosmology *cosmo, const char *fname) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &MPI_Rank_Count);
 
-    FILE *f = NULL; // formatted output file
-
-    if (rank == 0) {
-        /* Get the current time */
-        char timestring[26];
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        struct tm* tm_info = localtime(&tv.tv_sec);
-        strftime(timestring, 26, "%Y-%m-%d %H:%M:%S (%Z)", tm_info);
-
-        /* Create a formatted file with the used cosmological parameters */
-        f = fopen("used_cosmology.ini", "w");
-        fprintf(f, "# Parameters read from '%s'\n", fname);
-        fprintf(f, "# Parameters read at %s\n\n", timestring);
-        fprintf(f, "[Cosmology]\n");
-    }
+    /* Create a formatted file with the used parameters */
+    FILE *f = NULL;
+    begin_used_parameter_file("used_cosmology.ini", fname, &f, rank);
 
     /* Read the basic cosmological parameters */
+    begin_section("Cosmology", f, rank);
     cosmo->h = read_double("Cosmology", "h", 0.70, fname, f, rank);
     cosmo->Omega_b = read_double("Cosmology", "Omega_b", 0.05, fname, f, rank);
     cosmo->Omega_cdm = read_double("Cosmology", "Omega_cdm", 0.25, fname, f, rank);
