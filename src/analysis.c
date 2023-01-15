@@ -72,11 +72,11 @@ int kick_weights_only(struct particle *parts, long int local_partnum,
                       const struct cosmology *cosmo,
                       const struct physical_consts *pcs) {
 
+#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS) && defined(WITH_ACCELERATIONS)
     /* Drift the particles to the correct time */
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *p = &parts[i];
 
-#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS) && defined(WITH_ACCELERATIONS)
         if (p->type == 6) {
             /* Compute the kicked velocity (without changing p->v) */
             FloatVelType v[3] = {p->v[0] + p->a[0] * kick_dtau,

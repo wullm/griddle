@@ -388,6 +388,7 @@ int main(int argc, char *argv[]) {
     }
 #else
     const double nu_shot_factor = 1.0;
+    const double neutrino_qfac = 0.0;
 #endif
 
     /* Determine the output times for various output types */
