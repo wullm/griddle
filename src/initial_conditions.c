@@ -352,7 +352,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct units *us, struct physical_consts *pcs,
                               long long particle_offset, long long X0,
                               long long NX, double z_start,
-                              double f_asymptotic) {
+                              double f_asymptotic, double max_vel) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -404,6 +404,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double grid_fac = boxlen / N;
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
 
+    /* Velocity conversion factors */
+    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
+
     /* Generate a particle lattice */
     for (int i = X0; i < X0 + NX; i++) {
         for (int j = 0; j < N; j++) {
@@ -444,9 +447,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 part->x[2] = pos_to_int_fac * x[2];
 
                 /* Set the velocities */
-                part->v[0] = a_start * (v[0] - vel_fact * factor_vel_2lpt * dx2[0]);
-                part->v[1] = a_start * (v[1] - vel_fact * factor_vel_2lpt * dx2[1]);
-                part->v[2] = a_start * (v[2] - vel_fact * factor_vel_2lpt * dx2[2]);
+                part->v[0] = a_start * (v[0] - vel_fact * factor_vel_2lpt * dx2[0]) * vel_to_int_fac;
+                part->v[1] = a_start * (v[1] - vel_fact * factor_vel_2lpt * dx2[1]) * vel_to_int_fac;
+                part->v[2] = a_start * (v[2] - vel_fact * factor_vel_2lpt * dx2[2]) * vel_to_int_fac;
 
 #ifdef WITH_MASSES
                 part->m = part_mass;
@@ -466,7 +469,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                        struct physical_consts *pcs, long long int N_nupart,
                        long long particle_offset, long long local_cdm_num,
                        long long local_neutrino_num, double boxlen,
-                       long long X0_nupart, long long NX_nupart,
+                       double max_vel, long long X0_nupart, long long NX_nupart,
                        double z_start, rng_state *state) {
 
     /* Create interpolation splines for scale factors */
@@ -492,6 +495,9 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
+    /* Velocity conversion factors */
+    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
 
     /* Generate neutrinos */
     for (long long i = 0; i < local_neutrino_num; i++) {
@@ -526,9 +532,9 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
         double p = neutrino_seed_to_fermi_dirac(seed_and_id) * fac / m_eV;
         neutrino_seed_to_direction(seed_and_id, n);
 
-        part->v[0] = p * n[0];
-        part->v[1] = p * n[1];
-        part->v[2] = p * n[2];
+        part->v[0] = p * n[0] * vel_to_int_fac;
+        part->v[1] = p * n[1] * vel_to_int_fac;
+        part->v[2] = p * n[2] * vel_to_int_fac;
     }
 
     /* Clean up strooklat interpolation splines */
@@ -546,7 +552,7 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
                             struct physical_consts *pcs, long long int N_nupart,
                             long long local_partnum, long long max_partnum,
                             long long local_neutrino_num, double boxlen,
-                            double z_start, long int Seed) {
+                            double max_vel, double z_start, long int Seed) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -600,6 +606,10 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
 
     /* Conversion factor between floating point and integer positions */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
+    /* Velocity conversion factors */
+    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
+    const double int_to_vel_fac = 1.0 / vel_to_int_fac;
 
     /* Position conversion factors to [0, M] where M is the grid size */
     const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
@@ -683,9 +693,9 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
             accelCIC_2nd(box, x, acc, M, MX0, buffer_width, Mz, cell_fac);
 
             /* Execute kick */
-            FloatVelType v[3] = {p->v[0] + acc[0] * kick_dtau,
-                                 p->v[1] + acc[1] * kick_dtau,
-                                 p->v[2] + acc[2] * kick_dtau};
+            FloatVelType v[3] = {p->v[0] * int_to_vel_fac + acc[0] * kick_dtau,
+                                 p->v[1] * int_to_vel_fac + acc[1] * kick_dtau,
+                                 p->v[2] * int_to_vel_fac + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
             const double rel_drift = relativistic_drift(v, p, pcs, a);
@@ -696,9 +706,9 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
             p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
 
             /* Update velocities */
-            p->v[0] = v[0];
-            p->v[1] = v[1];
-            p->v[2] = v[2];
+            p->v[0] = v[0] * vel_to_int_fac;
+            p->v[1] = v[1] * vel_to_int_fac;
+            p->v[2] = v[2] * vel_to_int_fac;
         }
 
         /* Exchange partciles between MPI tasks */

@@ -323,9 +323,10 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                         coords[particles_total * 3 + 1] = parts[index_a].x[1] * int_to_pos_fac;
                         coords[particles_total * 3 + 2] = parts[index_a].x[2] * int_to_pos_fac;
                         /* Unpack the velocities */
-                        vels[particles_total * 3 + 0] = parts[index_a].v[0];
-                        vels[particles_total * 3 + 1] = parts[index_a].v[1];
-                        vels[particles_total * 3 + 2] = parts[index_a].v[2];
+                        // TODO: replace
+                        vels[particles_total * 3 + 0] = 0; //parts[index_a].v[0];
+                        vels[particles_total * 3 + 1] = 0; //parts[index_a].v[1];
+                        vels[particles_total * 3 + 2] = 0; //parts[index_a].v[2];
 #ifdef WITH_ACCELERATIONS
                         /* Kick to the right time */
                         if (dtau_kick != 0.) {

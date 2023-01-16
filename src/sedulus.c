@@ -146,6 +146,14 @@ int main(int argc, char *argv[]) {
     long int N = pars.PartGridSize;
     double boxlen = pars.BoxLength;
 
+    /* Position factors */
+    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
+
+    /* Velocity factors */
+    const double max_vel = 5e3;
+    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
+    const double int_to_vel_fac = 1.0 / vel_to_int_fac;
+
     /* Check what portions of 3D grids get stored locally */
     long int X0, NX;
     fft_mpi_local_size_3d(N, N, N/2+1, MPI_COMM_WORLD, &NX, &X0);
@@ -196,7 +204,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &ics_timer);
 
         local_partnum = local_cdm_num;
-        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, local_partnum, local_firstpart, max_partnum);
+        readSnapshot(&pars, &us, particles, pars.InitialConditionsFile, a_begin, local_partnum, local_firstpart, max_partnum, max_vel);
 
         /* Timer */
         timer_stop(rank, &ics_timer, "Reading initial conditions took ");
@@ -212,7 +220,7 @@ int main(int argc, char *argv[]) {
 
             generate_neutrinos(particles, &cosmo, &ctabs, &us, &pcs, N_nu,
                                local_partnum, local_cdm_num, local_neutrino_num,
-                               boxlen, X0_nu, NX_nu, z_start, &seed);
+                               boxlen, max_vel, X0_nu, NX_nu, z_start, &seed);
 
             local_partnum += local_neutrino_num;
 
@@ -227,7 +235,8 @@ int main(int argc, char *argv[]) {
                 pre_integrate_neutrinos(&nu_potential, &ptdat, &pars, pars.FixedModes,
                                         pars.InvertedModes, particles, &cosmo, &ctabs,
                                         &us, &pcs, N_nu, local_partnum, max_partnum,
-                                        local_neutrino_num, boxlen, z_start, pars.Seed);
+                                        local_neutrino_num, boxlen, max_vel,
+                                        z_start, pars.Seed);
 
                 free_local_grid(&nu_potential);
 
@@ -292,7 +301,7 @@ int main(int argc, char *argv[]) {
         generate_particle_lattice(&lpt_potential, &lpt_potential_2,
                                   &velocity_potential, &ptdat, particles,
                                   &cosmo, &us, &pcs, local_partnum, X0, NX,
-                                  z_start, f_asymptotic);
+                                  z_start, f_asymptotic, max_vel);
 
         local_partnum += local_cdm_num;
 
@@ -487,7 +496,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &snapshot_timer);
 
         message(rank, "Exporting a snapshot at a = %g.\n", output_list_snap[0]);
-        exportSnapshot(&pars, &us, &pcs, particles, 0, a_begin, N, local_partnum, /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
+        exportSnapshot(&pars, &us, &pcs, particles, 0, a_begin, N, local_partnum, /* kick_dtau = */ 0., /* drift_dtau = */ 0., max_vel);
 
         timer_stop(rank, &snapshot_timer, "Exporting a snapshot took ");
         message(rank, "\n");
@@ -503,9 +512,6 @@ int main(int argc, char *argv[]) {
     const double Omega_m = cosmo.Omega_cdm + cosmo.Omega_b;
     const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
 #endif
-
-    /* Position factors */
-    const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
 
     /* Position factors on [0, M] where M is the PM size */
     const double grid_to_int_fac = pow(2.0, POSITION_BITS) / M;
@@ -619,9 +625,9 @@ int main(int argc, char *argv[]) {
 #endif
 
             /* Execute kick */
-            FloatVelType v[3] = {p->v[0] + acc[0] * kick_dtau,
-                                 p->v[1] + acc[1] * kick_dtau,
-                                 p->v[2] + acc[2] * kick_dtau};
+            FloatVelType v[3] = {p->v[0] * int_to_vel_fac + acc[0] * kick_dtau,
+                                 p->v[1] * int_to_vel_fac + acc[1] * kick_dtau,
+                                 p->v[2] * int_to_vel_fac + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
             const double rel_drift = relativistic_drift(v, p, &pcs, a);
@@ -632,9 +638,9 @@ int main(int argc, char *argv[]) {
             p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
 
             /* Update velocities */
-            p->v[0] = v[0];
-            p->v[1] = v[1];
-            p->v[2] = v[2];
+            p->v[0] = v[0] * vel_to_int_fac;
+            p->v[1] = v[1] * vel_to_int_fac;
+            p->v[2] = v[2] * vel_to_int_fac;
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
@@ -719,7 +725,7 @@ int main(int argc, char *argv[]) {
 #endif
 
                 /* Reversibly drift the particles to the correct time */
-                drift_particles(particles, local_partnum, a, power_drift_dtau, pos_to_int_fac, &pcs);
+                drift_particles(particles, local_partnum, a, power_drift_dtau, pos_to_int_fac, int_to_vel_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
                 /* Reversibly kick neutrino particle weights */
@@ -761,7 +767,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 /* Reverse the particle drifts */
-                drift_particles(particles, local_partnum, a, -power_drift_dtau, pos_to_int_fac, &pcs);
+                drift_particles(particles, local_partnum, a, -power_drift_dtau, pos_to_int_fac, int_to_vel_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
                 if (N_nu > 0) {
@@ -799,7 +805,7 @@ int main(int argc, char *argv[]) {
 #endif
 
                 /* Reversibly drift the particles to the correct time */
-                drift_particles(particles, local_partnum, a, halos_drift_dtau, pos_to_int_fac, &pcs);
+                drift_particles(particles, local_partnum, a, halos_drift_dtau, pos_to_int_fac, int_to_vel_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
                 /* Reversibly kick neutrino particle weights */
@@ -822,7 +828,7 @@ int main(int argc, char *argv[]) {
                 message(rank, "\n");
 
                 /* Reverse the particle drifts */
-                drift_particles(particles, local_partnum, a, -halos_drift_dtau, pos_to_int_fac, &pcs);
+                drift_particles(particles, local_partnum, a, -halos_drift_dtau, pos_to_int_fac, int_to_vel_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
                 if (N_nu > 0) {
@@ -871,7 +877,7 @@ int main(int argc, char *argv[]) {
 #endif
 
                 /* Reversibly drift the particles to the correct time */
-                drift_particles(particles, local_partnum, a, snap_drift_dtau, pos_to_int_fac, &pcs);
+                drift_particles(particles, local_partnum, a, snap_drift_dtau, pos_to_int_fac, int_to_vel_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
                 /* Reversibly kick neutrino particle weights */
@@ -881,11 +887,11 @@ int main(int argc, char *argv[]) {
                 }
                 message(rank, "\n");
 
-                exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
+                exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau, max_vel);
                 timer_stop(rank, &run_timer, "Exporting a snapshot took ");
 
                 /* Reverse the particle drifts */
-                drift_particles(particles, local_partnum, a, -snap_drift_dtau, pos_to_int_fac, &pcs);
+                drift_particles(particles, local_partnum, a, -snap_drift_dtau, pos_to_int_fac, int_to_vel_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
                 if (N_nu > 0) {

@@ -47,19 +47,24 @@ IntPosType position_checksum(const struct particle *parts, long int local_partnu
 
 int drift_particles(struct particle *parts, long int local_partnum,
                     double a, double drift_dtau, double pos_to_int_fac,
-                    const struct physical_consts *pcs) {
+                    double int_to_vel_fac, const struct physical_consts *pcs) {
 
     /* Drift the particles to the correct time */
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *p = &parts[i];
 
+        /* Convert integer velocities to physical velocities */
+        FloatVelType v[3] = {p->v[0] * int_to_vel_fac,
+                             p->v[1] * int_to_vel_fac,
+                             p->v[2] * int_to_vel_fac};
+
         /* Relativistic drift correction */
-        const double rel_drift = relativistic_drift(p->v, p, pcs, a);
+        const double rel_drift = relativistic_drift(v, p, pcs, a);
 
         /* Execute drift */
-        p->x[0] += (IntPosType) (p->v[0] * drift_dtau * rel_drift * pos_to_int_fac);
-        p->x[1] += (IntPosType) (p->v[1] * drift_dtau * rel_drift * pos_to_int_fac);
-        p->x[2] += (IntPosType) (p->v[2] * drift_dtau * rel_drift * pos_to_int_fac);
+        p->x[0] += (IntPosType) (v[0] * drift_dtau * rel_drift * pos_to_int_fac);
+        p->x[1] += (IntPosType) (v[1] * drift_dtau * rel_drift * pos_to_int_fac);
+        p->x[2] += (IntPosType) (v[2] * drift_dtau * rel_drift * pos_to_int_fac);
     }                        
     return 0;                        
 }

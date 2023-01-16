@@ -31,13 +31,13 @@
 int exportSnapshot(struct params *pars, struct units *us,
                    struct physical_consts *pcs, struct particle *particles,
                    int output_num, double a, int N, long long int local_partnum,
-                   double dtau_kick, double dtau_drift);
+                   double dtau_kick, double dtau_drift, double max_vel);
 int writeHeaderAttributes(struct params *pars, struct units *us, double a,
                           long long int *numparts_local, long long int *numparts_total,
                           hid_t h_file);
 int readSnapshot(struct params *pars, struct units *us,
                  struct particle *particles, const char *fname, double a,
                  long long int local_partnum, long long int local_firstpart,
-                 long long int max_partnum);
+                 long long int max_partnum, double max_vel);
 
 #endif

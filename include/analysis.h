@@ -28,7 +28,7 @@
 IntPosType position_checksum(const struct particle *parts, long int local_partnum);
 int drift_particles(struct particle *parts, long int local_partnum,
                     double a, double drift_dtau, double pos_to_int_fac,
-                    const struct physical_consts *pcs);
+                    double int_to_vel_fac, const struct physical_consts *pcs);
 int kick_weights_only(struct particle *parts, long int local_partnum,
                       double a, double kick_dtau, double neutrino_qfac,
                       const struct cosmology *cosmo,

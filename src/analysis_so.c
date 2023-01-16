@@ -944,9 +944,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
                         /* Particle velocity */
-                        double vx = parts[index_a].v[0];
-                        double vy = parts[index_a].v[1];
-                        double vz = parts[index_a].v[2];
+                        // TODO: replace
+                        double vx = 0; //parts[index_a].v[0];
+                        double vy = 0; //parts[index_a].v[1];
+                        double vz = 0; //parts[index_a].v[2];
 
 #ifdef WITH_ACCELERATIONS
                         /* Kick velocities to the right time */
@@ -1078,9 +1079,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             halos[i].x_min_pot[0] = x_min_pot[0] * int_to_pos_fac;
             halos[i].x_min_pot[1] = x_min_pot[1] * int_to_pos_fac;
             halos[i].x_min_pot[2] = x_min_pot[2] * int_to_pos_fac;
-            halos[i].v_min_pot[0] = parts[minpot_index].v[0];
-            halos[i].v_min_pot[1] = parts[minpot_index].v[1];
-            halos[i].v_min_pot[2] = parts[minpot_index].v[2];
+            // TODO: replace
+            halos[i].v_min_pot[0] = 0; //parts[minpot_index].v[0];
+            halos[i].v_min_pot[1] = 0; //parts[minpot_index].v[1];
+            halos[i].v_min_pot[2] = 0; //parts[minpot_index].v[2];
         }
 
         /* The integer position of the halo centre */
@@ -1308,9 +1310,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     const double fz = (dz < -dz) ? dz * int_to_pos_fac : -((-dz) * int_to_pos_fac);
 
                     /* Particle velocity */
-                    double vx = parts[index_a].v[0];
-                    double vy = parts[index_a].v[1];
-                    double vz = parts[index_a].v[2];
+                    // TODO: replace
+                    double vx = 0; //parts[index_a].v[0];
+                    double vy = 0; //parts[index_a].v[1];
+                    double vz = 0; //parts[index_a].v[2];
 
 #ifdef WITH_ACCELERATIONS
                     /* Kick velocities to the right time */

@@ -36,7 +36,7 @@
 int exportSnapshot(struct params *pars, struct units *us,
                    struct physical_consts *pcs, struct particle *particles,
                    int output_num, double a, int N, long long int local_partnum,
-                   double dtau_kick, double dtau_drift) {
+                   double dtau_kick, double dtau_drift, double max_vel) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -230,6 +230,10 @@ int exportSnapshot(struct params *pars, struct units *us,
         const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
         const double int_to_pos_fac = 1.0 / pos_to_int_fac;
 
+        /* Velocity factors */
+        const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
+        const double int_to_vel_fac = 1.0 / vel_to_int_fac;
+
         /* Unpack the remaining particle data into contiguous arrays */
         double *coords = malloc(3 * local_parts_per_type[t] * sizeof(double));
         double *vels = malloc(3 * local_parts_per_type[t] * sizeof(double));
@@ -246,9 +250,9 @@ int exportSnapshot(struct params *pars, struct units *us,
             coords[i * 3 + 1] = p->x[1] * int_to_pos_fac;
             coords[i * 3 + 2] = p->x[2] * int_to_pos_fac;
             /* Unpack the velocities */
-            vels[i * 3 + 0] = p->v[0];
-            vels[i * 3 + 1] = p->v[1];
-            vels[i * 3 + 2] = p->v[2];
+            vels[i * 3 + 0] = p->v[0] * int_to_vel_fac;
+            vels[i * 3 + 1] = p->v[1] * int_to_vel_fac;
+            vels[i * 3 + 2] = p->v[2] * int_to_vel_fac;
 #ifdef WITH_ACCELERATIONS
             /* Kick to the right time */
             if (dtau_kick != 0.) {
@@ -516,7 +520,7 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
 int readSnapshot(struct params *pars, struct units *us,
                  struct particle *particles, const char *fname, double a,
                  long long int local_partnum, long long int local_firstpart,
-                 long long int max_partnum) {
+                 long long int max_partnum, double max_vel) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -691,12 +695,15 @@ int readSnapshot(struct params *pars, struct units *us,
     H5Sclose(h_space);
     H5Dclose(h_dat);
 
+    /* Velocity factors */
+    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
+
     /* Transfer the contiguous array to the particle data */
     for (int i = 0; i < local_partnum; i++) {
         /* Convert peculiar velocities to internal velocities */
-        particles[i].v[0] = veloc_data[i * 3 + 0] * a;
-        particles[i].v[1] = veloc_data[i * 3 + 1] * a;
-        particles[i].v[2] = veloc_data[i * 3 + 2] * a;
+        particles[i].v[0] = veloc_data[i * 3 + 0] * a * vel_to_int_fac;
+        particles[i].v[1] = veloc_data[i * 3 + 1] * a * vel_to_int_fac;
+        particles[i].v[2] = veloc_data[i * 3 + 2] * a * vel_to_int_fac;
     }
 
     /* Free the contiguous array */

@@ -54,11 +54,15 @@ typedef uint64_t IntPosType;
 #ifdef SINGLE_PRECISION_VELOCITIES
 #define VELOCITY_BITS 32
 #define MPI_FLOATVEL_TYPE MPI_FLOAT
+#define MPI_INTVEL_TYPE MPI_INT32_T
 typedef float FloatVelType;
+typedef int32_t IntVelType;
 #else
 #define VELOCITY_BITS 64
 #define MPI_FLOATVEL_TYPE MPI_DOUBLE
+#define MPI_INTVEL_TYPE MPI_INT64_T
 typedef double FloatVelType;
+typedef int64_t IntVelType;
 #endif
 
 struct particle {
@@ -70,7 +74,7 @@ struct particle {
 
     /* Position, velocity */
     IntPosType x[3];
-    FloatVelType v[3];
+    IntVelType v[3];
 
 #ifdef WITH_ACCELERATIONS
     /* Accelerations */
@@ -95,7 +99,7 @@ static inline MPI_Datatype mpi_particle_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[7] = {MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_FLOATVEL_TYPE,
+    MPI_Datatype types[7] = {MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_INTVEL_TYPE,
                              MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT16_T};
     int lengths[7];
     MPI_Aint displacements[7];
