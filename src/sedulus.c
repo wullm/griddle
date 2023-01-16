@@ -125,12 +125,6 @@ int main(int argc, char *argv[]) {
     /* Timer */
     timer_stop(rank, &setup_timer, "Reading transfer functions took ");
 
-    /* Create interpolation splines for redshifts and wavenumbers */
-    struct strooklat spline_z = {ptdat.redshift, ptdat.tau_size};
-    struct strooklat spline_k = {ptdat.k, ptdat.k_size};
-    init_strooklat_spline(&spline_z, 100);
-    init_strooklat_spline(&spline_k, 100);
-
     /* Additional interpolation spline for the background cosmology scale factors */
     struct strooklat spline_bg_a = {ctabs.avec, ctabs.size};
     init_strooklat_spline(&spline_bg_a, 100);
@@ -310,6 +304,10 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &ics_timer, "Generating the particle lattice took ");
     }
+
+    /* Clean up perturbation data */
+    cleanPerturb(&ptdat);
+    cleanPerturbParams(&ptpars);
 
     /* The gravity mesh can be a different size than the particle lattice */
     long int M = pars.MeshGridSize;
@@ -959,15 +957,11 @@ int main(int argc, char *argv[]) {
     /* Clean up */
     cleanParams(&pars);
     cleanCosmology(&cosmo);
-    cleanPerturb(&ptdat);
-    cleanPerturbParams(&ptpars);
 
     /* Clean up the cosmological tables */
     free_cosmology_tables(&ctabs);
 
     /* Clean up strooklat interpolation splines */
-    free_strooklat_spline(&spline_z);
-    free_strooklat_spline(&spline_k);
     free_strooklat_spline(&spline_bg_a);
 
     /* Timer */
