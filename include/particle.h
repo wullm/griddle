@@ -24,12 +24,12 @@
 #include <mpi.h>
 
 #define SINGLE_PRECISION_IDS
-#define SINGLE_PRECISION_POSITIONS
-#define SINGLE_PRECISION_VELOCITIES
-#define WITH_ACCELERATIONS
-#define WITH_MASSES
-#define WITH_PARTICLE_IDS
-#define WITH_PARTTYPE
+#define HALF_PRECISION_POSITIONS
+#define HALF_PRECISION_VELOCITIES
+// #define WITH_ACCELERATIONS
+// #define WITH_MASSES
+// #define WITH_PARTICLE_IDS
+// #define WITH_PARTTYPE
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
@@ -41,7 +41,11 @@ typedef uint32_t IntIDType;
 typedef uint64_t IntIDType;
 #endif
 
-#ifdef SINGLE_PRECISION_POSITIONS
+#if defined(HALF_PRECISION_POSITIONS)
+#define POSITION_BITS 16
+#define MPI_INTPOS_TYPE MPI_UINT16_T
+typedef uint16_t IntPosType;
+#elif defined(SINGLE_PRECISION_POSITIONS)
 #define POSITION_BITS 32
 #define MPI_INTPOS_TYPE MPI_UINT32_T
 typedef uint32_t IntPosType;
@@ -51,7 +55,13 @@ typedef uint32_t IntPosType;
 typedef uint64_t IntPosType;
 #endif
 
-#ifdef SINGLE_PRECISION_VELOCITIES
+#if defined(HALF_PRECISION_VELOCITIES)
+#define VELOCITY_BITS 16
+#define MPI_FLOATVEL_TYPE MPI_FLOAT
+#define MPI_INTVEL_TYPE MPI_INT16_T
+typedef float FloatVelType;
+typedef int16_t IntVelType;
+#elif defined(SINGLE_PRECISION_VELOCITIES)
 #define VELOCITY_BITS 32
 #define MPI_FLOATVEL_TYPE MPI_FLOAT
 #define MPI_INTVEL_TYPE MPI_INT32_T
