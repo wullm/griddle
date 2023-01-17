@@ -28,6 +28,7 @@
 #include "../include/analysis_so.h"
 #include "../include/catalogue_io.h"
 #include "../include/git_version.h"
+#include "../include/message.h"
 
 /* The current limit of for parallel HDF5 writes is 2GB */
 #define HDF5_PARALLEL_LIMIT 2147000000LL
@@ -212,149 +213,12 @@ int exportCatalogue(const struct params *pars, const struct units *us,
         int err = writeCatalogueAttributes(pars, us, a, h_out_file);
         if (err > 0) exit(1);
 
-        /* The particle group in the output file */
-        hid_t h_grp;
-        
-        /* Datsets */
-        hid_t h_data;
-        
-        /* For each halo type, prepare the group and data sets */
-        for (int t = 0; t < num_types; t++) {
-        
-            /* Vector dataspace (e.g. positions, velocities) */
-            const hsize_t vrank = 2;
-            const hsize_t vdims[2] = {total_num_structures, 3};
-            hid_t h_vspace = H5Screate_simple(vrank, vdims, NULL);
-        
-            /* Scalar dataspace (e.g. masses, ids) */
-            const hsize_t srank = 1;
-            const hsize_t sdims[1] = {total_num_structures};
-            hid_t h_sspace = H5Screate_simple(srank, sdims, NULL);
-        
-            /* Set chunking for vectors and scalars */
-            const hsize_t vchunk[2] = {HDF5_CHUNK_SIZE, 3};
-            const hsize_t schunk[1] = {HDF5_CHUNK_SIZE};
-            
-            /* Create properties for scalars */
-            hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
-            H5Pset_chunk(h_prop_sca, srank, schunk);
-
-            /* Create properties for the positions */
-            hid_t h_prop_pos = H5Pcreate(H5P_DATASET_CREATE);
-            H5Pset_chunk(h_prop_pos, vrank, vchunk);
-
-            /* Create properties for the positions */
-            hid_t h_prop_vel = H5Pcreate(H5P_DATASET_CREATE);
-            H5Pset_chunk(h_prop_vel, vrank, vchunk);
-
-            /* Create properties for the masses */
-            hid_t h_prop_mass = H5Pcreate(H5P_DATASET_CREATE);
-            H5Pset_chunk(h_prop_mass, srank, schunk);
-
-            /* Create properties for the radii */
-            hid_t h_prop_radius = H5Pcreate(H5P_DATASET_CREATE);
-            H5Pset_chunk(h_prop_radius, srank, schunk);
-
-            /* Set lossy filter (keep "digits" digits after the decimal point) */
-            const int digits_pos = pars->SnipshotPositionDScaleCompression;
-            const int digits_vel = pars->SnipshotVelocityDScaleCompression;
-            const int digits_mass = pars->CatalogueMassDScaleCompression;
-            const int digits_radius = pars->CatalogueRadiusDScaleCompression;
-            if (digits_pos > 0)
-                H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
-            if (digits_vel > 0)
-                H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
-            if (digits_mass > 0)
-                H5Pset_scaleoffset(h_prop_mass, H5Z_SO_FLOAT_DSCALE, digits_mass);
-            if (digits_radius > 0)
-                H5Pset_scaleoffset(h_prop_radius, H5Z_SO_FLOAT_DSCALE, digits_radius);
-
-            /* Set shuffle and lossless compression filters (GZIP level 4) */
-            const int gzip_level = pars->SnipshotZipCompressionLevel;
-            if (gzip_level > 0) {
-                H5Pset_shuffle(h_prop_pos);
-                H5Pset_shuffle(h_prop_vel);
-                H5Pset_shuffle(h_prop_mass);
-                H5Pset_shuffle(h_prop_radius);
-                H5Pset_deflate(h_prop_pos, gzip_level);
-                H5Pset_deflate(h_prop_vel, gzip_level);
-                H5Pset_deflate(h_prop_mass, gzip_level);
-                H5Pset_deflate(h_prop_radius, gzip_level);
-            }
-
-            /* Create the particle group in the output file */
-            h_grp = H5Gcreate(h_out_file, ExportNames[t], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-            
-            /* Halo IDs (use scalar space) */
-            h_data = H5Dcreate(h_grp, "ID", H5T_NATIVE_LLONG, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-            H5Dclose(h_data);
-            
-            /* Centres of mass (use vector space) */
-            h_data = H5Dcreate(h_grp, "CentreOfMass", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
-            H5Dclose(h_data);
-
-            /* Shrinking sphere centre (use vector space) */
-            h_data = H5Dcreate(h_grp, "ShrinkingSphereCentre", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
-            H5Dclose(h_data);
-
-            /* Total mass (use scalar space) */
-            h_data = H5Dcreate(h_grp, "Mass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
-            H5Dclose(h_data);
-            
-            /* Numbers of particles (use scalar space) */
-            h_data = H5Dcreate(h_grp, "ParticleNumber", H5T_NATIVE_INT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-            H5Dclose(h_data);
-
-            /* Halo radius (use scalar space) */
-            h_data = H5Dcreate(h_grp, "Radius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
-            H5Dclose(h_data);
-
-            /* The following properties are only for SO halos */
-            if (t == 1) {
-                /* Radius enclosing the innermost particles that determine the CoM for SO halos (use scalar space) */
-                h_data = H5Dcreate(h_grp, "InnerRadius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Centre of Mass velocities (use vector space) */
-                h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Shrinking sphere centre velocity (use vector space) */
-                h_data = H5Dcreate(h_grp, "ShrinkingSphereVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Dark matter centres of mass (use vector space) */
-                h_data = H5Dcreate(h_grp, "DarkMatterCentreOfMass", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Dark matter centre of mass velocities (use vector space) */
-                h_data = H5Dcreate(h_grp, "DarkMatterCentreOfMassVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Total dark matter mass (use scalar space) */
-                h_data = H5Dcreate(h_grp, "DarkMatterMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Total neutrino mass (use scalar space) */
-                h_data = H5Dcreate(h_grp, "NeutrinoMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Total particle mass (use scalar space) */
-                h_data = H5Dcreate(h_grp, "TotalParticleMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
-                H5Dclose(h_data);
-            }
-            
-            /* Close the group */
-            H5Gclose(h_grp);
-        }
-
         /* Close the file */
         H5Fclose(h_out_file);        
     }
 
     /* Wait until all ranks are finished */
     MPI_Barrier(MPI_COMM_WORLD);
-    
 
     /* Property list for MPI file access */
     hid_t prop_faxs = H5Pcreate(H5P_FILE_ACCESS);
@@ -388,6 +252,127 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     hid_t h_ch_vspace = H5Screate_simple(vrank, ch_vdims, NULL);
     hid_t h_ch_sspace = H5Screate_simple(srank, ch_sdims, NULL);
 
+    /* The group and dataset in the output file */
+    hid_t h_grp, h_data;
+
+    /* Create properties for the positions */
+    hid_t h_prop_pos = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(h_prop_pos, vrank, vchunk);
+
+    /* Create properties for the positions */
+    hid_t h_prop_vel = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(h_prop_vel, vrank, vchunk);
+
+    /* Create properties for the masses */
+    hid_t h_prop_mass = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(h_prop_mass, srank, schunk);
+
+    /* Create properties for the radii */
+    hid_t h_prop_radius = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(h_prop_radius, srank, schunk);
+
+    /* Set lossy filter (keep "digits" digits after the decimal point) */
+    const int digits_pos = pars->SnipshotPositionDScaleCompression;
+    const int digits_vel = pars->SnipshotVelocityDScaleCompression;
+    const int digits_mass = pars->CatalogueMassDScaleCompression;
+    const int digits_radius = pars->CatalogueRadiusDScaleCompression;
+    if (digits_pos > 0)
+        H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
+    if (digits_vel > 0)
+        H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
+    if (digits_mass > 0)
+        H5Pset_scaleoffset(h_prop_mass, H5Z_SO_FLOAT_DSCALE, digits_mass);
+    if (digits_radius > 0)
+        H5Pset_scaleoffset(h_prop_radius, H5Z_SO_FLOAT_DSCALE, digits_radius);
+
+    /* Set shuffle and lossless compression filters (GZIP level 4) */
+    const int gzip_level = pars->SnipshotZipCompressionLevel;
+    if (gzip_level > 0) {
+        H5Pset_shuffle(h_prop_pos);
+        H5Pset_shuffle(h_prop_vel);
+        H5Pset_shuffle(h_prop_mass);
+        H5Pset_shuffle(h_prop_radius);
+        H5Pset_deflate(h_prop_pos, gzip_level);
+        H5Pset_deflate(h_prop_vel, gzip_level);
+        H5Pset_deflate(h_prop_mass, gzip_level);
+        H5Pset_deflate(h_prop_radius, gzip_level);
+    }
+
+    /* For each halo type, prepare the group and data sets */
+    for (int t = 0; t < num_types; t++) {
+
+        /* Create the particle group in the output file */
+        h_grp = H5Gcreate(h_out_file, ExportNames[t], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+        /* Halo IDs (use scalar space) */
+        h_data = H5Dcreate(h_grp, "ID", H5T_NATIVE_LLONG, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* Centres of mass (use vector space) */
+        h_data = H5Dcreate(h_grp, "CentreOfMass", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* Shrinking sphere centre (use vector space) */
+        h_data = H5Dcreate(h_grp, "ShrinkingSphereCentre", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* Total mass (use scalar space) */
+        h_data = H5Dcreate(h_grp, "Mass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* Numbers of particles (use scalar space) */
+        h_data = H5Dcreate(h_grp, "ParticleNumber", H5T_NATIVE_INT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* Halo radius (use scalar space) */
+        h_data = H5Dcreate(h_grp, "Radius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* The following properties are only for SO halos */
+        if (t == 1) {
+            /* Radius enclosing the innermost particles that determine the CoM for SO halos (use scalar space) */
+            h_data = H5Dcreate(h_grp, "InnerRadius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Centre of Mass velocities (use vector space) */
+            h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Shrinking sphere centre velocity (use vector space) */
+            h_data = H5Dcreate(h_grp, "ShrinkingSphereVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Dark matter centres of mass (use vector space) */
+            h_data = H5Dcreate(h_grp, "DarkMatterCentreOfMass", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Dark matter centre of mass velocities (use vector space) */
+            h_data = H5Dcreate(h_grp, "DarkMatterCentreOfMassVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Total dark matter mass (use scalar space) */
+            h_data = H5Dcreate(h_grp, "DarkMatterMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Total neutrino mass (use scalar space) */
+            h_data = H5Dcreate(h_grp, "NeutrinoMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Total particle mass (use scalar space) */
+            h_data = H5Dcreate(h_grp, "TotalParticleMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
+            H5Dclose(h_data);
+        }
+
+        /* Close the group */
+        H5Gclose(h_grp);
+    }
+
+    /* Close property lists */
+    H5Pclose(h_prop_pos);
+    H5Pclose(h_prop_vel);
+    H5Pclose(h_prop_mass);
+    H5Pclose(h_prop_radius);
+
     /* Determine the number of structures on each rank */
     long long int *halonum_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
     long long int *first_id_by_rank = calloc(MPI_Rank_Count, sizeof(long long int));
@@ -414,12 +399,12 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
 
     /* Unpack the halo data into contiguous arrays */
-    long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
+    long long int *ids = malloc(1 * local_num_structures * sizeof(long long int));
     float *coms = malloc(3 * local_num_structures * sizeof(float));
     float *coms_inner = malloc(3 * local_num_structures * sizeof(float));
     float *masses = malloc(1 * local_num_structures * sizeof(float));
     float *radii = malloc(1 * local_num_structures * sizeof(float));
-    int *nparts = malloc(3 * local_num_structures * sizeof(int));
+    int *nparts = malloc(1 * local_num_structures * sizeof(int));
     for (long long i = 0; i < local_num_structures; i++) {
         struct fof_halo *h = &fofs[i];
         /* Unpack the particle IDs */
@@ -440,14 +425,14 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     }
 
     /* Open the particle group in the output file */
-    hid_t h_grp = H5Gopen(h_out_file, ExportNames[0], H5P_DEFAULT);
+    h_grp = H5Gopen(h_out_file, ExportNames[0], H5P_DEFAULT);
 
     /* Property list for collective MPI write */
     hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
     H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
 
     /* Write halo id data (scalar) */
-    hid_t h_data = H5Dopen(h_grp, "ID", H5P_DEFAULT);
+    h_data = H5Dopen(h_grp, "ID", H5P_DEFAULT);
     H5Dwrite(h_data, H5T_NATIVE_LLONG, h_ch_sspace, h_sspace, prop_write, ids);
     H5Dclose(h_data);
     free(ids);
@@ -458,11 +443,11 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Dclose(h_data);
     free(coms);
 
-    /* Write mass data (scalar) */
-    h_data = H5Dopen(h_grp, "Mass", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_sspace, h_sspace, prop_write, masses);
+    /* Write centre of mass data (vector) */
+    h_data = H5Dopen(h_grp, "ShrinkingSphereCentre", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_vspace, h_vspace, prop_write, coms_inner);
     H5Dclose(h_data);
-    free(masses);
+    free(coms_inner);
 
     /* Write particle number data (scalar) */
     h_data = H5Dopen(h_grp, "ParticleNumber", H5P_DEFAULT);
@@ -476,11 +461,11 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Dclose(h_data);
     free(radii);
 
-    /* Write centre of mass data (vector) */
-    h_data = H5Dopen(h_grp, "ShrinkingSphereCentre", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_vspace, h_vspace, prop_write, coms_inner);
+    /* Write mass data (scalar) */
+    h_data = H5Dopen(h_grp, "Mass", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_sspace, h_sspace, prop_write, masses);
     H5Dclose(h_data);
-    free(coms_inner);
+    free(masses);
 
     /* Close the property list and group */
     H5Pclose(prop_write);
@@ -568,7 +553,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
 
     /* Unpack the halo data into contiguous arrays */
-    long long int *ids = malloc(3 * local_num_structures * sizeof(long long int));
+    long long int *ids = malloc(1 * local_num_structures * sizeof(long long int));
     float *coms = malloc(3 * local_num_structures * sizeof(float));
     float *coms_inner = malloc(3 * local_num_structures * sizeof(float));
     float *coms_dm = malloc(3 * local_num_structures * sizeof(float));
@@ -581,7 +566,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     float *masses_tot = malloc(1 * local_num_structures * sizeof(float));
     float *radii = malloc(1 * local_num_structures * sizeof(float));
     float *inner_radii = malloc(1 * local_num_structures * sizeof(float));
-    int *nparts = malloc(3 * local_num_structures * sizeof(int));
+    int *nparts = malloc(1 * local_num_structures * sizeof(int));
     for (long long i = 0; i < local_num_structures; i++) {
         struct so_halo *h = &so_halos[i];
         /* Unpack the particle IDs */
