@@ -334,6 +334,18 @@ int exportCatalogue(const struct params *pars, const struct units *us,
             h_data = H5Dcreate(h_grp, "InnerRadius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
             H5Dclose(h_data);
 
+            /* Radius enclosing half the mass of the halo (use scalar space) */
+            h_data = H5Dcreate(h_grp, "HalfMassRadius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Maximum circular velocity (use scalar space) */
+            h_data = H5Dcreate(h_grp, "MaximumCircularVelocity", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Radius at maximum circular velocity (use scalar space) */
+            h_data = H5Dcreate(h_grp, "MaximumCircularVelocityRadius", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_radius, H5P_DEFAULT);
+            H5Dclose(h_data);
+
             /* Centre of Mass velocities (use vector space) */
             h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
             H5Dclose(h_data);
@@ -566,6 +578,9 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     float *masses_tot = malloc(1 * local_num_structures * sizeof(float));
     float *radii = malloc(1 * local_num_structures * sizeof(float));
     float *inner_radii = malloc(1 * local_num_structures * sizeof(float));
+    float *half_mass_radii = malloc(1 * local_num_structures * sizeof(float));
+    float *vmax_radii = malloc(1 * local_num_structures * sizeof(float));
+    float *vmaxs = malloc(1 * local_num_structures * sizeof(float));
     int *nparts = malloc(1 * local_num_structures * sizeof(int));
     for (long long i = 0; i < local_num_structures; i++) {
         struct so_halo *h = &so_halos[i];
@@ -595,13 +610,16 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         vels_dm[i * 3 + 0] = h->v_com_dm[0];
         vels_dm[i * 3 + 1] = h->v_com_dm[1];
         vels_dm[i * 3 + 2] = h->v_com_dm[2];
-        /* Unpack the SO masses and radii */
+        /* Unpack the SO masses and radii and maximum circular velocities */
         masses[i] = h->M_SO;
         masses_dm[i] = h->mass_dm;
         masses_nu[i] = h->mass_nu;
         masses_tot[i] = h->mass_tot;
         radii[i] = h->R_SO;
         inner_radii[i] = h->R_inner;
+        half_mass_radii[i] = h->R_half_mass;
+        vmax_radii[i] = h->R_v_max;
+        vmaxs[i] = h->v_max;
         /* Unpack the particle numbers */
         nparts[i] = h->npart_tot;
     }
@@ -690,6 +708,24 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_sspace, h_sspace, prop_write, inner_radii);
     H5Dclose(h_data);
     free(inner_radii);
+
+    /* Write half mass radius data (scalar) */
+    h_data = H5Dopen(h_grp, "HalfMassRadius", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_sspace, h_sspace, prop_write, half_mass_radii);
+    H5Dclose(h_data);
+    free(half_mass_radii);
+
+    /* Write maximum circular velocity radius data (scalar) */
+    h_data = H5Dopen(h_grp, "MaximumCircularVelocityRadius", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_sspace, h_sspace, prop_write, vmax_radii);
+    H5Dclose(h_data);
+    free(vmax_radii);
+
+    /* Write maximum circular velocity data (scalar) */
+    h_data = H5Dopen(h_grp, "MaximumCircularVelocity", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_sspace, h_sspace, prop_write, vmaxs);
+    H5Dclose(h_data);
+    free(vmaxs);
 
     /* Write particle number data (scalar) */
     h_data = H5Dopen(h_grp, "ParticleNumber", H5P_DEFAULT);

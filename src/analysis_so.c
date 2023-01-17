@@ -1171,6 +1171,51 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             }
         }
 
+        /* Determine the maximum circular velocity */
+        double m_over_r_max = 0.;
+        double R_v_max = 0.;
+        for (long int j = 0; j < nearby_partnum; j++) {
+            if (so_parts[j].r > 0) {
+                /* The circular velocity squared (module a factor G) */
+                double m_over_r = so_parts[j].m / so_parts[j].r;
+
+                if (m_over_r > m_over_r_max) {
+                    m_over_r_max = m_over_r;
+                    R_v_max = so_parts[j].r;
+                }
+            }
+        }
+
+        /* The maximum circular velocity and the corresponding radius */
+        halos[i].v_max = sqrt(m_over_r_max * pcs->GravityG);
+        halos[i].R_v_max = R_v_max;
+
+        /* Determine the half-mass radius */
+        int first_above_half = -1;
+        for (long int j = first_nonzero; j < nearby_partnum; j++) {
+            /* Skip particles at zero radial distance */
+            if (so_parts[j].r == 0) continue;
+
+            if (so_parts[j].m >= halos[i].M_SO * 0.5) {
+                first_above_half = j;
+                break;
+            }
+        }
+
+        if (first_above_half > 0) {
+            /* We have found an interval containing the half-mass radius */
+            double delta_m = so_parts[first_above_half].m - so_parts[first_above_half - 1].m;
+            double delta_r = so_parts[first_above_half].r - so_parts[first_above_half - 1].r;
+
+            /* If there is no gradient, then use midpoint (TODO: not ideal) */
+            if (delta_m == 0) {
+                halos[i].R_half_mass = so_parts[first_above_half - 1].r + 0.5 * delta_r;
+            } else {
+                /* Linearly interpolate to find the half-mass radius */
+                halos[i].R_half_mass = so_parts[first_above_half - 1].r + (halos[i].M_SO * 0.5 - so_parts[first_above_half - 1].m) * delta_r / delta_m;
+            }
+        }
+
         /* The square of the SO radius */
         double R_SO_2 = halos[i].R_SO * halos[i].R_SO;
 
