@@ -491,44 +491,54 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
     const double fac = (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann) / pcs->ElectronVolt;
 
     /* Position factors */
+    const double grid_fac = boxlen / N_nupart;
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
 
     /* Generate neutrinos */
-    for (long long i = 0; i < local_neutrino_num; i++) {
-        struct particle *part = &parts[particle_offset + i];
-        long int seed_and_id = local_cdm_num + i;
+    for (int i = X0_nupart; i < X0_nupart + NX_nupart; i++) {
+        for (int j = 0; j < N_nupart; j++) {
+            for (int k = 0; k < N_nupart; k++) {
+                struct particle *part = &parts[particle_offset + (i - X0_nupart) * N_nupart * N_nupart + j * N_nupart + k];
+                long int seed_and_id = local_cdm_num + (long long int) i * N_nupart * N_nupart + j * N_nupart + k;
 #ifdef WITH_PARTICLE_IDS
-        part->id = seed_and_id;
+                part->id = seed_and_id;
 #endif
 
         /* Neutrino */
 #ifdef WITH_PARTTYPE
-        part->type = 6;
+                part->type = 6;
 
-        /* Initially the weight is zero */
-        part->w = 0.;
+                /* Initially the weight is zero */
+                part->w = 0.;
 #endif
 
-        /* Sample a position uniformly in the box (on this rank) */
-        part->x[0] = pos_to_int_fac * (sampleUniform(state) * NX_nupart + X0_nupart) * boxlen / N_nupart;
-        part->x[1] = pos_to_int_fac * sampleUniform(state) * boxlen;
-        part->x[2] = pos_to_int_fac * sampleUniform(state) * boxlen;
+                /* Regular grid positions (offset from the corner) */
+                double x[3] = {i + 0.5,
+                               j + 0.5,
+                               k + 0.5};
 
-        /* Sample a neutrino species */
-        int species = (int)(seed_and_id % cosmo->N_nu);
-        double m_eV = cosmo->M_nu[species];
+                /* Convert to integer positions */
+                part->x[0] = x[0] * grid_fac * pos_to_int_fac;
+                part->x[1] = x[1] * grid_fac * pos_to_int_fac;
+                part->x[2] = x[2] * grid_fac * pos_to_int_fac;
+
+                /* Sample a neutrino species */
+                int species = (int)(seed_and_id % cosmo->N_nu);
+                double m_eV = cosmo->M_nu[species];
 #ifdef WITH_MASSES
-        part->m = Omega_nu_0[species] * base_part_mass;
+                part->m = Omega_nu_0[species] * base_part_mass;
 #endif
 
-        /* Sample a deterministic Fermi-Dirac momentum */
-        double n[3];
-        double p = neutrino_seed_to_fermi_dirac(seed_and_id) * fac / m_eV;
-        neutrino_seed_to_direction(seed_and_id, n);
+                /* Sample a deterministic Fermi-Dirac momentum */
+                double n[3];
+                double p = neutrino_seed_to_fermi_dirac(seed_and_id) * fac / m_eV;
+                neutrino_seed_to_direction(seed_and_id, n);
 
-        part->v[0] = p * n[0];
-        part->v[1] = p * n[1];
-        part->v[2] = p * n[2];
+                part->v[0] = p * n[0];
+                part->v[1] = p * n[1];
+                part->v[2] = p * n[2];
+            }
+        }
     }
 
     /* Clean up strooklat interpolation splines */
