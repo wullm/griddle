@@ -29,7 +29,7 @@
 
 const char *grid_type_names[num_grid_types] = {"all", "cb", "nu"};
 
-int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
+int mass_deposition(struct distributed_grid *dgrid, particle_data *parts,
                     long long int local_partnum, enum grid_type gtype) {
 
     const long int N = dgrid->N;
@@ -53,16 +53,20 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     }
 
     for (long long i = 0; i < local_partnum; i++) {
-        struct particle *part = &parts[i];
+        particle_data *p = &parts[i];
 
 #ifdef WITH_PARTTYPE
         if (gtype == cb_mass && part->type != 1) continue;
         else if (gtype == nu_mass && part->type != 6) continue;
 #endif
 
-        double X = part->x[0] * int_to_grid_fac;
-        double Y = part->x[1] * int_to_grid_fac;
-        double Z = part->x[2] * int_to_grid_fac;
+        /* Fetch integer positions */
+        IntPosType ix[3];
+        unpack_particle_position(p, ix);
+
+        double X = ix[0] * int_to_grid_fac;
+        double Y = ix[1] * int_to_grid_fac;
+        double Z = ix[2] * int_to_grid_fac;
 
 #ifdef WITH_MASSES
         double M = part->m * cell_factor_3;

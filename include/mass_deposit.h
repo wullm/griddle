@@ -34,7 +34,7 @@ enum grid_type {
 
 extern const char *grid_type_names[num_grid_types];
 
-int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
+int mass_deposition(struct distributed_grid *dgrid, particle_data *parts,
                     long long int local_partnum, enum grid_type gtype);
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs, FourierPlanType r2c,

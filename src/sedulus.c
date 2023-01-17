@@ -63,6 +63,7 @@ int main(int argc, char *argv[]) {
         message(rank, "%s\n", GIT_STATUS);
         message(rank, "\n");
         message(rank, "sizeof(struct particle) = %d\n", sizeof(struct particle));
+        message(rank, "sizeof(particle_data) = %d\n", sizeof(particle_data));
         message(rank, "sizeof(GridFloatType) = %d\n", sizeof(GridFloatType));
         message(rank, "sizeof(GridComplexType) = %d\n", sizeof(GridComplexType));
         message(rank, "\n");
@@ -191,7 +192,7 @@ int main(int argc, char *argv[]) {
     long long local_cdm_num = NX * N * N;
     long long local_firstpart = X0 * N * N;
     long long max_partnum = local_cdm_num + local_neutrino_num + foreign_buffer;
-    struct particle *particles = malloc(max_partnum * sizeof(struct particle));
+    particle_data *particles = malloc(max_partnum * sizeof(particle_data));
 
     /* The current number of particles */
     long long local_partnum = 0;
@@ -373,11 +374,12 @@ int main(int argc, char *argv[]) {
         double weights_sq_sum_local = 0.;
 
         for (long long i = 0; i < local_partnum; i++) {
-            struct particle *p = &particles[i];
-            if (p->type == 6) {
-                neutrino_count_local++;
-                weights_sq_sum_local += p->w * p->w;
-            }
+            // TODO
+            // struct particle *p = &particles[i];
+            // if (p->type == 6) {
+            //     neutrino_count_local++;
+            //     weights_sq_sum_local += p->w * p->w;
+            // }
         }
 
         /* Collect neutrino weight information from all ranks */
@@ -475,7 +477,7 @@ int main(int argc, char *argv[]) {
 
         /* Run the halo finder */
         const double linking_length = pars.LinkingLength * boxlen / N;
-        analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars, &ctabs,  /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
+        // analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars, &ctabs,  /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
 
         /* Timer */
         MPI_Barrier(MPI_COMM_WORLD);
@@ -593,12 +595,16 @@ int main(int argc, char *argv[]) {
 
         /* Integrate the particles */
         for (long long i = 0; i < local_partnum; i++) {
-            struct particle *p = &particles[i];
+            particle_data *p = &particles[i];
+
+            /* Fetch integer positions */
+            IntPosType ix[3];
+            unpack_particle_position(p, ix);
 
             /* Convert integer positions to floating points on [0, M] */
-            double x[3] = {p->x[0] * int_to_grid_fac,
-                           p->x[1] * int_to_grid_fac,
-                           p->x[2] * int_to_grid_fac};
+            double x[3] = {ix[0] * int_to_grid_fac,
+                           ix[1] * int_to_grid_fac,
+                           ix[2] * int_to_grid_fac};
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
@@ -624,23 +630,31 @@ int main(int argc, char *argv[]) {
             p->a[2] = acc[2];
 #endif
 
+            /* Unpack integer velocities */
+            IntVelType iv[3];
+            unpack_particle_velocity(p, iv);
+
             /* Execute kick */
-            FloatVelType v[3] = {p->v[0] * int_to_vel_fac + acc[0] * kick_dtau,
-                                 p->v[1] * int_to_vel_fac + acc[1] * kick_dtau,
-                                 p->v[2] * int_to_vel_fac + acc[2] * kick_dtau};
+            FloatVelType v[3] = {iv[0] * int_to_vel_fac - 0.5 * max_vel + acc[0] * kick_dtau,
+                                 iv[1] * int_to_vel_fac - 0.5 * max_vel + acc[1] * kick_dtau,
+                                 iv[2] * int_to_vel_fac - 0.5 * max_vel + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
             const double rel_drift = relativistic_drift(v, p, &pcs, a);
 
             /* Execute drift */
-            p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
+            ix[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
+            ix[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
+            ix[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
 
             /* Update velocities */
-            p->v[0] = v[0] * vel_to_int_fac;
-            p->v[1] = v[1] * vel_to_int_fac;
-            p->v[2] = v[2] * vel_to_int_fac;
+            iv[0] = (v[0] + 0.5 * max_vel) * vel_to_int_fac;
+            iv[1] = (v[1] + 0.5 * max_vel) * vel_to_int_fac;
+            iv[2] = (v[2] + 0.5 * max_vel) * vel_to_int_fac;
+            
+            /* Repack particle data */
+            pack_particle_position(p, ix);
+            pack_particle_velocity(p, iv);
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
@@ -820,7 +834,7 @@ int main(int argc, char *argv[]) {
 
                 /* Run the halo finder */
                 const double linking_length = pars.LinkingLength * boxlen / N;
-                analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars, &ctabs, halos_kick_dtau, halos_drift_dtau);
+                // analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars, &ctabs, halos_kick_dtau, halos_drift_dtau);
 
                 /* Timer */
                 MPI_Barrier(MPI_COMM_WORLD);

@@ -24,12 +24,13 @@
 #include <mpi.h>
 
 #define SINGLE_PRECISION_IDS
-#define HALF_PRECISION_POSITIONS
-#define HALF_PRECISION_VELOCITIES
+#define SINGLE_PRECISION_POSITIONS
+#define SINGLE_PRECISION_VELOCITIES
 // #define WITH_ACCELERATIONS
 // #define WITH_MASSES
 // #define WITH_PARTICLE_IDS
 // #define WITH_PARTTYPE
+// #define WITH_SEEDS
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
@@ -58,21 +59,21 @@ typedef uint64_t IntPosType;
 #if defined(HALF_PRECISION_VELOCITIES)
 #define VELOCITY_BITS 16
 #define MPI_FLOATVEL_TYPE MPI_FLOAT
-#define MPI_INTVEL_TYPE MPI_INT16_T
+#define MPI_INTVEL_TYPE MPI_UINT16_T
 typedef float FloatVelType;
-typedef int16_t IntVelType;
+typedef uint16_t IntVelType;
 #elif defined(SINGLE_PRECISION_VELOCITIES)
 #define VELOCITY_BITS 32
 #define MPI_FLOATVEL_TYPE MPI_FLOAT
-#define MPI_INTVEL_TYPE MPI_INT32_T
+#define MPI_INTVEL_TYPE MPI_UINT32_T
 typedef float FloatVelType;
-typedef int32_t IntVelType;
+typedef uint32_t IntVelType;
 #else
 #define VELOCITY_BITS 64
 #define MPI_FLOATVEL_TYPE MPI_DOUBLE
-#define MPI_INTVEL_TYPE MPI_INT64_T
+#define MPI_INTVEL_TYPE MPI_UINT64_T
 typedef double FloatVelType;
-typedef int64_t IntVelType;
+typedef uint64_t IntVelType;
 #endif
 
 struct particle {
@@ -105,8 +106,53 @@ struct particle {
 #endif
 };
 
-static inline MPI_Datatype mpi_particle_type() {
+/* Use memory-efficient packing of particle data */
+// #define WITH_PARTICLE_PACKING
+#ifdef WITH_PARTICLE_PACKING
+#include "particle_packing.h"
+#else
 
+typedef struct particle particle_data;
+// typedef struct particle particle;
+
+static inline IntPosType unpack_particle_xpos(particle_data *p) {
+    return p->x[0];
+}
+
+static inline IntPosType unpack_particle_ypos(particle_data *p) {
+    return p->x[1];
+}
+
+static inline IntPosType unpack_particle_zpos(particle_data *p) {
+    return p->x[2];
+}
+
+static inline void unpack_particle_position(particle_data *p, IntPosType x[3]) {
+    x[0] = p->x[0];
+    x[1] = p->x[1];
+    x[2] = p->x[2];
+}
+
+static inline void pack_particle_position(particle_data *p, IntPosType x[3]) {
+    p->x[0] = x[0];
+    p->x[1] = x[1];
+    p->x[2] = x[2];
+}
+
+static inline void unpack_particle_velocity(particle_data *p, IntVelType v[3]) {
+    v[0] = p->x[0];
+    v[1] = p->x[1];
+    v[2] = p->x[2];
+}
+
+static inline void pack_particle_velocity(particle_data *p, IntVelType v[3]) {
+    p->v[0] = v[0];
+    p->v[1] = v[1];
+    p->v[2] = v[2];
+}
+
+static inline MPI_Datatype mpi_particle_type() {
+ 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
     MPI_Datatype types[7] = {MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_INTVEL_TYPE,
@@ -114,7 +160,7 @@ static inline MPI_Datatype mpi_particle_type() {
     int lengths[7];
     MPI_Aint displacements[7];
     MPI_Aint base_address;
-    struct particle temp;
+    particle_data temp;
     MPI_Get_address(&temp, &base_address);
 
 #ifdef WITH_PARTICLE_IDS
@@ -180,6 +226,8 @@ static inline MPI_Datatype mpi_particle_type() {
 
     return particle_type;
 }
+
+#endif
 
 // static inline int particleSort(const void *a, const void *b) {
 //     struct particle *pa = (struct particle*) a;

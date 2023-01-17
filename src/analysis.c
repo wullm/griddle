@@ -22,7 +22,7 @@
 #include "../include/analysis.h"
 #include "../include/relativity.h"
 
-IntPosType position_checksum(const struct particle *parts, long int local_partnum) {
+IntPosType position_checksum(particle_data *parts, long int local_partnum) {
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -32,10 +32,15 @@ IntPosType position_checksum(const struct particle *parts, long int local_partnu
     IntPosType checksum_local = 0;
 
     for (long long i = 0; i < local_partnum; i++) {
-        const struct particle *p = &parts[i];
-        checksum_local += p->x[0];
-        checksum_local += p->x[1];
-        checksum_local += p->x[2];
+        particle_data *p = &parts[i];
+        
+        /* Fetch integer positions */
+        IntPosType ix[3];
+        unpack_particle_position(p, ix);
+        
+        checksum_local += ix[0];
+        checksum_local += ix[1];
+        checksum_local += ix[2];
     }
 
     IntPosType checksum_global = 0;
@@ -45,26 +50,37 @@ IntPosType position_checksum(const struct particle *parts, long int local_partnu
     return checksum_global;
 }
 
-int drift_particles(struct particle *parts, long int local_partnum,
+int drift_particles(particle_data *parts, long int local_partnum,
                     double a, double drift_dtau, double pos_to_int_fac,
                     double int_to_vel_fac, const struct physical_consts *pcs) {
 
     /* Drift the particles to the correct time */
     for (long long i = 0; i < local_partnum; i++) {
-        struct particle *p = &parts[i];
+        particle_data *p = &parts[i];
+        
+        /* Fetch integer positions */
+        IntPosType ix[3];
+        unpack_particle_position(p, ix);
+        
+        /* Unpack integer velocities */
+        IntVelType iv[3];
+        unpack_particle_velocity(p, iv);
 
         /* Convert integer velocities to physical velocities */
-        FloatVelType v[3] = {p->v[0] * int_to_vel_fac,
-                             p->v[1] * int_to_vel_fac,
-                             p->v[2] * int_to_vel_fac};
+        FloatVelType v[3] = {iv[0] * int_to_vel_fac,
+                             iv[1] * int_to_vel_fac,
+                             iv[2] * int_to_vel_fac};
 
         /* Relativistic drift correction */
         const double rel_drift = relativistic_drift(v, p, pcs, a);
 
         /* Execute drift */
-        p->x[0] += (IntPosType) (v[0] * drift_dtau * rel_drift * pos_to_int_fac);
-        p->x[1] += (IntPosType) (v[1] * drift_dtau * rel_drift * pos_to_int_fac);
-        p->x[2] += (IntPosType) (v[2] * drift_dtau * rel_drift * pos_to_int_fac);
+        ix[0] += (IntPosType) (v[0] * drift_dtau * rel_drift * pos_to_int_fac);
+        ix[1] += (IntPosType) (v[1] * drift_dtau * rel_drift * pos_to_int_fac);
+        ix[2] += (IntPosType) (v[2] * drift_dtau * rel_drift * pos_to_int_fac);
+        
+        /* Repack particle positions */
+        pack_particle_position(p, ix);
     }                        
     return 0;                        
 }
@@ -72,7 +88,7 @@ int drift_particles(struct particle *parts, long int local_partnum,
 /* Computing neutrino particle weights using kicked velocities, without
  * actually changing the velocities to prevent round-off errors and maintain
  * reversibility */
-int kick_weights_only(struct particle *parts, long int local_partnum,
+int kick_weights_only(particle_data *parts, long int local_partnum,
                       double a, double kick_dtau, double neutrino_qfac,
                       const struct cosmology *cosmo,
                       const struct physical_consts *pcs) {
@@ -80,7 +96,7 @@ int kick_weights_only(struct particle *parts, long int local_partnum,
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS) && defined(WITH_ACCELERATIONS)
     /* Drift the particles to the correct time */
     for (long long i = 0; i < local_partnum; i++) {
-        struct particle *p = &parts[i];
+        particle_data *p = &parts[i];
 
         if (p->type == 6) {
             /* Compute the kicked velocity (without changing p->v) */

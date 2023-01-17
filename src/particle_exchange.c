@@ -30,7 +30,7 @@
 #include "../include/particle_exchange.h"
 #include "../include/message.h"
 
-// #define DEBUG_CHECKS
+#define DEBUG_CHECKS
 
 /* Determine the direction in which a particle should be exchanged with
  * neighbouring ranks (left, no move, right) < == > (-1, 0, 1) */
@@ -48,7 +48,7 @@ static inline int exchange_dir(IntPosType x0, double int_to_rank_fac, int rank,
 }
 
 /* Exchange particles between MPI ranks (Ng = N_grid != N_particle) */
-int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
+int exchange_particles(particle_data *parts, double boxlen, long long int Ng,
                        long long int *num_localpart, long long int max_partnum,
                        int exchange_iteration, long long int received_left,
                        long long int received_right, long long int num_send_left,
@@ -92,10 +92,11 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         num_send_right = 0;
 
         for (long long i = 0; i < *num_localpart; i++) {
-            struct particle *p = &parts[i];
-
+            particle_data *p = &parts[i];
+            IntPosType x = unpack_particle_xpos(p);
+            
             /* Decide whether the particle should be sent left or right */
-            int exdir = exchange_dir(p->x[0], int_to_rank_fac, rank, MPI_Rank_Half);
+            int exdir = exchange_dir(x, int_to_rank_fac, rank, MPI_Rank_Half);
             if (exdir == -1) {
                 num_send_left++;
             } else if (exdir == 1) {
@@ -105,8 +106,8 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
 
         if (num_send_left > 0 || num_send_right > 0) {
             /* Allocate temporary arrays for particle sort */
-            struct particle *temp_left = malloc(num_send_left * sizeof(struct particle));
-            struct particle *temp_right = malloc(num_send_right * sizeof(struct particle));
+            particle_data *temp_left = malloc(num_send_left * sizeof(particle_data));
+            particle_data *temp_right = malloc(num_send_right * sizeof(particle_data));
 
             /* Sort the particles into buckets: left, centre, right */
             long int i_left = 0;
@@ -114,24 +115,26 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             long int i_rest = 0;
 
             for (long long i = 0; i < *num_localpart; i++) {
-                struct particle *p = &parts[i];
-                int exdir = exchange_dir(p->x[0], int_to_rank_fac, rank, MPI_Rank_Half);
+                particle_data *p = &parts[i];
+                IntPosType x = unpack_particle_xpos(p);
+                
+                int exdir = exchange_dir(x, int_to_rank_fac, rank, MPI_Rank_Half);
                 if (exdir == -1) {
-                    memcpy(temp_left + i_left, parts + i, sizeof(struct particle));
+                    memcpy(temp_left + i_left, parts + i, sizeof(particle_data));
                     i_left++;
                 } if (exdir == 0) {
-                    memcpy(parts + i_rest, parts + i, sizeof(struct particle));
+                    memcpy(parts + i_rest, parts + i, sizeof(particle_data));
                     i_rest++;
                 } else if (exdir == 1) {
-                    memcpy(temp_right + i_right, parts + i, sizeof(struct particle));
+                    memcpy(temp_right + i_right, parts + i, sizeof(particle_data));
                     i_right++;
                 }
             }
 
             /* Move the particles into the main array (memmove because of overlap) */
-            memmove(parts + num_send_left, parts, (*num_localpart - num_send_right - num_send_left) * sizeof(struct particle));
-            memcpy(parts, temp_left, num_send_left * sizeof(struct particle));
-            memcpy(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(struct particle));
+            memmove(parts + num_send_left, parts, (*num_localpart - num_send_right - num_send_left) * sizeof(particle_data));
+            memcpy(parts, temp_left, num_send_left * sizeof(particle_data));
+            memcpy(parts + (*num_localpart - num_send_right), temp_right, num_send_right * sizeof(particle_data));
 
             /* Free the temporary arrays */
             free(temp_left);
@@ -142,14 +145,18 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
         /* It should all be sorted */
         for (long long i = 1; i < *num_localpart; i++) {
             // assert (parts[i].exchange_dir >= parts[i-1].exchange_dir);
-            int exdir_a = exchange_dir(parts[i-1].x[0], int_to_rank_fac, rank, MPI_Rank_Half);
-            int exdir_b = exchange_dir(parts[i].x[0], int_to_rank_fac, rank, MPI_Rank_Half);
+            
+            IntPosType xa = unpack_particle_xpos(&parts[i-1]);
+            IntPosType xb = unpack_particle_xpos(&parts[i]);
+            
+            int exdir_a = exchange_dir(xa, int_to_rank_fac, rank, MPI_Rank_Half);
+            int exdir_b = exchange_dir(xb, int_to_rank_fac, rank, MPI_Rank_Half);
             assert(exdir_b >= exdir_a);
         }
 #endif
 
         // if (num_send_left + num_send_right > 0) {
-        //     qsort(parts, *num_localpart, sizeof(struct particle), particleSort);
+        //     qsort(parts, *num_localpart, sizeof(particle_data), particleSort);
         // }
     }
 
@@ -160,8 +167,8 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     // printf("Sending %lld right, starting from %lld (%d) and %lld left, starting from %lld, and we have %lld foreigns\n", num_send_right, first_send_right, rank, num_send_left, first_send_left, foreign_particles);
 
     /* Arrays and counts of received particles */
-    struct particle *receive_parts_right = NULL;
-    struct particle *receive_parts_left = NULL;
+    particle_data *receive_parts_right = NULL;
+    particle_data *receive_parts_left = NULL;
     int receive_from_left = 0;
     int receive_from_right = 0;
 
@@ -183,7 +190,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             MPI_Iprobe(rank_left, 0, MPI_COMM_WORLD, &ready_left, &status_left);
             if (ready_left) {
                 MPI_Get_count(&status_left, particle_type, &receive_from_left);
-                receive_parts_left = malloc(receive_from_left * sizeof(struct particle));
+                receive_parts_left = malloc(receive_from_left * sizeof(particle_data));
                 MPI_Recv(receive_parts_left, receive_from_left, particle_type,
                          rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 finished_left = 1;
@@ -197,7 +204,7 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
             MPI_Iprobe(rank_right, 0, MPI_COMM_WORLD, &ready_right, &status_right);
             if (ready_right) {
                 MPI_Get_count(&status_right, particle_type, &receive_from_right);
-                receive_parts_right = malloc(receive_from_right * sizeof(struct particle));
+                receive_parts_right = malloc(receive_from_right * sizeof(particle_data));
                 MPI_Recv(receive_parts_right, receive_from_right, particle_type,
                          rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 finished_right = 1;
@@ -210,9 +217,10 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /* For the received particles, determine whether they should be moved on */
     long long int remaining_foreign_parts_right = 0;
     for (long long i = 0; i < receive_from_right; i++) {
-        struct particle *p = &receive_parts_right[i];
+        particle_data *p = &receive_parts_right[i];
+        IntPosType x = unpack_particle_xpos(p);
 
-        int home_rank = p->x[0] * int_to_rank_fac;
+        int home_rank = x * int_to_rank_fac;
         if (home_rank != rank) {
             remaining_foreign_parts_right++;
         }
@@ -221,9 +229,10 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /* For the received particles, determine whether they should be moved on */
     long long int remaining_foreign_parts_left = 0;
     for (long long i = 0; i < receive_from_left; i++) {
-        struct particle *p = &receive_parts_left[i];
+        particle_data *p = &receive_parts_left[i];
+        IntPosType x = unpack_particle_xpos(p);
 
-        int home_rank = p->x[0] * int_to_rank_fac;
+        int home_rank = x * int_to_rank_fac;
         if (home_rank != rank) {
             remaining_foreign_parts_left++;
         }
@@ -234,69 +243,71 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /* Just sort the received particles received from the left */
     if (receive_from_left > 0 && remaining_foreign_parts_left > 0) {
         /* Allocate temporary arrays */
-        struct particle *temp_right = malloc(remaining_foreign_parts_left * sizeof(struct particle));
-        struct particle *temp_rest = malloc((receive_from_left - remaining_foreign_parts_left) * sizeof(struct particle));
+        particle_data *temp_right = malloc(remaining_foreign_parts_left * sizeof(particle_data));
+        particle_data *temp_rest = malloc((receive_from_left - remaining_foreign_parts_left) * sizeof(particle_data));
 
         /* Sort the particles into buckets: centre, right (left not possible) */
         long int i_right = 0;
         long int i_rest = 0;
 
         for (long long i = 0; i < receive_from_left; i++) {
-            struct particle *p = &receive_parts_left[i];
+            particle_data *p = &receive_parts_left[i];
+            IntPosType x = unpack_particle_xpos(p);
 
-            int home_rank = p->x[0] * int_to_rank_fac;
+            int home_rank = x * int_to_rank_fac;
             if (home_rank == rank) {
-                memcpy(temp_rest + i_rest, receive_parts_left + i, sizeof(struct particle));
+                memcpy(temp_rest + i_rest, receive_parts_left + i, sizeof(particle_data));
                 i_rest++;
             } else {
-                memcpy(temp_right + i_right, receive_parts_left + i, sizeof(struct particle));
+                memcpy(temp_right + i_right, receive_parts_left + i, sizeof(particle_data));
                 i_right++;
             }
         }
 
         /* Move the particles where they need to be in the main array */
-        memcpy(receive_parts_left, temp_rest, (receive_from_left - remaining_foreign_parts_left) * sizeof(struct particle));
-        memcpy(receive_parts_left + (receive_from_left - remaining_foreign_parts_left), temp_right, remaining_foreign_parts_left * sizeof(struct particle));
+        memcpy(receive_parts_left, temp_rest, (receive_from_left - remaining_foreign_parts_left) * sizeof(particle_data));
+        memcpy(receive_parts_left + (receive_from_left - remaining_foreign_parts_left), temp_right, remaining_foreign_parts_left * sizeof(particle_data));
 
         /* Free the temporary arrays */
         free(temp_rest);
         free(temp_right);
 
-        // qsort(receive_parts_left, receive_from_left, sizeof(struct particle), particleSort);
+        // qsort(receive_parts_left, receive_from_left, sizeof(particle_data), particleSort);
     }
 
     /* Just sort the received particles received from the right */
     if (receive_from_right > 0) {
         /* Allocate temporary arrays */
-        struct particle *temp_left = malloc(remaining_foreign_parts_right * sizeof(struct particle));
-        struct particle *temp_rest = malloc((receive_from_right - remaining_foreign_parts_right) * sizeof(struct particle));
+        particle_data *temp_left = malloc(remaining_foreign_parts_right * sizeof(particle_data));
+        particle_data *temp_rest = malloc((receive_from_right - remaining_foreign_parts_right) * sizeof(particle_data));
 
         /* Sort the particles into buckets: left, centre (right not possible) */
         long int i_left = 0;
         long int i_rest = 0;
 
         for (long long i = 0; i < receive_from_right; i++) {
-            struct particle *p = &receive_parts_right[i];
+            particle_data *p = &receive_parts_right[i];
+            IntPosType x = unpack_particle_xpos(p);
 
-            int home_rank = p->x[0] * int_to_rank_fac;
+            int home_rank = x * int_to_rank_fac;
             if (home_rank == rank) {
-                memcpy(temp_rest + i_rest, receive_parts_right + i, sizeof(struct particle));
+                memcpy(temp_rest + i_rest, receive_parts_right + i, sizeof(particle_data));
                 i_rest++;
             } else {
-                memcpy(temp_left + i_left, receive_parts_right + i, sizeof(struct particle));
+                memcpy(temp_left + i_left, receive_parts_right + i, sizeof(particle_data));
                 i_left++;
             }
         }
 
         /* Move the particles where they need to be in the main array */
-        memcpy(receive_parts_right, temp_left, remaining_foreign_parts_right * sizeof(struct particle));
-        memcpy(receive_parts_right + remaining_foreign_parts_right, temp_rest, (receive_from_right - remaining_foreign_parts_right) * sizeof(struct particle));
+        memcpy(receive_parts_right, temp_left, remaining_foreign_parts_right * sizeof(particle_data));
+        memcpy(receive_parts_right + remaining_foreign_parts_right, temp_rest, (receive_from_right - remaining_foreign_parts_right) * sizeof(particle_data));
 
         /* Free the temporary arrays */
         free(temp_left);
         free(temp_rest);
 
-        // qsort(receive_parts_right, receive_from_right, sizeof(struct particle), particleSort);
+        // qsort(receive_parts_right, receive_from_right, sizeof(particle_data), particleSort);
     }
 
     /* Make sure that we can accommodate the received particles */
@@ -313,14 +324,14 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /* Make space for particles on the left (use memmove because of overlap) */
     if (receive_from_right > 0 || num_send_left > 0)
         memmove(parts + receive_from_right, parts + num_send_left,
-                (*num_localpart - num_send_left) * sizeof(struct particle));
+                (*num_localpart - num_send_left) * sizeof(particle_data));
     /* Insert the particles received from the right on the left (to pass on) */
     if (receive_from_right > 0)
-        memcpy(parts, receive_parts_right, receive_from_right * sizeof(struct particle));
+        memcpy(parts, receive_parts_right, receive_from_right * sizeof(particle_data));
     /* Insert the particles received from the left on the right (to pass on) */
     if (receive_from_left > 0)
         memcpy(parts + *num_localpart - num_send_left - num_send_right + receive_from_right,
-               receive_parts_left, receive_from_left * sizeof(struct particle));
+               receive_parts_left, receive_from_left * sizeof(particle_data));
 
     /* Update the particle numbers */
     *num_localpart = *num_localpart + receive_from_left + receive_from_right - num_send_right - num_send_left;
@@ -329,8 +340,13 @@ int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
     /* It should all be sorted */
     for (long long i = 1; i < *num_localpart; i++) {
         // assert (parts[i].exchange_dir >= parts[i-1].exchange_dir);
-        int exdir_a = exchange_dir(parts[i-1].x[0], int_to_rank_fac, rank, MPI_Rank_Half);
-        int exdir_b = exchange_dir(parts[i].x[0], int_to_rank_fac, rank, MPI_Rank_Half);
+        IntPosType xa = unpack_particle_xpos(&parts[i-1]);
+        IntPosType xb = unpack_particle_xpos(&parts[i]);
+        int exdir_a = exchange_dir(xa, int_to_rank_fac, rank, MPI_Rank_Half);
+        int exdir_b = exchange_dir(xb, int_to_rank_fac, rank, MPI_Rank_Half);
+        if (!(exdir_b >= exdir_a)) {
+            printf("aha %u %u\n", xa, xb);
+        }
         assert(exdir_b >= exdir_a);
     }
 #endif

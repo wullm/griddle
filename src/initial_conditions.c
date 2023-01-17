@@ -348,7 +348,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                               struct distributed_grid *lpt_potential_2,
                               struct distributed_grid *velocity_potential,
                               struct perturb_data *ptdat,
-                              struct particle *parts, struct cosmology *cosmo,
+                              particle_data *parts, struct cosmology *cosmo,
                               struct units *us, struct physical_consts *pcs,
                               long long particle_offset, long long X0,
                               long long NX, double z_start,
@@ -405,15 +405,16 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
 
     /* Velocity conversion factors */
-    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS - 1) / max_vel;
+    const double vel_to_int_fac = pow(2.0, VELOCITY_BITS) / max_vel;
 
     /* Generate a particle lattice */
     for (int i = X0; i < X0 + NX; i++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
-                struct particle *part = &parts[particle_offset + (i - X0) * N * N + j * N + k];
+                particle_data *p = &parts[particle_offset + (i - X0) * N * N + j * N + k];
+                bzero(p, sizeof(particle_data));
 #ifdef WITH_PARTICLE_IDS
-                part->id = (long long int) i * N * N + j * N + k;
+                p->id = (long long int) i * N * N + j * N + k;
 #endif
 
                 /* Regular grid positions */
@@ -433,7 +434,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 
                 /* CDM */
 #ifdef WITH_PARTTYPE
-                part->type = 1;
+                p->type = 1;
 #endif
 
                 /* Add the displacements */
@@ -442,17 +443,27 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 x[2] = x[2] * grid_fac - (dx[2] + factor_2lpt * dx2[2]);
 
                 /* Convert positions to integers */
-                part->x[0] = pos_to_int_fac * x[0];
-                part->x[1] = pos_to_int_fac * x[1];
-                part->x[2] = pos_to_int_fac * x[2];
+                IntPosType ix[3];
+                ix[0] = pos_to_int_fac * x[0];
+                ix[1] = pos_to_int_fac * x[1];
+                ix[2] = pos_to_int_fac * x[2];
 
-                /* Set the velocities */
-                part->v[0] = a_start * (v[0] - vel_fact * factor_vel_2lpt * dx2[0]) * vel_to_int_fac;
-                part->v[1] = a_start * (v[1] - vel_fact * factor_vel_2lpt * dx2[1]) * vel_to_int_fac;
-                part->v[2] = a_start * (v[2] - vel_fact * factor_vel_2lpt * dx2[2]) * vel_to_int_fac;
+                /* Set the integer velocities */
+                IntVelType iv[3];
+                FloatVelType fv[3];
+                fv[0] = a_start * (v[0] - vel_fact * factor_vel_2lpt * dx2[0]);
+                fv[1] = a_start * (v[1] - vel_fact * factor_vel_2lpt * dx2[1]);
+                fv[2] = a_start * (v[2] - vel_fact * factor_vel_2lpt * dx2[2]);
+                iv[0] = (fv[0] + 0.5 * max_vel) * vel_to_int_fac;
+                iv[1] = (fv[1] + 0.5 * max_vel) * vel_to_int_fac;
+                iv[2] = (fv[2] + 0.5 * max_vel) * vel_to_int_fac;
+
+                /* Pack particle data */
+                pack_particle_position(p, ix);
+                pack_particle_velocity(p, iv);
 
 #ifdef WITH_MASSES
-                part->m = part_mass;
+                p->m = part_mass;
 #endif
             }
         }
@@ -464,7 +475,7 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
     return 0;
 }
 
-int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
+int generate_neutrinos(particle_data *parts, struct cosmology *cosmo,
                        struct cosmology_tables *ctabs, struct units *us,
                        struct physical_consts *pcs, long long int N_nupart,
                        long long particle_offset, long long local_cdm_num,
@@ -501,7 +512,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
 
     /* Generate neutrinos */
     for (long long i = 0; i < local_neutrino_num; i++) {
-        struct particle *part = &parts[particle_offset + i];
+        particle_data *part = &parts[particle_offset + i];
         long int seed_and_id = local_cdm_num + i;
 #ifdef WITH_PARTICLE_IDS
         part->id = seed_and_id;
@@ -515,10 +526,14 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
         part->w = 0.;
 #endif
 
+        /* Generate integer positions and velocities */
+        IntPosType ix[3];
+        IntVelType iv[3];
+
         /* Sample a position uniformly in the box (on this rank) */
-        part->x[0] = pos_to_int_fac * (sampleUniform(state) * NX_nupart + X0_nupart) * boxlen / N_nupart;
-        part->x[1] = pos_to_int_fac * sampleUniform(state) * boxlen;
-        part->x[2] = pos_to_int_fac * sampleUniform(state) * boxlen;
+        ix[0] = pos_to_int_fac * (sampleUniform(state) * NX_nupart + X0_nupart) * boxlen / N_nupart;
+        ix[1] = pos_to_int_fac * sampleUniform(state) * boxlen;
+        ix[2] = pos_to_int_fac * sampleUniform(state) * boxlen;
 
         /* Sample a neutrino species */
         int species = (int)(seed_and_id % cosmo->N_nu);
@@ -532,9 +547,13 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
         double p = neutrino_seed_to_fermi_dirac(seed_and_id) * fac / m_eV;
         neutrino_seed_to_direction(seed_and_id, n);
 
-        part->v[0] = p * n[0] * vel_to_int_fac;
-        part->v[1] = p * n[1] * vel_to_int_fac;
-        part->v[2] = p * n[2] * vel_to_int_fac;
+        iv[0] = p * n[0] * vel_to_int_fac;
+        iv[1] = p * n[1] * vel_to_int_fac;
+        iv[2] = p * n[2] * vel_to_int_fac;
+
+        /* Pack the particle data */
+        pack_particle_position(part, ix);
+        pack_particle_velocity(part, iv);
     }
 
     /* Clean up strooklat interpolation splines */
@@ -547,7 +566,7 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
 
 int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data *ptdat,
                             struct params *pars, char fix_modes, char invert_modes,
-                            struct particle *parts, struct cosmology *cosmo,
+                            particle_data *parts, struct cosmology *cosmo,
                             struct cosmology_tables *ctabs, struct units *us,
                             struct physical_consts *pcs, long long int N_nupart,
                             long long local_partnum, long long max_partnum,
@@ -676,39 +695,51 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
 
         /* Integrate the neutrino particles */
         for (long long i = 0; i < local_partnum; i++) {
-            struct particle *p = &parts[i];
+            particle_data *p = &parts[i];
 
 #ifdef WITH_PARTTYPE
             /* Only integrate neutrinos */
             if (p->type != 6) continue;
 #endif
 
+            /* Fetch integer positions */
+            IntPosType ix[3];
+            unpack_particle_position(p, ix);
+
             /* Convert integer positions to floating points on [0, M] */
-            double x[3] = {p->x[0] * int_to_grid_fac,
-                           p->x[1] * int_to_grid_fac,
-                           p->x[2] * int_to_grid_fac};
+            double x[3] = {ix[0] * int_to_grid_fac,
+                           ix[1] * int_to_grid_fac,
+                           ix[2] * int_to_grid_fac};
 
             /* Obtain the acceleration by differentiating the potential */
             double acc[3] = {0, 0, 0};
             accelCIC_2nd(box, x, acc, M, MX0, buffer_width, Mz, cell_fac);
 
+            /* Unpack integer velocities */
+            IntVelType iv[3];
+            unpack_particle_velocity(p, iv);
+
             /* Execute kick */
-            FloatVelType v[3] = {p->v[0] * int_to_vel_fac + acc[0] * kick_dtau,
-                                 p->v[1] * int_to_vel_fac + acc[1] * kick_dtau,
-                                 p->v[2] * int_to_vel_fac + acc[2] * kick_dtau};
+            FloatVelType v[3] = {iv[0] * int_to_vel_fac + acc[0] * kick_dtau,
+                                 iv[1] * int_to_vel_fac + acc[1] * kick_dtau,
+                                 iv[2] * int_to_vel_fac + acc[2] * kick_dtau};
 
             /* Relativistic drift correction */
             const double rel_drift = relativistic_drift(v, p, pcs, a);
 
             /* Execute drift */
-            p->x[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
-            p->x[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
+            ix[0] += v[0] * drift_dtau * rel_drift * pos_to_int_fac;
+            ix[1] += v[1] * drift_dtau * rel_drift * pos_to_int_fac;
+            ix[2] += v[2] * drift_dtau * rel_drift * pos_to_int_fac;
 
             /* Update velocities */
-            p->v[0] = v[0] * vel_to_int_fac;
-            p->v[1] = v[1] * vel_to_int_fac;
-            p->v[2] = v[2] * vel_to_int_fac;
+            iv[0] = v[0] * vel_to_int_fac;
+            iv[1] = v[1] * vel_to_int_fac;
+            iv[2] = v[2] * vel_to_int_fac;
+            
+            /* Repack particle data */
+            pack_particle_position(p, ix);
+            pack_particle_velocity(p, iv);
         }
 
         /* Exchange partciles between MPI tasks */

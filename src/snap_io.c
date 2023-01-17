@@ -34,7 +34,7 @@
 #define HDF5_CHUNK_SIZE 65536LL
 
 int exportSnapshot(struct params *pars, struct units *us,
-                   struct physical_consts *pcs, struct particle *particles,
+                   struct physical_consts *pcs, particle_data *particles,
                    int output_num, double a, int N, long long int local_partnum,
                    double dtau_kick, double dtau_drift, double max_vel) {
 
@@ -54,7 +54,7 @@ int exportSnapshot(struct params *pars, struct units *us,
     /* We need to sort the local particles by type */
 #ifdef WITH_PARTTYPE
     if (num_types > 1)
-        qsort(particles, local_partnum, sizeof(struct particle), particleTypeSort);
+        qsort(particles, local_partnum, sizeof(particle_data), particleTypeSort);
 #endif
 
     /* Find the numbers of particles per type */
@@ -63,7 +63,8 @@ int exportSnapshot(struct params *pars, struct units *us,
 
     for (long long int i = 0; i < local_partnum; i++) {
 #ifdef WITH_PARTTYPE
-        if (particles[i].type == 1) {
+        particle_data *p = &particles[i];
+        if (p->type == 1) {
             local_parts_per_type[0]++;
         } else {
             local_parts_per_type[1]++;
@@ -244,15 +245,22 @@ int exportSnapshot(struct params *pars, struct units *us,
         double *masses = malloc(1 * local_parts_per_type[t] * sizeof(double));
 #endif
         for (long long i = 0; i < local_parts_per_type[t]; i++) {
-            struct particle *p = &particles[i + local_first_of_type[t]];
-            /* Unpack the coordinates */
-            coords[i * 3 + 0] = p->x[0] * int_to_pos_fac;
-            coords[i * 3 + 1] = p->x[1] * int_to_pos_fac;
-            coords[i * 3 + 2] = p->x[2] * int_to_pos_fac;
-            /* Unpack the velocities */
-            vels[i * 3 + 0] = p->v[0] * int_to_vel_fac;
-            vels[i * 3 + 1] = p->v[1] * int_to_vel_fac;
-            vels[i * 3 + 2] = p->v[2] * int_to_vel_fac;
+            particle_data *p = &particles[i + local_first_of_type[t]];
+            
+            /* Fetch integer positions and velocities */
+            IntPosType ix[3];
+            IntVelType iv[3];
+            unpack_particle_position(p, ix);
+            unpack_particle_position(p, iv);
+            
+            /* Repack the coordinates */
+            coords[i * 3 + 0] = ix[0] * int_to_pos_fac;
+            coords[i * 3 + 1] = ix[1] * int_to_pos_fac;
+            coords[i * 3 + 2] = ix[2] * int_to_pos_fac;
+            /* Repack the velocities */
+            vels[i * 3 + 0] = iv[0] * int_to_vel_fac;
+            vels[i * 3 + 1] = iv[1] * int_to_vel_fac;
+            vels[i * 3 + 2] = iv[2] * int_to_vel_fac;
 #ifdef WITH_ACCELERATIONS
             /* Kick to the right time */
             if (dtau_kick != 0.) {
@@ -281,7 +289,8 @@ int exportSnapshot(struct params *pars, struct units *us,
         if (t == 1) {
             weights = malloc(1 * local_parts_per_type[t] * sizeof(double));
             for (long long i = 0; i < local_parts_per_type[t]; i++) {
-                weights[i] = particles[i + local_first_of_type[t]].w;
+                particle_data *p = &particles[i + local_first_of_type[t]];
+                weights[i] = p->w;
             }
         }
 #endif
@@ -518,7 +527,7 @@ int writeHeaderAttributes(struct params *pars, struct units *us, double a,
 }
 
 int readSnapshot(struct params *pars, struct units *us,
-                 struct particle *particles, const char *fname, double a,
+                 particle_data *particles, const char *fname, double a,
                  long long int local_partnum, long long int local_firstpart,
                  long long int max_partnum, double max_vel) {
 
@@ -637,9 +646,13 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Transfer the coordinate array to the particles */
     for (int i = 0; i < local_partnum; i++) {
-        particles[i].x[0] = coord_data[i * 3 + 0] * pos_to_int_fac;
-        particles[i].x[1] = coord_data[i * 3 + 1] * pos_to_int_fac;
-        particles[i].x[2] = coord_data[i * 3 + 2] * pos_to_int_fac;
+        particle_data *p = &particles[i];
+        
+        /* Convert to integer positions */
+        IntPosType ix[3] = {coord_data[i * 3 + 0] * pos_to_int_fac,
+                            coord_data[i * 3 + 1] * pos_to_int_fac,
+                            coord_data[i * 3 + 2] * pos_to_int_fac};
+        pack_particle_position(p, ix);
     }
 
     free(coord_data);
@@ -668,7 +681,8 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Transfer the contiguous array to the particle data */
     for (int i = 0; i < local_partnum; i++) {
-        particles[i].m = mass_data[i];
+        particle_data *p = &particles[i];
+        p->m = mass_data[i];
     }
 
     /* Free the contiguous array */
@@ -700,10 +714,13 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Transfer the contiguous array to the particle data */
     for (int i = 0; i < local_partnum; i++) {
-        /* Convert peculiar velocities to internal velocities */
-        particles[i].v[0] = veloc_data[i * 3 + 0] * a * vel_to_int_fac;
-        particles[i].v[1] = veloc_data[i * 3 + 1] * a * vel_to_int_fac;
-        particles[i].v[2] = veloc_data[i * 3 + 2] * a * vel_to_int_fac;
+        particle_data *p = &particles[i];
+        
+        /* Convert  peculiar velocities to internal integer velocities */
+        IntVelType iv[3] = {veloc_data[i * 3 + 0] * a * vel_to_int_fac,
+                            veloc_data[i * 3 + 1] * a * vel_to_int_fac,
+                            veloc_data[i * 3 + 2] * a * vel_to_int_fac};
+        pack_particle_velocity(p, iv);
     }
 
     /* Free the contiguous array */
@@ -732,7 +749,8 @@ int readSnapshot(struct params *pars, struct units *us,
 
     /* Transfer the contiguous array to the particle data */
     for (int i = 0; i < local_partnum; i++) {
-        particles[i].id = ids_data[i];
+        particle_data *p = &particles[i];
+        p->id = ids_data[i];
     }
 
     /* Free the contiguous array */
@@ -742,7 +760,8 @@ int readSnapshot(struct params *pars, struct units *us,
 #ifdef WITH_PARTTYPE
     /* Set particle types */
     for (int i = 0; i < local_partnum; i++) {
-        particles[i].type = 1; // cdm
+        particle_data *p = &particles[i];
+        p->type = 1; // cdm
     }
 #endif
 

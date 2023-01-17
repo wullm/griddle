@@ -25,7 +25,7 @@
 
 /* Relativistic equations of motion (2207.14256) */
 static inline double relativistic_drift(const FloatVelType v[3],
-                                        const struct particle *p,
+                                        const particle_data *p,
                                         const struct physical_consts *pcs,
                                         double a) {
 #ifdef WITH_PARTTYPE

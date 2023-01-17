@@ -24,7 +24,7 @@
 
 #include "particle.h"
 
-int exchange_particles(struct particle *parts, double boxlen, long long int Ng,
+int exchange_particles(particle_data *parts, double boxlen, long long int Ng,
                        long long int *num_localpart, long long int max_partnum,
                        int exchange_iteration, long long int received_left,
                        long long int received_right, long long int num_send_left,
