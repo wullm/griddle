@@ -93,7 +93,7 @@ int kick_weights_only(struct particle *parts, long int local_partnum,
 
             p->w = 1.0 - f / fi;
         }
-#endif
     }
+#endif
     return 0;
 }
