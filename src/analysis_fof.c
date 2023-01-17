@@ -339,13 +339,13 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     }
 
     /* The cells must be larger than the linking length */
-    if (boxlen / N_cells <= 2 * linking_length) {
+    if (boxlen / N_cells < 1.01 * linking_length) {
         printf("The cells are smaller than the linking length. Decrease HaloFinding:CellNumber.\n");
         exit(1);
     }
 
     /* The ranks must cover a physical length larger than the linking length */
-    if (boxlen / MPI_Rank_Count <= 2 * linking_length) {
+    if (boxlen / MPI_Rank_Count < 1.01 * linking_length) {
         printf("The number of ranks is so high that they do not span at least one linking length!\n");
         exit(1);
     }
