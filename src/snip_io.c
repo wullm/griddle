@@ -412,9 +412,9 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     const int gzip_level = pars->SnipshotZipCompressionLevel;
     if (gzip_level > 0) {
         H5Pset_shuffle(h_prop_pos);
-        H5Pset_shuffle(digits_vel);
+        H5Pset_shuffle(h_prop_vel);
         H5Pset_deflate(h_prop_pos, gzip_level);
-        H5Pset_deflate(digits_vel, gzip_level);
+        H5Pset_deflate(h_prop_vel, gzip_level);
     }
 
     /* Create vector datapsace for chunks of data */
