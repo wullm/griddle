@@ -274,14 +274,6 @@ int exportCatalogue(const struct params *pars, const struct units *us,
                 h_data = H5Dcreate(h_grp, "InnerRadius", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
                 H5Dclose(h_data);
 
-                /* Position of the potential minimum particle (use vector space) */
-                h_data = H5Dcreate(h_grp, "PotentialMinimumPosition", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
-                H5Dclose(h_data);
-
-                /* Velocity of the potential minimum particle (use vector space) */
-                h_data = H5Dcreate(h_grp, "PotentialMinimumVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
-                H5Dclose(h_data);
-
                 /* Centre of Mass velocities (use vector space) */
                 h_data = H5Dcreate(h_grp, "CentreOfMassVelocity", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
                 H5Dclose(h_data);
@@ -534,11 +526,9 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     double *coms = malloc(3 * local_num_structures * sizeof(double));
     double *coms_inner = malloc(3 * local_num_structures * sizeof(double));
     double *coms_dm = malloc(3 * local_num_structures * sizeof(double));
-    double *pos_minpot = malloc(3 * local_num_structures * sizeof(double));
     double *vels = malloc(3 * local_num_structures * sizeof(double));
     double *vels_inner = malloc(3 * local_num_structures * sizeof(double));
     double *vels_dm = malloc(3 * local_num_structures * sizeof(double));
-    double *vels_minpot = malloc(3 * local_num_structures * sizeof(double));
     double *masses = malloc(1 * local_num_structures * sizeof(double));
     double *masses_dm = malloc(1 * local_num_structures * sizeof(double));
     double *masses_nu = malloc(1 * local_num_structures * sizeof(double));
@@ -562,10 +552,6 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         coms_dm[i * 3 + 0] = h->x_com_dm[0];
         coms_dm[i * 3 + 1] = h->x_com_dm[1];
         coms_dm[i * 3 + 2] = h->x_com_dm[2];
-        /* Unpack the potential minimum coordinates */
-        pos_minpot[i * 3 + 0] = h->x_min_pot[0];
-        pos_minpot[i * 3 + 1] = h->x_min_pot[1];
-        pos_minpot[i * 3 + 2] = h->x_min_pot[2];
         /* Unpack the CoM velocities */
         vels[i * 3 + 0] = h->v_com[0];
         vels[i * 3 + 1] = h->v_com[1];
@@ -578,10 +564,6 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         vels_dm[i * 3 + 0] = h->v_com_dm[0];
         vels_dm[i * 3 + 1] = h->v_com_dm[1];
         vels_dm[i * 3 + 2] = h->v_com_dm[2];
-        /* Unpack the potential minimum velocities */
-        vels_minpot[i * 3 + 0] = h->v_min_pot[0];
-        vels_minpot[i * 3 + 1] = h->v_min_pot[1];
-        vels_minpot[i * 3 + 2] = h->v_min_pot[2];
         /* Unpack the SO masses and radii */
         masses[i] = h->M_SO;
         masses_dm[i] = h->mass_dm;
@@ -620,12 +602,6 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dclose(h_data);
     free(coms_dm);
 
-    /* Write potential minimum data (vector) */
-    h_data = H5Dopen(h_grp, "PotentialMinimumPosition", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, pos_minpot);
-    H5Dclose(h_data);
-    free(pos_minpot);
-
     /* Write centre of mass velocity data (vector) */
     h_data = H5Dopen(h_grp, "CentreOfMassVelocity", H5P_DEFAULT);
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
@@ -643,12 +619,6 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels_dm);
     H5Dclose(h_data);
     free(vels_dm);
-
-    /* Write potential minimum velocity data (vector) */
-    h_data = H5Dopen(h_grp, "PotentialMinimumVelocity", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels_minpot);
-    H5Dclose(h_data);
-    free(vels_minpot);
 
     /* Write mass data (scalar) */
     h_data = H5Dopen(h_grp, "Mass", H5P_DEFAULT);

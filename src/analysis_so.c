@@ -1011,101 +1011,13 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             r *= rfac;
         }
 
-        /* Now find the minimum potential particle */
-        double minpot = 0.0;
-        long int minpot_index = -1;
-
-        /* Check particles within this radius */
-        const double r_check = r_ini;
-        const double r2_check = r_check * r_check;
-
-        /* Loop over cells */
-        for (CellIntType c1 = 0; c1 < num_overlap; c1++) {
-            /* Find the particle count and offset of the cell */
-            CellIntType cell1 = cells[c1];
-            long int local_count1 = cell_counts[cell1];
-            long int local_offset1 = cell_offsets[cell1];
-
-            /* Loop over particles in the first cell */
-            for (long int a = 0; a < local_count1; a++) {
-                const long int index_a = cell_list[local_offset1 + a].offset;
-
-                /* Skip neutrinos */
-                if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
-
-                /* Skip particles outside the shrinking sphere radius */
-                const IntPosType *xa = parts[index_a].x;
-                const double ra2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
-                if (ra2 >= r2_check) continue;
-
-                /* Reset the potential */
-                double potential = 0.0;
-
-                /* Loop over cells */
-                for (CellIntType c2 = 0; c2 < num_overlap; c2++) {
-                    /* Find the particle count and offset of the cell */
-                    CellIntType cell2 = cells[c2];
-                    long int local_count2 = cell_counts[cell2];
-                    long int local_offset2 = cell_offsets[cell2];
-
-                    /* Loop over particles in the second cell */
-                    for (long int b = 0; b < local_count2; b++) {
-                        const long int index_b = cell_list[local_offset2 + b].offset;
-
-                        /* No self interaction */
-                        if (index_a == index_b) continue;
-
-                        /* Skip neutrinos */
-                        if (compare_particle_type(&parts[index_b], neutrino_type, 0)) continue;
-
-                        /* Skip particles outside the shrinking sphere radius */
-                        const IntPosType *xb = parts[index_b].x;
-                        const double rb2 = int_to_phys_dist2(xb, com, int_to_pos_fac);
-                        if (rb2 >= r2_check) continue;
-
-#ifdef WITH_MASSES
-                        double mass = parts[index_b].m;
-#else
-                        double mass = get_part_mass(&parts[index_b], part_mass_cb, base_part_mass_nu, cosmo);
-#endif
-
-                        double r2 = int_to_phys_dist2(xa, xb, int_to_pos_fac);
-
-                        potential -= mass / sqrt(r2);
-                    }
-                }
-
-                if (potential < minpot || minpot_index == -1) {
-                    minpot = potential;
-                    minpot_index = index_a;
-                }
-            }
-        }
-
-        /* Store position and velocity of the potential minimum particle */
-        if (minpot_index > -1) {
-            const IntPosType *x_min_pot = parts[minpot_index].x;
-            halos[i].x_min_pot[0] = x_min_pot[0] * int_to_pos_fac;
-            halos[i].x_min_pot[1] = x_min_pot[1] * int_to_pos_fac;
-            halos[i].x_min_pot[2] = x_min_pot[2] * int_to_pos_fac;
-            halos[i].v_min_pot[0] = parts[minpot_index].v[0];
-            halos[i].v_min_pot[1] = parts[minpot_index].v[1];
-            halos[i].v_min_pot[2] = parts[minpot_index].v[2];
-        }
-
         /* The integer position of the halo centre */
         IntPosType centre[3];
 
-        if (pars->UsePotentialMinimumAsCentre && minpot_index > -1) {
-            const IntPosType *x_min_pot = parts[minpot_index].x;
-            centre[0] = x_min_pot[0];
-            centre[1] = x_min_pot[1];
-            centre[2] = x_min_pot[2];
-        } else {
-            centre[0] = com[0];
-            centre[1] = com[1];
-            centre[2] = com[2];
-        }
+        /* Use the CoM (either shrinking sphere or FOF in case this failed) */
+        centre[0] = com[0];
+        centre[1] = com[1];
+        centre[2] = com[2];
 
         /* Compute the distance between the shrinking sphere and FOF centres */
         IntPosType fof[3] = {(*fofs)[i].x_com_inner[0] * pos_to_int_fac,

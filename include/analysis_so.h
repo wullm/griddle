@@ -65,10 +65,6 @@ struct so_halo {
     double x_com_dm[3];
     /* Centre of mass velocity of all dark matter SO particles */
     double v_com_dm[3];
-    /* Position of the minimum potential particle */
-    double x_min_pot[3];
-    /* Velocity of the minimum potential particle */
-    double v_min_pot[3];
     /* Total number of particles within the SO radius */
     int npart_tot;
     /* Home rank of the halo */
