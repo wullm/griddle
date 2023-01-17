@@ -119,10 +119,8 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, lon
         const long int index_a = cl[local_offset1 + a];
         const IntPosType *xa = parts[index_a].x;
 
-#ifdef WITH_PARTTYPE
         /* Don't link neutrinos */
-        if (parts[index_a].type == 6) continue;
-#endif
+        if (match_particle_type(&parts[index_a], neutrino_type, 0)) continue;
 
         /* If we are linking within the same cell, only check all pairs once */
         long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
@@ -131,10 +129,8 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, lon
             const long int index_b = cl[local_offset2 + b];
             const IntPosType *xb = parts[index_b].x;
 
-#ifdef WITH_PARTTYPE
             /* Don't link neutrinos */
-            if (parts[index_b].type == 6) continue;
-#endif
+            if (match_particle_type(&parts[index_b], neutrino_type, 0)) continue;
 
             if (should_link(xa, xb, int_to_pos_fac, linking_length_2)) {
                 links++;

@@ -52,7 +52,7 @@ int exportSnapshot(struct params *pars, struct units *us,
     }
 
     /* We need to sort the local particles by type */
-#ifdef WITH_PARTTYPE
+#if defined(WITH_PARTTYPE) || defined(WITH_PARTICLE_SEEDS)
     if (num_types > 1)
         qsort(particles, local_partnum, sizeof(struct particle), particleTypeSort);
 #endif
@@ -62,15 +62,11 @@ int exportSnapshot(struct params *pars, struct units *us,
     long long int local_first_of_type[2] = {0, 0};
 
     for (long long int i = 0; i < local_partnum; i++) {
-#ifdef WITH_PARTTYPE
-        if (particles[i].type == 1) {
+        if (match_particle_type(&particles[i], cdm_type, 1)) {
             local_parts_per_type[0]++;
         } else {
             local_parts_per_type[1]++;
         }
-#else
-        local_parts_per_type[0]++;
-#endif
     }
 
     /* Find the first index of each type */

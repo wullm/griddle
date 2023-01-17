@@ -77,7 +77,7 @@ int kick_weights_only(struct particle *parts, long int local_partnum,
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *p = &parts[i];
 
-        if (p->type == 6) {
+        if (match_particle_type(p, neutrino_type, 0)) {
             /* Compute the kicked velocity (without changing p->v) */
             FloatVelType v[3] = {p->v[0] + p->a[0] * kick_dtau,
                                  p->v[1] + p->a[1] * kick_dtau,

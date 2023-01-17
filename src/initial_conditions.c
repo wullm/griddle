@@ -412,6 +412,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
 #ifdef WITH_PARTICLE_IDS
                 part->id = (long long int) i * N * N + j * N + k;
 #endif
+#ifdef WITH_PARTICLE_SEEDS
+                part->seed = 0;
+#endif
 
                 /* Regular grid positions */
                 double x[3] = {i, j, k};
@@ -502,6 +505,9 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                 long int seed_and_id = local_cdm_num + (long long int) i * N_nupart * N_nupart + j * N_nupart + k;
 #ifdef WITH_PARTICLE_IDS
                 part->id = seed_and_id;
+#endif
+#ifdef WITH_PARTICLE_SEEDS
+                part->seed = seed_and_id;
 #endif
 
         /* Neutrino */

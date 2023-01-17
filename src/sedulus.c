@@ -365,7 +365,7 @@ int main(int argc, char *argv[]) {
 
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
-            if (p->type == 6) {
+            if (match_particle_type(p, neutrino_type, 0)) {
                 neutrino_count_local++;
                 weights_sq_sum_local += p->w * p->w;
             }
@@ -638,7 +638,7 @@ int main(int argc, char *argv[]) {
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
 #if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
-            if (p->type == 6) {
+            if (match_particle_type(p, neutrino_type, 0)) {
                 double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
                 double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
                 double q = sqrt(v2) * neutrino_qfac * m_eV;

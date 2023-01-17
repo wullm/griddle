@@ -29,6 +29,7 @@
 #define WITH_ACCELERATIONS
 #define WITH_MASSES
 #define WITH_PARTICLE_IDS
+#define WITH_PARTICLE_SEEDS
 #define WITH_PARTTYPE
 
 #ifdef SINGLE_PRECISION_IDS
@@ -68,6 +69,11 @@ struct particle {
     IntIDType id;
 #endif
 
+#ifdef WITH_PARTICLE_SEEDS
+    /* Particle seed */
+    uint32_t seed;
+#endif
+
     /* Position, velocity */
     IntPosType x[3];
     FloatVelType v[3];
@@ -91,14 +97,42 @@ struct particle {
 #endif
 };
 
+enum particle_type {
+    cdm_type,
+    neutrino_type
+};
+
+static inline int match_particle_type(const struct particle *p,
+                                      enum particle_type type,
+                                      int default_if_undefined) {
+#if defined(WITH_PARTTYPE)
+    if (p->type == type) {
+        return 1;
+    } else {
+        return 0;
+    }
+#elif defined(WITH_PARTICLE_SEEDS)
+    if (p->seed == 0 && type == cdm_type) {
+        return 1;
+    } else if (p->seed > 0 && type == neutrino_type) {
+        return 1;
+    } else {
+        return 0;
+    }
+#else
+    return default_if_undefined;
+#endif
+}
+
 static inline MPI_Datatype mpi_particle_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[7] = {MPI_PID_TYPE, MPI_INTPOS_TYPE, MPI_FLOATVEL_TYPE,
-                             MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT16_T};
-    int lengths[7];
-    MPI_Aint displacements[7];
+    MPI_Datatype types[8] = {MPI_PID_TYPE, MPI_UINT32_T, MPI_INTPOS_TYPE,
+                             MPI_FLOATVEL_TYPE, MPI_FLOAT, MPI_FLOAT,
+                             MPI_FLOAT, MPI_UINT16_T};
+    int lengths[8];
+    MPI_Aint displacements[8];
     MPI_Aint base_address;
     struct particle temp;
     MPI_Get_address(&temp, &base_address);
@@ -107,6 +141,16 @@ static inline MPI_Datatype mpi_particle_type() {
     /* ID */
     lengths[0] = 1;
     MPI_Get_address(&temp.id, &displacements[0]);
+    displacements[0] = MPI_Aint_diff(displacements[0], base_address);
+#else
+    lengths[0] = 0;
+    displacements[0] = 0;
+#endif
+
+#ifdef WITH_PARTICLE_SEEDS
+    /* Seed */
+    lengths[0] = 1;
+    MPI_Get_address(&temp.seed, &displacements[0]);
     displacements[0] = MPI_Aint_diff(displacements[0], base_address);
 #else
     lengths[0] = 0;
@@ -173,11 +217,17 @@ static inline MPI_Datatype mpi_particle_type() {
 //     return pa->exchange_dir >= pb->exchange_dir;
 // }
 
-#ifdef WITH_PARTTYPE
+#if defined(WITH_PARTTYPE)
 static inline int particleTypeSort(const void *a, const void *b) {
     struct particle *pa = (struct particle*) a;
     struct particle *pb = (struct particle*) b;
     return pa->type >= pb->type;
+}
+#elif defined(WITH_PARTICLE_SEEDS)
+static inline int particleTypeSort(const void *a, const void *b) {
+    struct particle *pa = (struct particle*) a;
+    struct particle *pb = (struct particle*) b;
+    return pa->seed >= pb->seed;
 }
 #endif
 
