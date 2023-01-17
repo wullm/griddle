@@ -24,6 +24,7 @@
 #include "../include/particle.h"
 #include "../include/units.h"
 #include "../include/fft.h"
+#include "../include/cosmology.h"
 
 enum grid_type {
     all_mass,
@@ -35,7 +36,9 @@ enum grid_type {
 extern const char *grid_type_names[num_grid_types];
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
-                    long long int local_partnum, enum grid_type gtype);
+                    long long int local_partnum, enum grid_type gtype,
+                    const struct cosmology *cosmo,
+                    const struct physical_consts *pcs);
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs, FourierPlanType r2c,
                       FourierPlanType c2r);

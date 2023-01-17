@@ -42,6 +42,7 @@
 #include "snap_io.h"
 #include "git_version.h"
 #include "relativity.h"
+#include "neutrino.h"
 #include "analysis.h"
 #include "analysis_fof.h"
 #include "analysis_powspec.h"

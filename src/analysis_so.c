@@ -32,6 +32,7 @@
 #include "../include/catalogue_io.h"
 #include "../include/snip_io.h"
 #include "../include/cosmology.h"
+#include "../include/neutrino.h"
 #include "../include/message.h"
 
 #define DEBUG_CHECKS
@@ -615,6 +616,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double part_mass = rho_crit_0 * Omega_m * pow(boxlen / Np, 3);
 #endif
 
+    /* Conversion factor for neutrino momenta */
+    const double neutrino_qfac = pcs->ElectronVolt / (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann);
+
     /* Compute the total neutrino density */
     double Omega_nu_tot_0 = 0;
     for (int i = 0; i < cosmo->N_nu; i++) {
@@ -1158,7 +1162,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #endif
 
                     if (match_particle_type(&parts[index_a], neutrino_type, 0)) {
-                        mass *= parts[index_a].w;
+                        /* Compute the neutrino delta-f weight */
+                        double q, w;
+                        neutrino_weight(parts[index_a].v, &parts[index_a], cosmo, neutrino_qfac, &q, &w);
+                        mass *= w;
                     }
 
                     so_parts[part_counter].m = mass;
@@ -1269,7 +1276,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #endif
 
                     if (match_particle_type(&parts[index_a], neutrino_type, 0)) {
-                        mass *= parts[index_a].w;
+                        /* Compute the neutrino delta-f weight */
+                        double q, w;
+                        neutrino_weight(parts[index_a].v, &parts[index_a], cosmo, neutrino_qfac, &q, &w);
+                        mass *= w;
                     }
 
                     /* Accumulate mass in the SO window */

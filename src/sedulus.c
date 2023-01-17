@@ -342,7 +342,7 @@ int main(int argc, char *argv[]) {
     timer_stop(rank, &fft_plan_timer, "Planning FFTs took ");
     message(rank, "\n");
 
-#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
+#ifdef WITH_NEUTRINOS
     /* Conversion factor for neutrino momenta */
     const double neutrino_qfac = pcs.ElectronVolt / (pcs.SpeedOfLight * cosmo.T_nu_0 * pcs.kBoltzmann);
 
@@ -366,8 +366,11 @@ int main(int argc, char *argv[]) {
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &particles[i];
             if (match_particle_type(p, neutrino_type, 0)) {
+                double q, w;
+                neutrino_weight(p->v, p, &cosmo, neutrino_qfac, &q, &w);
+
                 neutrino_count_local++;
-                weights_sq_sum_local += p->w * p->w;
+                weights_sq_sum_local += w * w;
             }
         }
 
@@ -428,7 +431,7 @@ int main(int argc, char *argv[]) {
                           grid_type_names[powspec_types[i]]);
 
             /* Initiate mass deposition */
-            mass_deposition(&mass, particles, local_partnum, powspec_types[i]);
+            mass_deposition(&mass, particles, local_partnum, powspec_types[i], &cosmo, &pcs);
             timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
             /* Merge the buffers with the main grid */
@@ -487,7 +490,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &snapshot_timer);
 
         message(rank, "Exporting a snapshot at a = %g.\n", output_list_snap[0]);
-        exportSnapshot(&pars, &us, &pcs, particles, 0, a_begin, N, local_partnum, /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
+        exportSnapshot(&pars, &us, &pcs, &cosmo, particles, 0, a_begin, N, local_partnum, /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
 
         timer_stop(rank, &snapshot_timer, "Exporting a snapshot took ");
         message(rank, "\n");
@@ -553,7 +556,7 @@ int main(int argc, char *argv[]) {
         double drift_dtau = strooklat_interp(&spline_bg_a, ctabs.drift_factors, a_next) -
                             strooklat_interp(&spline_bg_a, ctabs.drift_factors, a);
 
-#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
+#ifdef WITH_NEUTRINOS
         /* Accumulate the neutrino weights */
         long int neutrino_count_local = 0;
         double weights_sum_local = 0.;
@@ -568,7 +571,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &run_timer);
 
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum, all_mass);
+        mass_deposition(&mass, particles, local_partnum, all_mass, &cosmo, &pcs);
         timer_stop(rank, &run_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -637,23 +640,15 @@ int main(int argc, char *argv[]) {
             p->v[2] = v[2];
 
             /* Delta-f weighting for neutrino variance reduction (2010.07321) */
-#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
             if (match_particle_type(p, neutrino_type, 0)) {
-                double m_eV = cosmo.M_nu[(int)p->id % cosmo.N_nu];
-                double v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-                double q = sqrt(v2) * neutrino_qfac * m_eV;
-                double qi = neutrino_seed_to_fermi_dirac(p->id);
-                double f = fermi_dirac_density(q);
-                double fi = fermi_dirac_density(qi);
-
-                p->w = 1.0 - f / fi;
+                double q, w;
+                neutrino_weight(v, p, &cosmo, neutrino_qfac, &q, &w);
 
                 neutrino_count_local++;
-                weights_sum_local += p->w;
-                weights_sq_sum_local += p->w * p->w;
+                weights_sum_local += w;
+                weights_sq_sum_local += w * w;
                 neutrino_q_sum_local += q;
             }
-#endif
 
             // /* Convert positions to integers (wrapping automatic by overflow) */
             // p->x[0] = x[0] * grid_to_int_fac;
@@ -664,7 +659,7 @@ int main(int argc, char *argv[]) {
         /* Timer */
         timer_stop(rank, &run_timer, "Evolving particles took ");
 
-#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
+#ifdef WITH_NEUTRINOS
         if (N_nu > 0) {
             /* Collect neutrino weight information from all ranks */
             long int neutrino_count_global;
@@ -722,12 +717,12 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, power_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
-                /* Reversibly kick neutrino particle weights */
-                if (N_nu > 0) {
-                    kick_weights_only(particles, local_partnum, a, power_drift_dtau, neutrino_qfac, &cosmo, &pcs);
-                    timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
-                }
-                message(rank, "\n");
+                // /* Reversibly kick neutrino particle weights */
+                // if (N_nu > 0) {
+                //     kick_weights_only(particles, local_partnum, a, power_drift_dtau, neutrino_qfac, &cosmo, &pcs);
+                //     timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
+                // }
+                // message(rank, "\n");
 
                 for (int i = 0; i < powspec_types_num; i++) {
                     message(rank, "Working on power spectrum type '%s'.\n",
@@ -738,7 +733,7 @@ int main(int argc, char *argv[]) {
                     timer_stop(rank, &run_timer, "Exchanging particles took ");
 
                     /* Initiate mass deposition */
-                    mass_deposition(&mass, particles, local_partnum, powspec_types[i]);
+                    mass_deposition(&mass, particles, local_partnum, powspec_types[i], &cosmo, &pcs);
                     timer_stop(rank, &run_timer, "Computing mass density took ");
 
                     /* Merge the buffers with the main grid */
@@ -764,10 +759,10 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, -power_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
-                if (N_nu > 0) {
-                    kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
-                    timer_stop(rank, &run_timer, "Reversing weight kicks took ");
-                }
+                // if (N_nu > 0) {
+                //     kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
+                //     timer_stop(rank, &run_timer, "Reversing weight kicks took ");
+                // }
 
 #ifdef DEBUG_CHECKS
                 /* Compute position checksum */
@@ -802,12 +797,12 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, halos_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
-                /* Reversibly kick neutrino particle weights */
-                if (N_nu > 0) {
-                    kick_weights_only(particles, local_partnum, a, halos_drift_dtau, neutrino_qfac, &cosmo, &pcs);
-                    timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
-                }
-                message(rank, "\n");
+                // /* Reversibly kick neutrino particle weights */
+                // if (N_nu > 0) {
+                //     kick_weights_only(particles, local_partnum, a, halos_drift_dtau, neutrino_qfac, &cosmo, &pcs);
+                //     timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
+                // }
+                // message(rank, "\n");
 
                 /* Free the main grid before engaging the halo finder */
                 free_local_grid(&mass);
@@ -825,10 +820,10 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, -halos_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
-                if (N_nu > 0) {
-                    kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
-                    timer_stop(rank, &run_timer, "Reversing weight kicks took ");
-                }
+                // if (N_nu > 0) {
+                //     kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
+                //     timer_stop(rank, &run_timer, "Reversing weight kicks took ");
+                // }
 
 #ifdef DEBUG_CHECKS
                 /* Compute position checksum */
@@ -874,24 +869,24 @@ int main(int argc, char *argv[]) {
                 drift_particles(particles, local_partnum, a, snap_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
 
-                /* Reversibly kick neutrino particle weights */
-                if (N_nu > 0) {
-                    kick_weights_only(particles, local_partnum, a, snap_kick_dtau, neutrino_qfac, &cosmo, &pcs);
-                    timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
-                }
-                message(rank, "\n");
+                // /* Reversibly kick neutrino particle weights */
+                // if (N_nu > 0) {
+                //     kick_weights_only(particles, local_partnum, a, snap_kick_dtau, neutrino_qfac, &cosmo, &pcs);
+                //     timer_stop(rank, &run_timer, "Kicking particle weights to output time took ");
+                // }
+                // message(rank, "\n");
 
-                exportSnapshot(&pars, &us, &pcs, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
+                exportSnapshot(&pars, &us, &pcs, &cosmo, particles, /* output_num = */ j, output_list_snap[j], N, local_partnum, snap_kick_dtau, snap_drift_dtau);
                 timer_stop(rank, &run_timer, "Exporting a snapshot took ");
 
                 /* Reverse the particle drifts */
                 drift_particles(particles, local_partnum, a, -snap_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Reversing particle drift took ");
 
-                if (N_nu > 0) {
-                    kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
-                    timer_stop(rank, &run_timer, "Reversing weight kicks took ");
-                }
+                // if (N_nu > 0) {
+                //     kick_weights_only(particles, local_partnum, a, /* kick_dtau = */ 0., neutrino_qfac, &cosmo, &pcs);
+                //     timer_stop(rank, &run_timer, "Reversing weight kicks took ");
+                // }
 
 #ifdef DEBUG_CHECKS
                 /* Compute position checksum */

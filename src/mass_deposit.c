@@ -26,11 +26,14 @@
 #include "../include/fft.h"
 #include "../include/fft_kernels.h"
 #include "../include/message.h"
+#include "../include/neutrino.h"
 
 const char *grid_type_names[num_grid_types] = {"all", "cb", "nu"};
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
-                    long long int local_partnum, enum grid_type gtype) {
+                    long long int local_partnum, enum grid_type gtype,
+                    const struct cosmology *cosmo,
+                    const struct physical_consts *pcs) {
 
     const long int N = dgrid->N;
     const long int Nz = dgrid->Nz;
@@ -39,6 +42,9 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     const double boxlen = dgrid->boxlen;
     const double cell_factor = N / boxlen;
     const double cell_factor_3 = cell_factor * cell_factor * cell_factor;
+
+    /* Conversion factor for neutrino momenta */
+    const double neutrino_qfac = pcs->ElectronVolt / (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann);
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
@@ -55,10 +61,9 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
     for (long long i = 0; i < local_partnum; i++) {
         struct particle *part = &parts[i];
 
-#ifdef WITH_PARTTYPE
-        if (gtype == cb_mass && part->type != 1) continue;
-        else if (gtype == nu_mass && part->type != 6) continue;
-#endif
+        /* Only count the relevant particles for this grid type */
+        if (gtype == cb_mass && !match_particle_type(part, cdm_type, 1)) continue;
+        if (gtype == nu_mass && !match_particle_type(part, neutrino_type, 0)) continue;
 
         double X = part->x[0] * int_to_grid_fac;
         double Y = part->x[1] * int_to_grid_fac;
@@ -71,11 +76,11 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 #endif
 
         /* Neutrino delta-f weighting */
-#ifdef WITH_PARTTYPE
-        if (part->type == 6) {
-            M *= part->w;
+        if (match_particle_type(part, neutrino_type, 0)) {
+            double q, w;
+            neutrino_weight(part->v, part, cosmo, neutrino_qfac, &q, &w);
+            M *= w;
         }
-#endif
 
         /* The particles coordinates must be wrapped here! */
         int iX = X;

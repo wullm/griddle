@@ -32,6 +32,8 @@
 #define WITH_PARTICLE_SEEDS
 #define WITH_PARTTYPE
 
+#define WITH_NEUTRINOS
+
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32
 #define MPI_PID_TYPE MPI_UINT32_T
@@ -89,9 +91,6 @@ struct particle {
 #endif
 
 #ifdef WITH_PARTTYPE
-    /* Neutrino delta-f weight */
-    float w;
-
     /* The particle type */
     uint16_t type;
 #endif
@@ -128,11 +127,11 @@ static inline MPI_Datatype mpi_particle_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[8] = {MPI_PID_TYPE, MPI_UINT32_T, MPI_INTPOS_TYPE,
+    MPI_Datatype types[7] = {MPI_PID_TYPE, MPI_UINT32_T, MPI_INTPOS_TYPE,
                              MPI_FLOATVEL_TYPE, MPI_FLOAT, MPI_FLOAT,
-                             MPI_FLOAT, MPI_UINT16_T};
-    int lengths[8];
-    MPI_Aint displacements[8];
+                             MPI_UINT16_T};
+    int lengths[7];
+    MPI_Aint displacements[7];
     MPI_Aint base_address;
     struct particle temp;
     MPI_Get_address(&temp, &base_address);
@@ -188,20 +187,13 @@ static inline MPI_Datatype mpi_particle_type() {
 #endif
 
 #ifdef WITH_PARTTYPE
-    /* Neutrino delta-f weight */
-    lengths[5] = 1;
-    MPI_Get_address(&temp.w, &displacements[5]);
-    displacements[5] = MPI_Aint_diff(displacements[5], base_address);
-
     /* Particle type */
-    lengths[6] = 1;
+    lengths[5] = 1;
     MPI_Get_address(&temp.type, &displacements[6]);
-    displacements[6] = MPI_Aint_diff(displacements[6], base_address);
+    displacements[5] = MPI_Aint_diff(displacements[6], base_address);
 #else
     lengths[5] = 0;
     displacements[5] = 0;
-    lengths[6] = 0;
-    displacements[6] = 0;
 #endif
 
     /* Create the datatype */

@@ -431,9 +431,9 @@ int generate_particle_lattice(struct distributed_grid *lpt_potential,
                 double v[3] = {0,0,0};
                 accelCIC(velocity_potential, x, v);
 
-                /* CDM */
 #ifdef WITH_PARTTYPE
-                part->type = 1;
+                /* CDM */
+                part->type = cdm_type;
 #endif
 
                 /* Add the displacements */
@@ -510,12 +510,9 @@ int generate_neutrinos(struct particle *parts, struct cosmology *cosmo,
                 part->seed = seed_and_id;
 #endif
 
-        /* Neutrino */
 #ifdef WITH_PARTTYPE
-                part->type = 6;
-
-                /* Initially the weight is zero */
-                part->w = 0.;
+                /* Neutrino */
+                part->type = neutrino_type;
 #endif
 
                 /* Regular grid positions (offset from the corner) */
@@ -684,10 +681,8 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
         for (long long i = 0; i < local_partnum; i++) {
             struct particle *p = &parts[i];
 
-#ifdef WITH_PARTTYPE
             /* Only integrate neutrinos */
-            if (p->type != 6) continue;
-#endif
+            if (!match_particle_type(p, neutrino_type, 0)) continue;
 
             /* Convert integer positions to floating points on [0, M] */
             double x[3] = {p->x[0] * int_to_grid_fac,
@@ -725,27 +720,6 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
         /* Step forward */
         a = a_next;
     }
-
-#if defined(WITH_PARTTYPE) && defined(WITH_PARTICLE_IDS)
-    /* Conversion factor for neutrino momenta */
-    const double neutrino_qfac = pcs->ElectronVolt / (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann);
-
-    /* Finally, set the delta-f weights of the neutrino particles */
-    for (long long i = 0; i < local_partnum; i++) {
-        struct particle *p = &parts[i];
-
-        if (p->type == 6) {
-            double m_eV = cosmo->M_nu[(int)p->id % cosmo->N_nu];
-            double v2 = p->v[0] * p->v[0] + p->v[1] * p->v[1] + p->v[2] * p->v[2];
-            double q = sqrt(v2) * neutrino_qfac * m_eV;
-            double qi = neutrino_seed_to_fermi_dirac(p->id);
-            double f = fermi_dirac_density(q);
-            double fi = fermi_dirac_density(qi);
-
-            p->w = 1.0 - f / fi;
-        }
-    }
-#endif
 
     /* Clean up strooklat interpolation splines */
     free_strooklat_spline(&spline_z);

@@ -26,6 +26,7 @@
 #include <math.h>
 #include "../include/snap_io.h"
 #include "../include/relativity.h"
+#include "../include/neutrino.h"
 #include "../include/git_version.h"
 
 /* The current limit of for parallel HDF5 writes is 2GB */
@@ -34,9 +35,10 @@
 #define HDF5_CHUNK_SIZE 65536LL
 
 int exportSnapshot(struct params *pars, struct units *us,
-                   struct physical_consts *pcs, struct particle *particles,
-                   int output_num, double a, int N, long long int local_partnum,
-                   double dtau_kick, double dtau_drift) {
+                   struct physical_consts *pcs, struct cosmology *cosmo,
+                   struct particle *particles, int output_num, double a, int N,
+                   long long int local_partnum, double dtau_kick,
+                   double dtau_drift) {
 
     /* Get the dimensions of the cluster */
     int rank, MPI_Rank_Count;
@@ -267,16 +269,23 @@ int exportSnapshot(struct params *pars, struct units *us,
 #endif
         }
 
+        /* Conversion factor for neutrino momenta */
+        const double neutrino_qfac = pcs->ElectronVolt / (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann);
+
         /* Unpack neutrino weights only for type 1 */
-#ifdef WITH_PARTTYPE
         double *weights;
         if (t == 1) {
             weights = malloc(1 * local_parts_per_type[t] * sizeof(double));
             for (long long i = 0; i < local_parts_per_type[t]; i++) {
-                weights[i] = particles[i + local_first_of_type[t]].w;
+                struct particle *p = &particles[i + local_first_of_type[t]];
+
+                /* Compute the neutrino delta-f weight */
+                double q, w;
+                neutrino_weight(p->v, p, cosmo, neutrino_qfac, &q, &w);
+
+                weights[i] = w;
             }
         }
-#endif
 
         /* Open the particle group in the output file */
         hid_t h_grp = H5Gopen(h_out_file, ExportNames[t], H5P_DEFAULT);
@@ -309,7 +318,6 @@ int exportSnapshot(struct params *pars, struct units *us,
         free(masses);
 #endif
 
-#ifdef WITH_PARTTYPE
         if (t == 1) {
             /* Write weights data (scalar) */
             h_data = H5Dopen(h_grp, "Weights", H5P_DEFAULT);
@@ -317,7 +325,6 @@ int exportSnapshot(struct params *pars, struct units *us,
             H5Dclose(h_data);
             free(weights);
         }
-#endif
 
         /* Close the group */
         H5Gclose(h_grp);
@@ -731,7 +738,14 @@ int readSnapshot(struct params *pars, struct units *us,
 #ifdef WITH_PARTTYPE
     /* Set particle types */
     for (int i = 0; i < local_partnum; i++) {
-        particles[i].type = 1; // cdm
+        particles[i].type = cdm_type;
+    }
+#endif
+
+#ifdef WITH_PARTICLE_SEEDS
+    /* Set particle types */
+    for (int i = 0; i < local_partnum; i++) {
+        particles[i].seed = 0;
     }
 #endif
 
