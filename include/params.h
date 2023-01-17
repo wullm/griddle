@@ -88,6 +88,9 @@ struct params {
     char ExportSnipshots;
     double SnipshotReduceFactor;
     int SnipshotMinParticleNum;
+    int SnipshotPositionDScaleCompression;
+    int SnipshotVelocityDScaleCompression;
+    int SnipshotZipCompressionLevel;
 
     /* Power spectrum (for on-the-fly analysis) parameters */
     int PowerSpectrumBins;

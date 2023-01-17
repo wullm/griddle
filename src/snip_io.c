@@ -254,12 +254,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     /* Unpack the remaining particle data into contiguous arrays */
     double *coords = malloc(3 * maximum_local_number * sizeof(double));
     double *vels = malloc(3 * maximum_local_number * sizeof(double));
-#ifdef WITH_PARTICLE_IDS
-    long long *ids = malloc(1 * maximum_local_number * sizeof(long long));
-#endif
-#ifdef WITH_MASSES
-    double *masses = malloc(1 * maximum_local_number * sizeof(double));
-#endif
 
     /* Count the number of exported particles per halo and in total */
     int *particles_per_halo = calloc((int) local_halo_num, sizeof(int));
@@ -336,14 +330,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                         vels[particles_total * 3 + 0] /= a_scale_factor;
                         vels[particles_total * 3 + 1] /= a_scale_factor;
                         vels[particles_total * 3 + 2] /= a_scale_factor;
-#ifdef WITH_PARTICLE_IDS
-                        /* Unpack the particle IDs */
-                        ids[particles_total] = parts[index_a].id;
-#endif
-#ifdef WITH_MASSES
-                        /* Unpack the particle masses */
-                        masses[particles_total] = parts[index_a].m;
-#endif
                         particles_total++;
                         particles_per_halo[i]++;
                         
@@ -391,30 +377,53 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     const hsize_t vrank = 2;
     const hsize_t srank = 1;
     const hsize_t vdims[2] = {global_total_partnum, 3};
-    const hsize_t sdims[1] = {global_total_partnum};
     hid_t h_vspace = H5Screate_simple(vrank, vdims, NULL);
-    hid_t h_sspace = H5Screate_simple(srank, sdims, NULL);
+
+    const long int chunk_size = (global_total_partnum > 1000000l)
+                              ? HDF5_CHUNK_SIZE : HDF5_TINY_CHUNK_SIZE;
 
     /* Set chunking for vectors */
     hid_t h_prop_vec = H5Pcreate(H5P_DATASET_CREATE);
-    const hsize_t vchunk[2] = {HDF5_TINY_CHUNK_SIZE, 3};
+    const hsize_t vchunk[2] = {chunk_size, 3};
     H5Pset_chunk(h_prop_vec, vrank, vchunk);
 
     /* Set chunking for scalars */
     hid_t h_prop_sca = H5Pcreate(H5P_DATASET_CREATE);
-    const hsize_t schunk[1] = {HDF5_TINY_CHUNK_SIZE};
+    const hsize_t schunk[1] = {chunk_size};
     H5Pset_chunk(h_prop_sca, srank, schunk);
 
-    /* Create vector & scalar datapsace for smaller chunks of data */
+    /* Create properties for the positions */
+    hid_t h_prop_pos = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(h_prop_pos, vrank, vchunk);
+
+    /* Create properties for the positions */
+    hid_t h_prop_vel = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(h_prop_vel, vrank, vchunk);
+
+    /* Set lossy filter (keep "digits" digits after the decimal point) */
+    const int digits_pos = pars->SnipshotPositionDScaleCompression;
+    const int digits_vel = pars->SnipshotVelocityDScaleCompression;
+    if (digits_pos > 0)
+        H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
+    if (digits_vel > 0)
+        H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
+
+    /* Set shuffle and lossless compression filters (GZIP level 4) */
+    const int gzip_level = pars->SnipshotZipCompressionLevel;
+    if (gzip_level > 0) {
+        H5Pset_shuffle(h_prop_pos);
+        H5Pset_shuffle(digits_vel);
+        H5Pset_deflate(h_prop_pos, gzip_level);
+        H5Pset_deflate(digits_vel, gzip_level);
+    }
+
+    /* Create vector datapsace for chunks of data */
     const hsize_t ch_vdims[2] = {particles_total, 3};
-    const hsize_t ch_sdims[1] = {particles_total};
     hid_t h_ch_vspace = H5Screate_simple(vrank, ch_vdims, NULL);
-    hid_t h_ch_sspace = H5Screate_simple(srank, ch_sdims, NULL);
 
     /* The start of this chunk, in the overall vector & scalar spaces */
     const hsize_t start_in_group = first_id_by_rank[rank];
     const hsize_t vstart[2] = {start_in_group, 0}; //always with the "x" coordinate
-    const hsize_t sstart[1] = {start_in_group};
     
     /* Free memory */
     free(partnum_by_rank);
@@ -481,23 +490,12 @@ int exportSnipshot(const struct params *pars, const struct units *us,
         h_grp = H5Gcreate(h_out_file, ExportName, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
         /* Coordinates (use vector space) */
-        h_data = H5Dcreate(h_grp, "Coordinates", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+        h_data = H5Dcreate(h_grp, "Coordinates", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
         H5Dclose(h_data);
 
         /* Velocities (use vector space) */
-        h_data = H5Dcreate(h_grp, "Velocities", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vec, H5P_DEFAULT);
+        h_data = H5Dcreate(h_grp, "Velocities", H5T_NATIVE_DOUBLE, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
         H5Dclose(h_data);
-
-#ifdef WITH_PARTICLE_IDS
-        /* Particle IDs (use scalar space) */
-        h_data = H5Dcreate(h_grp, "ParticleIDs", H5T_NATIVE_LLONG, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-        H5Dclose(h_data);
-#endif
-#ifdef WITH_MASSES
-        /* Masses (use scalar space) */
-        h_data = H5Dcreate(h_grp, "Masses", H5T_NATIVE_DOUBLE, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
-        H5Dclose(h_data);
-#endif
 
         /* Close the group */
         H5Gclose(h_grp);
@@ -538,7 +536,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     
     /* Choose the hyperslabs for the local particles inside the overall spaces */
     H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
-    H5Sselect_hyperslab(h_sspace, H5S_SELECT_SET, sstart, NULL, ch_sdims, NULL);
 
     /* Open the particle group in the output file */
     hid_t h_grp = H5Gopen(h_out_file, ExportName, H5P_DEFAULT);
@@ -554,22 +551,6 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
     H5Dclose(h_data);
     free(vels);
-
-#ifdef WITH_PARTICLE_IDS
-    /* Write particle id data (scalar) */
-    h_data = H5Dopen(h_grp, "ParticleIDs", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_LLONG, h_ch_sspace, h_sspace, H5P_DEFAULT, ids);
-    H5Dclose(h_data);
-    free(ids);
-#endif
-
-#ifdef WITH_MASSES
-    /* Write mass data (scalar) */
-    h_data = H5Dopen(h_grp, "Masses", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_DOUBLE, h_ch_sspace, h_sspace, H5P_DEFAULT, masses);
-    H5Dclose(h_data);
-    free(masses);
-#endif
 
     /* Close the group */
     H5Gclose(h_grp);

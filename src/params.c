@@ -206,6 +206,9 @@ int readParams(struct params *pars, const char *fname) {
     pars->ExportSnipshots = read_long("HaloFinding", "ExportSnipshots", 1, fname, f, rank);
     pars->SnipshotReduceFactor =  read_double("HaloFinding", "SnipshotReduceFactor", 0.01, fname, f, rank);
     pars->SnipshotMinParticleNum =  read_long("HaloFinding", "SnipshotMinParticleNum", 5, fname, f, rank);
+    pars->SnipshotPositionDScaleCompression =  read_long("HaloFinding", "SnipshotPositionDScaleCompression", 3, fname, f, rank);
+    pars->SnipshotVelocityDScaleCompression =  read_long("HaloFinding", "SnipshotVelocityDScaleCompression", 1, fname, f, rank);
+    pars->SnipshotZipCompressionLevel =  read_long("HaloFinding", "SnipshotZipCompressionLevel", 4, fname, f, rank);
     read_string("HaloFinding", "SnipBaseName", "snip", pars->SnipBaseName, len, fname, f, rank);
 
     /* Close the formatted parameter file */
