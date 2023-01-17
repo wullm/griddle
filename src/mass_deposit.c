@@ -62,8 +62,8 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         struct particle *part = &parts[i];
 
         /* Only count the relevant particles for this grid type */
-        if (gtype == cb_mass && !match_particle_type(part, cdm_type, 1)) continue;
-        if (gtype == nu_mass && !match_particle_type(part, neutrino_type, 0)) continue;
+        if (gtype == cb_mass && !compare_particle_type(part, cdm_type, 1)) continue;
+        if (gtype == nu_mass && !compare_particle_type(part, neutrino_type, 0)) continue;
 
         double X = part->x[0] * int_to_grid_fac;
         double Y = part->x[1] * int_to_grid_fac;
@@ -76,7 +76,7 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 #endif
 
         /* Neutrino delta-f weighting */
-        if (match_particle_type(part, neutrino_type, 0)) {
+        if (compare_particle_type(part, neutrino_type, 0)) {
             double q, w;
             neutrino_weight(part->v, part, cosmo, neutrino_qfac, &q, &w);
             M *= w;

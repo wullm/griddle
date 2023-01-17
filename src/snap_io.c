@@ -64,7 +64,7 @@ int exportSnapshot(struct params *pars, struct units *us,
     long long int local_first_of_type[2] = {0, 0};
 
     for (long long int i = 0; i < local_partnum; i++) {
-        if (match_particle_type(&particles[i], cdm_type, 1)) {
+        if (compare_particle_type(&particles[i], cdm_type, 1)) {
             local_parts_per_type[0]++;
         } else {
             local_parts_per_type[1]++;

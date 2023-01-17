@@ -682,7 +682,7 @@ int pre_integrate_neutrinos(struct distributed_grid *dgrid, struct perturb_data 
             struct particle *p = &parts[i];
 
             /* Only integrate neutrinos */
-            if (!match_particle_type(p, neutrino_type, 0)) continue;
+            if (!compare_particle_type(p, neutrino_type, 0)) continue;
 
             /* Convert integer positions to floating points on [0, M] */
             double x[3] = {p->x[0] * int_to_grid_fac,

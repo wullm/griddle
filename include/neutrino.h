@@ -32,7 +32,7 @@ static inline void neutrino_weight(const FloatVelType v[3],
                                    double *w_out) {
 
 #ifdef WITH_NEUTRINOS
-    if (match_particle_type(p, neutrino_type, 0)) {
+    if (compare_particle_type(p, neutrino_type, 0)) {
 
 #if defined(WITH_PARTICLE_SEEDS)
         long int seed = p->seed;

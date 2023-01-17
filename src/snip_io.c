@@ -306,7 +306,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
                 const long int index_a = cell_list[local_offset + a].offset;
 
                 /* Skip non-DM particles */
-                if (!match_particle_type(&parts[index_a], cdm_type, 1)) continue;
+                if (!compare_particle_type(&parts[index_a], cdm_type, 1)) continue;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);

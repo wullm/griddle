@@ -101,9 +101,9 @@ enum particle_type {
     neutrino_type
 };
 
-static inline int match_particle_type(const struct particle *p,
-                                      enum particle_type type,
-                                      int default_if_undefined) {
+static inline int compare_particle_type(const struct particle *p,
+                                        enum particle_type type,
+                                        int default_if_undefined) {
 #if defined(WITH_PARTTYPE)
     if (p->type == type) {
         return 1;

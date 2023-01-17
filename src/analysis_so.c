@@ -815,7 +815,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const long int index_a = cell_list[local_offset + a].offset;
 
                 /* Skip neutrinos in the shrinking sphere algorithm */
-                if (match_particle_type(&parts[index_a], neutrino_type, 0)) continue;
+                if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -861,7 +861,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     const long int index_a = cell_list[local_offset + a].offset;
 
                     /* Skip neutrinos in the shrinking sphere algorithm */
-                    if (match_particle_type(&parts[index_a], neutrino_type, 0)) continue;
+                    if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
 
                     const IntPosType *xa = parts[index_a].x;
                     const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -919,7 +919,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     const long int index_a = cell_list[local_offset + a].offset;
 
                     /* Skip neutrinos in the shrinking sphere algorithm */
-                    if (match_particle_type(&parts[index_a], neutrino_type, 0)) continue;
+                    if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
 
                     const IntPosType *xa = parts[index_a].x;
                     const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -1015,7 +1015,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                 const long int index_a = cell_list[local_offset1 + a].offset;
 
                 /* Skip neutrinos */
-                if (match_particle_type(&parts[index_a], neutrino_type, 0)) continue;
+                if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
 
                 /* Skip particles outside the shrinking sphere radius */
                 const IntPosType *xa = parts[index_a].x;
@@ -1040,7 +1040,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                         if (index_a == index_b) continue;
 
                         /* Skip neutrinos */
-                        if (match_particle_type(&parts[index_b], neutrino_type, 0)) continue;
+                        if (compare_particle_type(&parts[index_b], neutrino_type, 0)) continue;
 
                         /* Skip particles outside the shrinking sphere radius */
                         const IntPosType *xb = parts[index_b].x;
@@ -1161,7 +1161,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     double mass = part_mass;
 #endif
 
-                    if (match_particle_type(&parts[index_a], neutrino_type, 0)) {
+                    if (compare_particle_type(&parts[index_a], neutrino_type, 0)) {
                         /* Compute the neutrino delta-f weight */
                         double q, w;
                         neutrino_weight(parts[index_a].v, &parts[index_a], cosmo, neutrino_qfac, &q, &w);
@@ -1275,7 +1275,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     double mass = part_mass;
 #endif
 
-                    if (match_particle_type(&parts[index_a], neutrino_type, 0)) {
+                    if (compare_particle_type(&parts[index_a], neutrino_type, 0)) {
                         /* Compute the neutrino delta-f weight */
                         double q, w;
                         neutrino_weight(parts[index_a].v, &parts[index_a], cosmo, neutrino_qfac, &q, &w);
@@ -1285,9 +1285,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     /* Accumulate mass in the SO window */
                     halos[i].mass_tot += mass;
                     halos[i].npart_tot++;
-                    if (match_particle_type(&parts[index_a], cdm_type, 1)) {
+                    if (compare_particle_type(&parts[index_a], cdm_type, 1)) {
                         halos[i].mass_dm += mass;
-                    } else if (match_particle_type(&parts[index_a], neutrino_type, 0)) {
+                    } else if (compare_particle_type(&parts[index_a], neutrino_type, 0)) {
                         halos[i].mass_nu += mass;
                     }
 
@@ -1320,7 +1320,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     halos[i].v_com[1] += vy * mass;
                     halos[i].v_com[2] += vz * mass;
 
-                    if (match_particle_type(&parts[index_a], cdm_type, 0)) {
+                    if (compare_particle_type(&parts[index_a], cdm_type, 0)) {
                         halos[i].x_com_dm[0] += fx * mass;
                         halos[i].x_com_dm[1] += fy * mass;
                         halos[i].x_com_dm[2] += fz * mass;

@@ -29,7 +29,7 @@ static inline double relativistic_drift(const FloatVelType v[3],
                                         const struct physical_consts *pcs,
                                         double a) {
 
-    if (match_particle_type(p, neutrino_type, 0)) {
+    if (compare_particle_type(p, neutrino_type, 0)) {
         FloatVelType v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
         FloatVelType ac = a * pcs->SpeedOfLight;
         FloatVelType ac2 = ac * ac;
