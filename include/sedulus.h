@@ -20,6 +20,7 @@
 #ifndef SEDULUS_H
 #define SEDULUS_H
 
+#include "config.h"
 #include "message.h"
 #include "params.h"
 #include "units.h"

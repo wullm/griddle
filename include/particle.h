@@ -23,16 +23,8 @@
 #include <stdint.h>
 #include <mpi.h>
 
-#define SINGLE_PRECISION_IDS
-#define SINGLE_PRECISION_POSITIONS
-#define SINGLE_PRECISION_VELOCITIES
-#define WITH_ACCELERATIONS
-#define WITH_MASSES
-#define WITH_PARTICLE_IDS
-#define WITH_PARTICLE_SEEDS
-#define WITH_PARTTYPE
+#include "config.h"
 
-#define WITH_NEUTRINOS
 
 #ifdef SINGLE_PRECISION_IDS
 #define PID_BITS 32

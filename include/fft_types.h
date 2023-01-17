@@ -20,9 +20,7 @@
 #ifndef FFT_TYPES_H
 #define FFT_TYPES_H
 
-#define SINGLE_PRECISION_FFTW
-// #define MEASURED_FFTW_PLANS
-// #define USE_IN_PLACE_FFTS
+#include "config.h"
 
 #ifdef SINGLE_PRECISION_FFTW
 typedef float GridFloatType;
