@@ -203,6 +203,8 @@ int readParams(struct params *pars, const char *fname) {
     pars->ShrinkingSphereRadiusFactor = read_double("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname, f, rank);
     pars->ShrinkingSphereMassFraction = read_double("HaloFinding", "ShrinkingSphereMassFraction", 0.01, fname, f, rank);
     pars->ShrinkingSphereMinParticleNum = read_long("HaloFinding", "ShrinkingSphereMinParticleNum", 100, fname, f, rank);
+    pars->CatalogueMassDScaleCompression = read_long("HaloFinding", "CatalogueMassDScaleCompression", 1, fname, f, rank);
+    pars->CatalogueRadiusDScaleCompression = read_long("HaloFinding", "CatalogueRadiusDScaleCompression", 1, fname, f, rank);
     pars->ExportSnipshots = read_long("HaloFinding", "ExportSnipshots", 1, fname, f, rank);
     pars->SnipshotReduceFactor =  read_double("HaloFinding", "SnipshotReduceFactor", 0.01, fname, f, rank);
     pars->SnipshotMinParticleNum =  read_long("HaloFinding", "SnipshotMinParticleNum", 5, fname, f, rank);

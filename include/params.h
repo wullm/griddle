@@ -76,6 +76,8 @@ struct params {
     double SphericalOverdensityThreshold;
     double SphericalOverdensityMinLookRadius;
     int FOFBufferSize;
+    int CatalogueMassDScaleCompression;
+    int CatalogueRadiusDScaleCompression;
 
     /* Shrinking sphere parameters */
     double ShrinkingSphereInitialRadius;
