@@ -112,8 +112,8 @@ struct fof_halo {
     int rank;
 };
 
-int analysis_fof(struct particle *parts, double boxlen, long int Np,
-                 long long int Ng, long long int num_localpart,
+int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
+                 long int N_nu, long long int Ng, long long int num_localpart,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,

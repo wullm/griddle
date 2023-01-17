@@ -62,4 +62,29 @@ static inline void neutrino_weight(const FloatVelType v[3],
 #endif
 }
 
+static inline int neutrino_species(const struct particle *p,
+                                   const struct cosmology *cosmo) {
+
+#ifdef WITH_NEUTRINOS
+    if (compare_particle_type(p, neutrino_type, 0)) {
+
+#if defined(WITH_PARTICLE_SEEDS)
+        long int seed = p->seed;
+#elif defined(WITH_PARTICLE_IDS)
+        long int seed = p->id;
+#else
+        printf("Error: Not compiled with particle seeds or ids.\n");
+        exit(1);
+#endif
+
+        return (int)seed % cosmo->N_nu;
+    } else {
+        return 0;
+    }
+#else
+    printf("Error: delta-f weight function called, but not compiled with neutrinos.\n");
+    exit(1);
+#endif
+}
+
 #endif

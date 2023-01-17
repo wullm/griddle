@@ -37,8 +37,9 @@ extern const char *grid_type_names[num_grid_types];
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum, enum grid_type gtype,
-                    const struct cosmology *cosmo,
-                    const struct physical_consts *pcs);
+                    const struct cosmology *cosmo, const struct units *us,
+                    const struct physical_consts *pcs, long int N_cb,
+                    long int N_nu);
 int compute_potential(struct distributed_grid *dgrid,
                       struct physical_consts *pcs, FourierPlanType r2c,
                       FourierPlanType c2r);

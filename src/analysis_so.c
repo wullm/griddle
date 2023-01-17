@@ -563,11 +563,26 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     return exchange_iteration;
 }
 
+#ifndef WITH_MASSES
+double get_part_mass(struct particle *p, double part_mass_cb,
+                     double base_part_mass_nu, const struct cosmology *cosmo) {
+    if (compare_particle_type(p, cdm_type, 1)) {
+        return part_mass_cb;
+    } else if (compare_particle_type(p, neutrino_type, 0)) {
+        return base_part_mass_nu * cosmo->Omega_nu_0[neutrino_species(p, cosmo)];
+    } else {
+        printf("Error: particle type not implemented.\n");
+        exit(1);
+    }
+}
+#endif
+
 int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
-                long int Np, long long int Ng, long long int num_localpart,
-                long long int max_partnum, long int total_num_fofs,
-                long int num_local_fofs, int output_num, double a_scale_factor,
-                const struct units *us, const struct physical_consts *pcs,
+                long int N_cb, long int N_nu, long long int Ng,
+                long long int num_localpart, long long int max_partnum,
+                long int total_num_fofs, long int num_local_fofs,
+                int output_num, double a_scale_factor, const struct units *us,
+                const struct physical_consts *pcs,
                 const struct cosmology *cosmo, const struct params *pars,
                 const struct cosmology_tables *ctabs,
                 double dtau_kick, double dtau_drift) {
@@ -612,8 +627,9 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     const double dens_fac = (4.0 / 3.0) * M_PI * rho_crit;
     const double inv_fac = 1.0 / dens_fac;
 #ifndef WITH_MASSES
-    const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
-    const double part_mass = rho_crit_0 * Omega_m * pow(boxlen / Np, 3);
+    const double Omega_cb = cosmo->Omega_cdm + cosmo->Omega_b;
+    const double part_mass_cb = rho_crit_0 * Omega_cb * pow(boxlen / N_cb, 3);
+    const double base_part_mass_nu = (N_nu > 0) ? rho_crit_0 * pow(boxlen / N_nu, 3) : 0.;
 #endif
 
     /* Conversion factor for neutrino momenta */
@@ -824,7 +840,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #ifdef WITH_MASSES
                     double mass = parts[index_a].m;
 #else
-                    double mass = part_mass;
+                    double mass = get_part_mass(&parts[index_a], part_mass_cb, base_part_mass_nu, cosmo);
 #endif
 
                     m_ini += mass;
@@ -870,7 +886,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #ifdef WITH_MASSES
                         double mass = parts[index_a].m;
 #else
-                        double mass = part_mass;
+                        double mass = get_part_mass(&parts[index_a], part_mass_cb, base_part_mass_nu, cosmo);
 #endif
 
                         sphere_mass += mass;
@@ -928,7 +944,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #ifdef WITH_MASSES
                         double mass = parts[index_a].m;
 #else
-                        double mass = part_mass;
+                        double mass = get_part_mass(&parts[index_a], part_mass_cb, base_part_mass_nu, cosmo);
 #endif
 
                         /* Compute the offset from the current CoM */
@@ -1050,7 +1066,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #ifdef WITH_MASSES
                         double mass = parts[index_b].m;
 #else
-                        double mass = part_mass;
+                        double mass = get_part_mass(&parts[index_b], part_mass_cb, base_part_mass_nu, cosmo);
 #endif
 
                         double r2 = int_to_phys_dist2(xa, xb, int_to_pos_fac);
@@ -1158,7 +1174,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #ifdef WITH_MASSES
                     double mass = parts[index_a].m;
 #else
-                    double mass = part_mass;
+                    double mass = get_part_mass(&parts[index_a], part_mass_cb, base_part_mass_nu, cosmo);
 #endif
 
                     if (compare_particle_type(&parts[index_a], neutrino_type, 0)) {
@@ -1272,7 +1288,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 #ifdef WITH_MASSES
                     double mass = parts[index_a].m;
 #else
-                    double mass = part_mass;
+                    double mass = get_part_mass(&parts[index_a], part_mass_cb, base_part_mass_nu, cosmo);
 #endif
 
                     if (compare_particle_type(&parts[index_a], neutrino_type, 0)) {

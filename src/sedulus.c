@@ -431,7 +431,7 @@ int main(int argc, char *argv[]) {
                           grid_type_names[powspec_types[i]]);
 
             /* Initiate mass deposition */
-            mass_deposition(&mass, particles, local_partnum, powspec_types[i], &cosmo, &pcs);
+            mass_deposition(&mass, particles, local_partnum, powspec_types[i], &cosmo, &us, &pcs, N, N_nu);
             timer_stop(rank, &powspec_timer, "Computing mass density took ");
 
             /* Merge the buffers with the main grid */
@@ -469,7 +469,7 @@ int main(int argc, char *argv[]) {
 
         /* Run the halo finder */
         const double linking_length = pars.LinkingLength * boxlen / N;
-        analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars, &ctabs,  /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
+        analysis_fof(particles, boxlen, N, N_nu, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ 0, a_begin, &us, &pcs, &cosmo, &pars, &ctabs,  /* kick_dtau = */ 0., /* drift_dtau = */ 0.);
 
         /* Timer */
         MPI_Barrier(MPI_COMM_WORLD);
@@ -495,17 +495,6 @@ int main(int argc, char *argv[]) {
         timer_stop(rank, &snapshot_timer, "Exporting a snapshot took ");
         message(rank, "\n");
     }
-
-#ifndef WITH_MASSES
-    /* If particles do not have individual masses, then the mass density grid
-     * is instead a number density grid. We then multiply the accelerations by
-     * the appropriate factor in the main loop. */
-    const double h = cosmo.h;
-    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us.UnitTimeSeconds;
-    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs.GravityG);
-    const double Omega_m = cosmo.Omega_cdm + cosmo.Omega_b;
-    const double part_mass = rho_crit * Omega_m * pow(boxlen / N, 3);
-#endif
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
@@ -571,7 +560,7 @@ int main(int argc, char *argv[]) {
         timer_start(rank, &run_timer);
 
         /* Initiate mass deposition */
-        mass_deposition(&mass, particles, local_partnum, all_mass, &cosmo, &pcs);
+        mass_deposition(&mass, particles, local_partnum, all_mass, &cosmo, &us, &pcs, N, N_nu);
         timer_stop(rank, &run_timer, "Computing mass density took ");
 
         /* Merge the buffers with the main grid */
@@ -609,12 +598,6 @@ int main(int argc, char *argv[]) {
                 printf("Differentiation scheme with order %d not implemented.\n", pars.DerivativeOrder);
             }
 
-#ifndef WITH_MASSES
-            acc[0] *= part_mass;
-            acc[1] *= part_mass;
-            acc[2] *= part_mass;
-#endif
-
 #ifdef WITH_ACCELERATIONS
             p->a[0] = acc[0];
             p->a[1] = acc[1];
@@ -649,11 +632,6 @@ int main(int argc, char *argv[]) {
                 weights_sq_sum_local += w * w;
                 neutrino_q_sum_local += q;
             }
-
-            // /* Convert positions to integers (wrapping automatic by overflow) */
-            // p->x[0] = x[0] * grid_to_int_fac;
-            // p->x[1] = x[1] * grid_to_int_fac;
-            // p->x[2] = x[2] * grid_to_int_fac;
         }
 
         /* Timer */
@@ -733,7 +711,7 @@ int main(int argc, char *argv[]) {
                     timer_stop(rank, &run_timer, "Exchanging particles took ");
 
                     /* Initiate mass deposition */
-                    mass_deposition(&mass, particles, local_partnum, powspec_types[i], &cosmo, &pcs);
+                    mass_deposition(&mass, particles, local_partnum, powspec_types[i], &cosmo, &us, &pcs, N, N_nu);
                     timer_stop(rank, &run_timer, "Computing mass density took ");
 
                     /* Merge the buffers with the main grid */
@@ -809,7 +787,7 @@ int main(int argc, char *argv[]) {
 
                 /* Run the halo finder */
                 const double linking_length = pars.LinkingLength * boxlen / N;
-                analysis_fof(particles, boxlen, N, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars, &ctabs, halos_kick_dtau, halos_drift_dtau);
+                analysis_fof(particles, boxlen, N, N_nu, M, local_partnum, max_partnum, linking_length, pars.MinHaloParticleNum, /* output_num = */ j, output_list_halos[j], &us, &pcs, &cosmo, &pars, &ctabs, halos_kick_dtau, halos_drift_dtau);
 
                 /* Timer */
                 MPI_Barrier(MPI_COMM_WORLD);

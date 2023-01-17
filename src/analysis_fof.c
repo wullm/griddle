@@ -234,8 +234,8 @@ void copy_edge_parts(struct fof_part_exchange_data **dest,
     }
 }
 
-int analysis_fof(struct particle *parts, double boxlen, long int Np,
-                 long long int Ng, long long int num_localpart,
+int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
+                 long int N_nu, long long int Ng, long long int num_localpart,
                  long long int max_partnum, double linking_length,
                  int halo_min_npart, int output_num, double a_scale_factor,
                  const struct units *us, const struct physical_consts *pcs,
@@ -293,8 +293,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     /* Compute the critical density */
     const double H_0 = cosmo->h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
     const double rho_crit_0 = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
-    const double Omega_m = cosmo->Omega_cdm + cosmo->Omega_b;
-    const double part_mass = rho_crit_0 * Omega_m * pow(boxlen / Np, 3);
+    const double Omega_cb = cosmo->Omega_cdm + cosmo->Omega_b;
+    const double part_mass_cb = rho_crit_0 * Omega_cb * pow(boxlen / N_cb, 3);
 #endif
 
     /* Find the maximum number of particles across all ranks */
@@ -313,7 +313,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     const double net_presort = (mem_fof_parts + mem_cell_list) - mem_grid;
     const double net_postsort = (mem_fof_parts + mem_cell_structures + mem_particle_list + mem_roots) - mem_grid;
     /* Estimate the number of halos */
-    const double halo_num_estimate = 0.005 * Np * Np * Np;
+    const double halo_num_estimate = 0.005 * N_cb * N_cb * N_cb;
     const double mem_central_parts = (halo_num_estimate * (sizeof(double) + sizeof(long int))) / (1.0e9);
     const double mem_halo_struct = (halo_num_estimate * sizeof(struct fof_halo)) / (1.0e9);
     const double net_final = (mem_fof_parts + mem_sizes_ids + mem_central_parts + mem_halo_struct) - mem_grid;
@@ -832,7 +832,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 #ifdef WITH_MASSES
             double mass = parts[i].m;
 #else
-            double mass = part_mass;
+            double mass = part_mass_cb;
 #endif
 
             /* Friends-of-friends mass */
@@ -956,7 +956,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
 #ifdef WITH_MASSES
                 double mass = parts[i].m;
 #else
-                double mass = part_mass;
+                double mass = part_mass_cb;
 #endif
 
                 /* Compute the offset from the shrinking sphere centre of mass */
@@ -1039,9 +1039,10 @@ int analysis_fof(struct particle *parts, double boxlen, long int Np,
     if (pars->DoSphericalOverdensities) {
         message(rank, "Proceeding with spherical overdensity calculations.\n");
 
-        analysis_so(parts, &fofs, boxlen, Np, Ng, num_localpart, max_partnum,
-                    total_halo_num, num_structures, output_num, a_scale_factor,
-                    us, pcs, cosmo, pars, ctabs, dtau_kick, dtau_drift);
+        analysis_so(parts, &fofs, boxlen, N_cb, N_nu, Ng, num_localpart,
+                    max_partnum, total_halo_num, num_structures, output_num,
+                    a_scale_factor, us, pcs, cosmo, pars, ctabs, dtau_kick,
+                    dtau_drift);
     }
 
     /* Free the remaining memory */

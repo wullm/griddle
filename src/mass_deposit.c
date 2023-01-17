@@ -32,8 +32,9 @@ const char *grid_type_names[num_grid_types] = {"all", "cb", "nu"};
 
 int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
                     long long int local_partnum, enum grid_type gtype,
-                    const struct cosmology *cosmo,
-                    const struct physical_consts *pcs) {
+                    const struct cosmology *cosmo, const struct units *us,
+                    const struct physical_consts *pcs, long int N_cb,
+                    long int N_nu) {
 
     const long int N = dgrid->N;
     const long int Nz = dgrid->Nz;
@@ -45,6 +46,19 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
 
     /* Conversion factor for neutrino momenta */
     const double neutrino_qfac = pcs->ElectronVolt / (pcs->SpeedOfLight * cosmo->T_nu_0 * pcs->kBoltzmann);
+
+#ifndef WITH_MASSES
+    /* Cosmological constants */
+    const double h = cosmo->h;
+    const double H_0 = h * 100 * KM_METRES / MPC_METRES * us->UnitTimeSeconds;
+    const double rho_crit = 3.0 * H_0 * H_0 / (8. * M_PI * pcs->GravityG);
+    const double Omega_cb = cosmo->Omega_cdm + cosmo->Omega_b;
+    const double part_mass_cb = rho_crit * Omega_cb * pow(boxlen / N_cb, 3);
+
+    /* Pull down the present day neutrino density per species */
+    const double base_part_mass_nu = (N_nu > 0) ? rho_crit * pow(boxlen / N_nu, 3) : 0.;
+    const double *Omega_nu_0 = cosmo->Omega_nu_0;
+#endif
 
     /* Position factors */
     const double pos_to_int_fac = pow(2.0, POSITION_BITS) / boxlen;
@@ -70,9 +84,14 @@ int mass_deposition(struct distributed_grid *dgrid, struct particle *parts,
         double Z = part->x[2] * int_to_grid_fac;
 
 #ifdef WITH_MASSES
-        double M = part->m * cell_factor_3;
+        double M = cell_factor_3 * part->m;
 #else
-        double M = cell_factor_3;
+        double M;
+        if (compare_particle_type(part, cdm_type, 1)) {
+            M = cell_factor_3 * part_mass_cb;
+        } else if (compare_particle_type(part, neutrino_type, 0)) {
+            M = cell_factor_3 * base_part_mass_nu * Omega_nu_0[neutrino_species(part, cosmo)];
+        }
 #endif
 
         /* Neutrino delta-f weighting */
