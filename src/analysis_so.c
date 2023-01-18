@@ -832,14 +832,14 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         const int minpart = pars->ShrinkingSphereMinParticleNum;
 
         /* The initial search radius */
-        double r_ini = (*fofs)[i].radius_fof * pars->ShrinkingSphereInitialRadius;
+        double r_ini = fmin(max_radius, (*fofs)[i].radius_fof * pars->ShrinkingSphereInitialRadius);
         double m_ini = 0.;
         int npart_ini = 0;
 
-        if (r_ini >= max_radius) {
-            printf("Error: Maximum search radius too small.\n");
-            exit(1);
-        }
+        // if (r_ini >= max_radius) {
+        //     printf("Error: Maximum search radius too small.\n");
+        //     exit(1);
+        // }
 
         /* Determine all cells that overlap with the search radius */
         find_overlapping_cells(halos[i].x_com_inner, r_ini * 1.01,

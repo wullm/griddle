@@ -271,6 +271,41 @@ void copy_edge_parts(struct fof_part_first_exchange_data **dest,
     }
 }
 
+void print_memory_message(int rank, int MPI_Rank_Count, long int Ng,
+                          int num_cells, long int max_partnum_global,
+                          long int N_cb) {
+    /* Compare memory use of FOF structures with that of the PM grid. */
+    const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
+    const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(long int)) / (1.0e9);
+    const double mem_cell_list = (max_partnum_global * sizeof(struct fof_cell_list)) / (1.0e9);
+    const double mem_particle_list = (max_partnum_global * sizeof(CellOffsetIntType)) / (1.0e9);
+    const double mem_fof_parts = (max_partnum_global * sizeof(struct fof_part_data)) / (1.0e9);
+    const double mem_roots = (max_partnum_global * sizeof(long int)) / (1.0e9);
+    const double mem_sizes_ids = (max_partnum_global * sizeof(long int)) / (1.0e9);
+    const double net_presort = (mem_fof_parts + mem_cell_list) - mem_grid;
+    const double net_postsort = (mem_fof_parts + mem_cell_structures + mem_particle_list + mem_roots) - mem_grid;
+    /* Estimate the number of halos */
+    const double halo_num_estimate = 0.005 * N_cb * N_cb * N_cb;
+    const double mem_central_parts = (halo_num_estimate * (sizeof(double) + sizeof(long int))) / (1.0e9);
+    const double mem_halo_struct = (halo_num_estimate * sizeof(struct fof_halo)) / (1.0e9);
+    const double net_final = (mem_fof_parts + mem_sizes_ids + mem_central_parts + mem_halo_struct) - mem_grid;
+    message(rank, "\n");
+    message(rank, "Estimated memory use of FOF structures.\n");
+    message(rank, "FOF particle data (always): %g GB\n", mem_fof_parts);
+    message(rank, "Cell list (pre-sort): %g GB\n", mem_cell_list);
+    message(rank, "Cell structures (post-sort): %g GB\n", mem_cell_structures);
+    message(rank, "Offset list (post-sort): %g GB\n", mem_particle_list);
+    message(rank, "Root list  (post-sort): %g GB\n", mem_roots);
+    message(rank, "Group sizes & ids  (final): %g GB\n", mem_sizes_ids);
+    message(rank, "Central particles (final): %g GB\n", mem_central_parts);
+    message(rank, "Halo data (final): %g GB\n", mem_halo_struct);
+    message(rank, "Available from PM grid: %g GB\n", mem_grid);
+    message(rank, "(Pre-sort) Net use: %g\n", net_presort);
+    message(rank, "(Post-sort) Net use: %g\n", net_postsort);
+    message(rank, "(Final) Net use: %g\n", net_final);
+    message(rank, "\n");
+}
+
 int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                  long int N_nu, long long int Ng, long long int num_localpart,
                  long long int max_partnum, double linking_length,
@@ -339,37 +374,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     long int max_partnum_global;
     MPI_Allreduce(&max_partnum, &max_partnum_global, 1, MPI_LONG,
                   MPI_SUM, MPI_COMM_WORLD);
-
-    /* Compare memory use of FOF structures with that of the PM grid. */
-    const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
-    const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(long int)) / (1.0e9);
-    const double mem_cell_list = (max_partnum_global * sizeof(struct fof_cell_list)) / (1.0e9);
-    const double mem_particle_list = (max_partnum_global * sizeof(CellOffsetIntType)) / (1.0e9);
-    const double mem_fof_parts = (max_partnum_global * sizeof(struct fof_part_data)) / (1.0e9);
-    const double mem_roots = (max_partnum_global * sizeof(long int)) / (1.0e9);
-    const double mem_sizes_ids = (max_partnum_global * sizeof(long int)) / (1.0e9);
-    const double net_presort = (mem_fof_parts + mem_cell_list) - mem_grid;
-    const double net_postsort = (mem_fof_parts + mem_cell_structures + mem_particle_list + mem_roots) - mem_grid;
-    /* Estimate the number of halos */
-    const double halo_num_estimate = 0.005 * N_cb * N_cb * N_cb;
-    const double mem_central_parts = (halo_num_estimate * (sizeof(double) + sizeof(long int))) / (1.0e9);
-    const double mem_halo_struct = (halo_num_estimate * sizeof(struct fof_halo)) / (1.0e9);
-    const double net_final = (mem_fof_parts + mem_sizes_ids + mem_central_parts + mem_halo_struct) - mem_grid;
-    message(rank, "\n");
-    message(rank, "Estimated memory use of FOF structures.\n");
-    message(rank, "FOF particle data (always): %g GB\n", mem_fof_parts);
-    message(rank, "Cell list (pre-sort): %g GB\n", mem_cell_list);
-    message(rank, "Cell structures (post-sort): %g GB\n", mem_cell_structures);
-    message(rank, "Offset list (post-sort): %g GB\n", mem_particle_list);
-    message(rank, "Root list  (post-sort): %g GB\n", mem_roots);
-    message(rank, "Group sizes & ids  (final): %g GB\n", mem_sizes_ids);
-    message(rank, "Central particles (final): %g GB\n", mem_central_parts);
-    message(rank, "Halo data (final): %g GB\n", mem_halo_struct);
-    message(rank, "Available from PM grid: %g GB\n", mem_grid);
-    message(rank, "(Pre-sort) Net use: %g\n", net_presort);
-    message(rank, "(Post-sort) Net use: %g\n", net_postsort);
-    message(rank, "(Final) Net use: %g\n", net_final);
-    message(rank, "\n");
+    print_memory_message(rank, MPI_Rank_Count, num_cells, Ng, max_partnum_global, N_cb);
 
     if ((double) N_cells * N_cells >= pow(2, CELL_INT_BYTES)) {
         printf("The number of cells is large. We should switch to larger ints (TODO).\n");
