@@ -297,7 +297,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
             
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 /* Skip non-DM particles */
                 if (!compare_particle_type(&parts[index_a], cdm_type, 1)) continue;
@@ -394,22 +394,22 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     hid_t h_prop_vel = H5Pcreate(H5P_DATASET_CREATE);
     H5Pset_chunk(h_prop_vel, vrank, vchunk);
 
-    /* Set lossy filter (keep "digits" digits after the decimal point) */
-    const int digits_pos = pars->SnipshotPositionDScaleCompression;
-    const int digits_vel = pars->SnipshotVelocityDScaleCompression;
-    if (digits_pos > 0)
-        H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
-    if (digits_vel > 0)
-        H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
-
-    /* Set shuffle and lossless compression filters (GZIP level 4) */
-    const int gzip_level = pars->SnipshotZipCompressionLevel;
-    if (gzip_level > 0) {
-        H5Pset_shuffle(h_prop_pos);
-        H5Pset_shuffle(h_prop_vel);
-        H5Pset_deflate(h_prop_pos, gzip_level);
-        H5Pset_deflate(h_prop_vel, gzip_level);
-    }
+    // /* Set lossy filter (keep "digits" digits after the decimal point) */
+    // const int digits_pos = pars->SnipshotPositionDScaleCompression;
+    // const int digits_vel = pars->SnipshotVelocityDScaleCompression;
+    // if (digits_pos > 0)
+    //     H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
+    // if (digits_vel > 0)
+    //     H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
+    // 
+    // /* Set shuffle and lossless compression filters (GZIP level 4) */
+    // const int gzip_level = pars->SnipshotZipCompressionLevel;
+    // if (gzip_level > 0) {
+    //     H5Pset_shuffle(h_prop_pos);
+    //     H5Pset_shuffle(h_prop_vel);
+    //     H5Pset_deflate(h_prop_pos, gzip_level);
+    //     H5Pset_deflate(h_prop_vel, gzip_level);
+    // }
 
     /* Create vector datapsace for chunks of data */
     const hsize_t ch_vdims[2] = {particles_total, 3};
@@ -480,6 +480,20 @@ int exportSnipshot(const struct params *pars, const struct units *us,
         /* Close the header group */
         H5Gclose(h_grp);
 
+        /* Create the particle group in the output file */
+        h_grp = H5Gcreate(h_out_file, ExportName, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+        /* Coordinates (use vector space) */
+        h_data = H5Dcreate(h_grp, "Coordinates", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
+        H5Dclose(h_data);
+
+        /* Velocities (use vector space) */
+        h_data = H5Dcreate(h_grp, "Velocities", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
+        H5Dclose(h_data);
+        
+        /* Close the particle group */
+        H5Gclose(h_grp);
+
         /* Scalar dataspace for halos */
         const hsize_t hsdims[1] = {total_halo_num};
         hid_t h_hsspace = H5Screate_simple(srank, hsdims, NULL);
@@ -514,38 +528,30 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     hid_t h_out_file = H5Fopen(fname, H5F_ACC_RDWR, prop_faxs);
     H5Pclose(prop_faxs);
 
-    /* Create the particle group in the output file */
-    hid_t h_grp = H5Gcreate(h_out_file, ExportName, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    /* Coordinates (use vector space) */
-    hid_t h_data = H5Dcreate(h_grp, "Coordinates", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_pos, H5P_DEFAULT);
-    H5Dclose(h_data);
-
-    /* Velocities (use vector space) */
-    h_data = H5Dcreate(h_grp, "Velocities", H5T_NATIVE_FLOAT, h_vspace, H5P_DEFAULT, h_prop_vel, H5P_DEFAULT);
-    H5Dclose(h_data);
-
     /* Choose the hyperslabs for the local particles inside the overall spaces */
     H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
 
     /* Property list for collective MPI write */
-    hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
-    H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    // hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
+    // H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+
+    /* Open the particle group in the output file */
+    hid_t h_grp = H5Gopen(h_out_file, "PartType1", H5P_DEFAULT);
 
     /* Write coordinate data (vector) */
-    h_data = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_vspace, h_vspace, prop_write, coords);
+    hid_t h_data = H5Dopen(h_grp, "Coordinates", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_vspace, h_vspace, H5P_DEFAULT, coords);
     H5Dclose(h_data);
     free(coords);
 
     /* Write velocity data (vector) */
     h_data = H5Dopen(h_grp, "Velocities", H5P_DEFAULT);
-    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_vspace, h_vspace, prop_write, vels);
+    H5Dwrite(h_data, H5T_NATIVE_FLOAT, h_ch_vspace, h_vspace, H5P_DEFAULT, vels);
     H5Dclose(h_data);
     free(vels);
 
     /* Close the property list and group */
-    H5Pclose(prop_write);
+    // H5Pclose(prop_write);
     H5Gclose(h_grp);
     
     /* Open the halo group in the output file */

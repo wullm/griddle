@@ -36,7 +36,8 @@
 
 #define DEBUG_CHECKS
 
-MPI_Datatype fof_type;
+MPI_Datatype fof_first_type;
+MPI_Datatype fof_second_type;
 
 /* Should two particles be linked? */
 static inline int should_link(const IntPosType ax[3], const IntPosType bx[3],
@@ -106,17 +107,18 @@ long int find_root_global(struct fof_part_data *fof_parts, struct fof_part_data 
 }
 
 /* Link particles within two cells */
-long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, long int *cl,
-                    long int local_offset1, long int local_offset2,
-                    long int local_count1, long int local_count2,
-                    double int_to_pos_fac, double linking_length_2) {
+long int link_cells(struct fof_part_data *fof_parts, struct particle *parts,
+                    CellOffsetIntType *cl, long int local_offset1,
+                    long int local_offset2, long int local_count1,
+                    long int local_count2, double int_to_pos_fac,
+                    double linking_length_2) {
 
     if (local_count1 < 1 || local_count2 < 1 || (local_count1 + local_count2 < 2)) return 0;
 
     long int links = 0;
 
     for (long int a = 0; a < local_count1; a++) {
-        const long int index_a = cl[local_offset1 + a];
+        const CellOffsetIntType index_a = cl[local_offset1 + a];
         const IntPosType *xa = parts[index_a].x;
 
         /* Don't link neutrinos */
@@ -126,7 +128,7 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, lon
         long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
 
         for (long int b = 0; b < max_check; b++) {
-            const long int index_b = cl[local_offset2 + b];
+            const CellOffsetIntType index_b = cl[local_offset2 + b];
             const IntPosType *xb = parts[index_b].x;
 
             /* Don't link neutrinos */
@@ -142,15 +144,15 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts, lon
     return links;
 }
 
-/* Receive FOF particle data */
-void receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
-                       int *num_received, int from_rank, long long int current_partnum,
-                       long long int max_partnum) {
+/* Receive FOF particle data in the first exchange */
+void first_receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
+                             int *num_received, int from_rank, long int from_rank_offset,
+                             long long int current_partnum, long long int max_partnum) {
 
     /* Prepare to receive particles */
     MPI_Status status;
     MPI_Probe(from_rank, 0, MPI_COMM_WORLD, &status);
-    MPI_Get_count(&status, fof_type, num_received);
+    MPI_Get_count(&status, fof_first_type, num_received);
 
     /* Check that we have enough memory */
     if (current_partnum + *num_received > max_partnum) {
@@ -159,10 +161,46 @@ void receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
     }
 
     /* Allocate memory for receiving particles */
-    struct fof_part_exchange_data *recv_parts = malloc(*num_received * sizeof(struct fof_part_exchange_data));
+    struct fof_part_first_exchange_data *recv_parts = malloc(*num_received * sizeof(struct fof_part_first_exchange_data));
 
     /* Receive the particle data */
-    MPI_Recv(recv_parts, *num_received, fof_type, from_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(recv_parts, *num_received, fof_first_type, from_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    /* Copy over the data */
+    for (long int i = 0; i < *num_received; i++) {
+        parts_dest[i].x[0] = recv_parts[i].x[0];
+        parts_dest[i].x[1] = recv_parts[i].x[1];
+        parts_dest[i].x[2] = recv_parts[i].x[2];
+        dest[i].global_offset = recv_parts[i].local_offset + from_rank_offset;
+        // roots have not been set yet and are not exchanged
+    }
+
+    /* Free the received data */
+    free(recv_parts);
+}
+
+
+/* Receive FOF particle data in the second exchange (more data is exchanged here) */
+void second_receive_fof_parts(struct fof_part_data *dest, struct particle *parts_dest,
+                              int *num_received, int from_rank, long long int current_partnum,
+                              long long int max_partnum) {
+
+    /* Prepare to receive particles */
+    MPI_Status status;
+    MPI_Probe(from_rank, 0, MPI_COMM_WORLD, &status);
+    MPI_Get_count(&status, fof_second_type, num_received);
+
+    /* Check that we have enough memory */
+    if (current_partnum + *num_received > max_partnum) {
+        printf("Not enough memory to exchange FOF data (%lld < %lld).\n", max_partnum, current_partnum + *num_received);
+        exit(1);
+    }
+
+    /* Allocate memory for receiving particles */
+    struct fof_part_second_exchange_data *recv_parts = malloc(*num_received * sizeof(struct fof_part_second_exchange_data));
+
+    /* Receive the particle data */
+    MPI_Recv(recv_parts, *num_received, fof_second_type, from_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     /* Copy over the data */
     for (long int i = 0; i < *num_received; i++) {
@@ -199,7 +237,7 @@ double edge_distance(IntPosType x, double boxlen, double int_to_rank_fac,
 /* Copy particles within a linking length from an edge. There are two types:
  * type = 0: left edge of the rank
  * type = 1: right edge of the domain */
-void copy_edge_parts(struct fof_part_exchange_data **dest,
+void copy_edge_parts(struct fof_part_first_exchange_data **dest,
                      struct fof_part_data *fof_parts,
                      struct particle *parts, int *num_copied,
                      long long int num_localpart, int type,
@@ -216,7 +254,7 @@ void copy_edge_parts(struct fof_part_exchange_data **dest,
     }
 
     /* Allocate memory for the edge particles */
-    *dest = malloc(count_near_edge * sizeof(struct fof_part_exchange_data));
+    *dest = malloc(count_near_edge * sizeof(struct fof_part_first_exchange_data));
     *num_copied = count_near_edge;
 
     /* Fish out particles within one linking length from the left edge */
@@ -227,8 +265,7 @@ void copy_edge_parts(struct fof_part_exchange_data **dest,
             (*dest)[copy_counter].x[0] = parts[i].x[0];
             (*dest)[copy_counter].x[1] = parts[i].x[1];
             (*dest)[copy_counter].x[2] = parts[i].x[2];
-            (*dest)[copy_counter].root = fof_parts[i].root;
-            (*dest)[copy_counter].global_offset = fof_parts[i].global_offset;
+            (*dest)[copy_counter].local_offset = i;
             copy_counter++;
         }
     }
@@ -253,7 +290,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     int rank_right = (rank + 1) % MPI_Rank_Count;
 
     /* Data type for MPI communication of particles */
-    fof_type = mpi_fof_part_type();
+    fof_first_type = mpi_fof_part_first_type();
+    fof_second_type = mpi_fof_part_second_type();
 
     /* Communicate the particle counts across all ranks */
     long long int *parts_per_rank = malloc(MPI_Rank_Count * sizeof(long int));
@@ -306,7 +344,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
     const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(long int)) / (1.0e9);
     const double mem_cell_list = (max_partnum_global * sizeof(struct fof_cell_list)) / (1.0e9);
-    const double mem_particle_list = (max_partnum_global * sizeof(long int)) / (1.0e9);
+    const double mem_particle_list = (max_partnum_global * sizeof(CellOffsetIntType)) / (1.0e9);
     const double mem_fof_parts = (max_partnum_global * sizeof(struct fof_part_data)) / (1.0e9);
     const double mem_roots = (max_partnum_global * sizeof(long int)) / (1.0e9);
     const double mem_sizes_ids = (max_partnum_global * sizeof(long int)) / (1.0e9);
@@ -350,6 +388,11 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
         exit(1);
     }
 
+    if (max_partnum > pow(2, OFFSET_INT_BYTES)) {
+        printf("The number of particles is too large for 32-bit integer offsets in the cell list structure.\n");
+        exit(1);
+    }
+
     /* Allocate memory for linking FOF particles */
     struct fof_part_data *fof_parts = malloc(max_partnum * sizeof(struct fof_part_data));
 
@@ -378,25 +421,20 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
             int receive_from_right, receive_from_left;
 
             /* Receive particle data from the right */
-            receive_fof_parts(fof_parts + num_localpart, parts + num_localpart,
-                              &receive_from_right, rank_right, num_localpart,
-                              max_partnum);
+            first_receive_fof_parts(fof_parts + num_localpart, parts + num_localpart,
+                                    &receive_from_right, rank_right, rank_offsets[rank_right],
+                                    num_localpart, max_partnum);
 
             /* Receive particle data from the left */
-            receive_fof_parts(fof_parts + num_localpart + receive_from_right,
-                              parts + num_localpart + receive_from_right,
-                              &receive_from_left, rank_left,
-                              num_localpart + receive_from_right, max_partnum);
+            first_receive_fof_parts(fof_parts + num_localpart + receive_from_right,
+                                    parts + num_localpart + receive_from_right,
+                                    &receive_from_left, rank_left, rank_offsets[rank_left],
+                                    num_localpart + receive_from_right, max_partnum);
 
             receive_foreign_count += receive_from_right;
             receive_foreign_count += receive_from_left;
         } else if (rank < MPI_Rank_Count - 1) {
-            /* Receive particles from the right */
-            receive_fof_parts(fof_parts + num_localpart, parts + num_localpart,
-                              &receive_foreign_count, rank_right, num_localpart,
-                              max_partnum);
-
-            struct fof_part_exchange_data *edge_parts;
+            struct fof_part_first_exchange_data *edge_parts;
             int count_near_edge;
 
             /* Fish out particles within one linking length from the left edge */
@@ -404,39 +442,54 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                             num_localpart, /* left */ 0, int_to_rank_fac,
                             int_to_pos_fac, boxlen, linking_length);
 
+            /* Receive particles from the right */
+            first_receive_fof_parts(fof_parts + num_localpart, parts + num_localpart,
+                                    &receive_foreign_count, rank_right, rank_offsets[rank_right],
+                                    num_localpart, max_partnum);
+
             /* Communicate the edge particles to the left neighbour */
-            MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
+            MPI_Send(edge_parts, count_near_edge, fof_first_type, rank_left, 0, MPI_COMM_WORLD);
 
             /* Release the delivered particles */
             free(edge_parts);
         } else {
-            struct fof_part_exchange_data *edge_parts;
-            int count_near_edge;
+            struct fof_part_first_exchange_data *left_edge_parts;
+            struct fof_part_first_exchange_data *right_edge_parts;
+            int count_near_left_edge;
+            int count_near_right_edge;
 
             /* Fish out particles within one linking length from the left edge */
-            copy_edge_parts(&edge_parts, fof_parts, parts, &count_near_edge,
-                            num_localpart, /* left */ 0, int_to_rank_fac,
-                            int_to_pos_fac, boxlen, linking_length);
-
-            /* Communicate the edge particles to the left neighbour */
-            MPI_Send(edge_parts, count_near_edge, fof_type, rank_left, 0, MPI_COMM_WORLD);
-
-            /* Release the delivered particles */
-            free(edge_parts);
+            copy_edge_parts(&left_edge_parts, fof_parts, parts,
+                            &count_near_left_edge, num_localpart, /* left */ 0,
+                            int_to_rank_fac, int_to_pos_fac, boxlen,
+                            linking_length);
 
             /* Fish out particles within one linking length from the right edge */
-            copy_edge_parts(&edge_parts, fof_parts, parts, &count_near_edge,
-                            num_localpart, /* right */ 1, int_to_rank_fac,
-                            int_to_pos_fac, boxlen, linking_length);
+            copy_edge_parts(&right_edge_parts, fof_parts, parts,
+                            &count_near_right_edge, num_localpart, /* right */ 1,
+                            int_to_rank_fac, int_to_pos_fac, boxlen,
+                            linking_length);
 
-            /* Communicate these edge particles to the right neighbour */
-            MPI_Send(edge_parts, count_near_edge, fof_type, rank_right, 0, MPI_COMM_WORLD);
+            /* Communicate the edge particles to the left neighbour */
+            MPI_Send(left_edge_parts, count_near_left_edge, fof_first_type,
+                     rank_left, 0, MPI_COMM_WORLD);
 
             /* Release the delivered particles */
-            free(edge_parts);
+            free(left_edge_parts);
+
+            /* Communicate these edge particles to the right neighbour */
+            MPI_Send(right_edge_parts, count_near_right_edge, fof_first_type,
+                     rank_right, 0, MPI_COMM_WORLD);
+
+            /* Release the delivered particles */
+            free(right_edge_parts);
         }
 
+        /* Place a barrier to make sure that the memory used for the exchange
+         * is freed on all ranks, before allocating the cell structures below */
+        MPI_Barrier(MPI_COMM_WORLD);
         timer_stop(rank, &fof_timer, "The first communication took ");
+        MPI_Barrier(MPI_COMM_WORLD);
     }
 
     /* Now create a particle-cell correspondence for sorting */
@@ -465,7 +518,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
     /* Free the sorted list and create a new list with offsets only */
     free(cell_list);
-    long int *particle_list = malloc((num_localpart + receive_foreign_count) * sizeof(long int));
+    CellOffsetIntType *particle_list = malloc((num_localpart + receive_foreign_count) * sizeof(CellOffsetIntType));
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
         particle_list[i] = fof_parts[i].root;
     }
@@ -559,6 +612,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     /* The total number of particles to be received from the left */
     int receive_from_left = 0;
 
+    message(rank, "Communicating and linking particles across ranks.\n");
+
     /* When running with multiple ranks, we need to communicate edge particles */
     if (MPI_Rank_Count > 1) {
 
@@ -583,7 +638,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
             /* Now, fish out all particles with foreign roots */
             long int copy_counter = 0;
-            struct fof_part_exchange_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_exchange_data));
+            struct fof_part_second_exchange_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_second_exchange_data));
             for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {
                 if (!is_local(fof_parts[i].root, rank_offset, num_localpart)) {
                     foreign_root_parts[copy_counter].x[0] = parts[i].x[0];
@@ -604,16 +659,16 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
             }
 
             /* Communicate the foreign particles to the right neighbour */
-            MPI_Send(foreign_root_parts, num_foreign_rooted, fof_type, rank_right, 0, MPI_COMM_WORLD);
+            MPI_Send(foreign_root_parts, num_foreign_rooted, fof_second_type, rank_right, 0, MPI_COMM_WORLD);
 
             /* Release the delivered particles */
             free(foreign_root_parts);
         } else {
             /* Receive particles from the left */
-            receive_fof_parts(fof_parts + num_localpart + receive_foreign_count,
-                              parts + num_localpart + receive_foreign_count,
-                              &receive_from_left, rank_left,
-                              num_localpart + receive_foreign_count, max_partnum);
+            second_receive_fof_parts(fof_parts + num_localpart + receive_foreign_count,
+                                     parts + num_localpart + receive_foreign_count,
+                                     &receive_from_left, rank_left,
+                                     num_localpart + receive_foreign_count, max_partnum);
 
             /* Collapse the tree using the global roots */
             for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
@@ -634,7 +689,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
             /* Now, fish out particles with foreign roots */
             long int copy_counter = 0;
-            struct fof_part_exchange_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_exchange_data));
+            struct fof_part_second_exchange_data *foreign_root_parts = malloc(num_foreign_rooted * sizeof(struct fof_part_second_exchange_data));
             for (long int i = 0; i < num_localpart + receive_foreign_count + receive_from_left; i++) {
                 /* Skip disabled particles */
                 if (fof_parts[i].root == -1) continue;
@@ -659,13 +714,14 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
             /* Communicate the foreign particles to the right neighbour */
             if (rank < MPI_Rank_Count - 1) {
-                MPI_Send(foreign_root_parts, num_foreign_rooted, fof_type, rank_right, 0, MPI_COMM_WORLD);
+                MPI_Send(foreign_root_parts, num_foreign_rooted, fof_second_type, rank_right, 0, MPI_COMM_WORLD);
             }
 
             /* Release the delivered particles */
             free(foreign_root_parts);
         }
 
+        MPI_Barrier(MPI_COMM_WORLD);
         timer_stop(rank, &fof_timer, "The second communication took ");
         MPI_Barrier(MPI_COMM_WORLD);
     }

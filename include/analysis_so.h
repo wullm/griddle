@@ -28,7 +28,7 @@
 #include "cosmology.h"
 
 struct so_cell_list {
-    long int offset;
+    CellOffsetIntType offset;
     CellIntType cell;
 };
 

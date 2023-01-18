@@ -37,9 +37,9 @@
 
 #define DEBUG_CHECKS
 
-static inline int sortLong(const void *a, const void *b) {
-    long int *la = (long int*) a;
-    long int *lb = (long int*) b;
+static inline int sortOffsets(const void *a, const void *b) {
+    CellOffsetIntType *la = (CellOffsetIntType*) a;
+    CellOffsetIntType *lb = (CellOffsetIntType*) b;
     return (*la) >= (*lb);
 }
 
@@ -352,7 +352,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
 
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -371,8 +371,8 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     /* The same particle could overlap with multiple halos and be counted
      * multiple times. To prevent sending over more than one copy, we first
      * create a list of indices. */
-    long int *indices_send_left = malloc(send_left_counter * sizeof(long int));
-    long int *indices_send_right = malloc(send_right_counter * sizeof(long int));
+    CellOffsetIntType *indices_send_left = malloc(send_left_counter * sizeof(CellOffsetIntType));
+    CellOffsetIntType *indices_send_right = malloc(send_right_counter * sizeof(CellOffsetIntType));
 
     /* Fish out local particles that overlap with foreign FOFs at distance n */
     long int copy_left_counter = 0;
@@ -401,7 +401,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
 
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, com, int_to_pos_fac);
@@ -436,34 +436,54 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
 #endif
 
     /* Sort the lists of indices */
-    qsort(indices_send_left, send_left_counter, sizeof(long int), sortLong);
-    qsort(indices_send_right, send_right_counter, sizeof(long int), sortLong);
+    qsort(indices_send_left, send_left_counter, sizeof(CellOffsetIntType), sortOffsets);
+    qsort(indices_send_right, send_right_counter, sizeof(CellOffsetIntType), sortOffsets);
 
-    /* Allocate memory for particles that should be sent */
-    struct particle *send_left = malloc(send_left_counter * sizeof(struct particle));
-    struct particle *send_right = malloc(send_right_counter * sizeof(struct particle));
-
-    /* Copy over unique particles to be sent left */
-    long int unique_send_left = 0;
+    /* Count the number of unique particles to be sent left */
+    long int num_unique_send_left = 0;
     for (long int i = 0; i < send_left_counter; i++) {
         if (i == 0) {
-            memcpy(send_left + unique_send_left, parts + indices_send_left[i], sizeof(struct particle));
-            unique_send_left++;
+            num_unique_send_left++;
         } else if (indices_send_left[i] > indices_send_left[i - 1]) {
-            memcpy(send_left + unique_send_left, parts + indices_send_left[i], sizeof(struct particle));
-            unique_send_left++;
+            num_unique_send_left++;
+        }
+    }
+
+    /* Count the number of unique particles to be sent right */
+    long int num_unique_send_right = 0;
+    for (long int i = 0; i < send_right_counter; i++) {
+        if (i == 0) {
+            num_unique_send_right++;
+        } else if (indices_send_right[i] > indices_send_right[i - 1]) {
+            num_unique_send_right++;
+        }
+    }
+
+    /* Allocate memory for particles that should be sent */
+    struct particle *send_left = malloc(num_unique_send_left * sizeof(struct particle));
+    struct particle *send_right = malloc(num_unique_send_right * sizeof(struct particle));
+
+    /* Copy over unique particles to be sent left */
+    long int unique_send_left_counter = 0;
+    for (long int i = 0; i < send_left_counter; i++) {
+        if (i == 0) {
+            memcpy(send_left + unique_send_left_counter, parts + indices_send_left[i], sizeof(struct particle));
+            unique_send_left_counter++;
+        } else if (indices_send_left[i] > indices_send_left[i - 1]) {
+            memcpy(send_left + unique_send_left_counter, parts + indices_send_left[i], sizeof(struct particle));
+            unique_send_left_counter++;
         }
     }
 
     /* Copy over unique particles to be sent right */
-    long int unique_send_right = 0;
+    long int unique_send_right_counter = 0;
     for (long int i = 0; i < send_right_counter; i++) {
         if (i == 0) {
-            memcpy(send_right + unique_send_right, parts + indices_send_right[i], sizeof(struct particle));
-            unique_send_right++;
+            memcpy(send_right + unique_send_right_counter, parts + indices_send_right[i], sizeof(struct particle));
+            unique_send_right_counter++;
         } else if (indices_send_right[i] > indices_send_right[i - 1]) {
-            memcpy(send_right + unique_send_right, parts + indices_send_right[i], sizeof(struct particle));
-            unique_send_right++;
+            memcpy(send_right + unique_send_right_counter, parts + indices_send_right[i], sizeof(struct particle));
+            unique_send_right_counter++;
         }
     }
 
@@ -480,9 +500,9 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
     /* Send particles left and right, using non-blocking calls */
     MPI_Request delivery_left;
     MPI_Request delivery_right;
-    MPI_Isend(send_left, unique_send_left, particle_type,
+    MPI_Isend(send_left, num_unique_send_left, particle_type,
               rank_left, 0, MPI_COMM_WORLD, &delivery_left);
-    MPI_Isend(send_right, unique_send_right, particle_type,
+    MPI_Isend(send_right, num_unique_send_right, particle_type,
               rank_right, 0, MPI_COMM_WORLD, &delivery_right);
 
     /* Probe and receive particles from the left and right when ready */
@@ -613,6 +633,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     
     message(rank, "Maximum search radius for SO particles: %g U_L\n", global_max);
+
+    if (max_partnum > pow(2, OFFSET_INT_BYTES)) {
+        printf("The number of particles is too large for 32-bit integer offsets in the cell list structure.\n");
+        exit(1);
+    }
 
     /* Spherical overdensity search radius */
     const double min_radius = pars->SphericalOverdensityMinLookRadius;
@@ -828,7 +853,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 /* Skip neutrinos in the shrinking sphere algorithm */
                 if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
@@ -874,7 +899,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
                 /* Loop over particles in cells */
                 for (long int a = 0; a < local_count; a++) {
-                    const long int index_a = cell_list[local_offset + a].offset;
+                    const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                     /* Skip neutrinos in the shrinking sphere algorithm */
                     if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
@@ -932,7 +957,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
                 /* Loop over particles in cells */
                 for (long int a = 0; a < local_count; a++) {
-                    const long int index_a = cell_list[local_offset + a].offset;
+                    const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                     /* Skip neutrinos in the shrinking sphere algorithm */
                     if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
@@ -1048,7 +1073,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, centre, int_to_pos_fac);
@@ -1077,7 +1102,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, centre, int_to_pos_fac);
@@ -1236,7 +1261,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
             /* Loop over particles in cells */
             for (long int a = 0; a < local_count; a++) {
-                const long int index_a = cell_list[local_offset + a].offset;
+                const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
                 const double r2 = int_to_phys_dist2(xa, centre, int_to_pos_fac);

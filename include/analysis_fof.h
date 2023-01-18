@@ -30,8 +30,12 @@
 typedef int32_t CellIntType;
 #define CELL_INT_BYTES 32
 
+typedef uint32_t CellOffsetIntType;
+#define MPI_OFFSET_TYPE MPI_UINT32_T
+#define OFFSET_INT_BYTES 32
+
 struct fof_cell_list {
-    long int offset;
+    CellOffsetIntType offset;
     CellIntType cell;
 };
 
@@ -83,10 +87,20 @@ struct fof_part_data {
     long int global_offset;
 };
 
-/* If you add/change/remove fields to fof_part_data or fof_halo,
- * update the corresponding MPI data types below. */
+/* If you add/change/remove fields to fof_part_first_exchange_data,
+ * update the corresponding MPI data type below. */
 
-struct fof_part_exchange_data {
+struct fof_part_first_exchange_data {
+    /* Integer positons of the particle */
+    IntPosType x[3];
+    /* The local offset */
+    CellOffsetIntType local_offset;
+};
+
+/* If you add/change/remove fields to fof_part_second_exchange_data,
+ * update the corresponding MPI data type below. */
+
+struct fof_part_second_exchange_data {
     /* Integer positons of the particle */
     IntPosType x[3];
     /* The offset (local or global) of the root of the linked particle tree */
@@ -94,6 +108,9 @@ struct fof_part_exchange_data {
     /* The global offset of the corresponding particle in parts */
     long int global_offset;
 };
+
+/* If you add/change/remove fields to fof_halo,
+ * update the corresponding MPI data type below. */
 
 struct fof_halo {
     /* Global ID of the halo */
@@ -121,16 +138,49 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                  const struct cosmology_tables *ctabs,
                  double dtau_kick, double dtau_drift);
 
-/* The MPI data type of the FOF particle data */
-static inline MPI_Datatype mpi_fof_part_type() {
+/* The MPI data type of the FOF particle data (in the first exchange) */
+static inline MPI_Datatype mpi_fof_part_first_type() {
 
     /* Construct an MPI data type from the constituent fields */
     MPI_Datatype particle_type;
-    MPI_Datatype types[4] = {MPI_INTPOS_TYPE, MPI_LONG, MPI_LONG};
-    int lengths[4];
-    MPI_Aint displacements[4];
+    MPI_Datatype types[2] = {MPI_INTPOS_TYPE, MPI_OFFSET_TYPE};
+    int lengths[2];
+    MPI_Aint displacements[2];
     MPI_Aint base_address;
-    struct fof_part_exchange_data temp;
+    struct fof_part_first_exchange_data temp;
+    MPI_Get_address(&temp, &base_address);
+
+    int counter = 0;
+
+    /* Position */
+    lengths[counter] = 3;
+    MPI_Get_address(&temp.x[0], &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Local offset */
+    lengths[counter] = 1;
+    MPI_Get_address(&temp.local_offset, &displacements[counter]);
+    displacements[counter] = MPI_Aint_diff(displacements[counter], base_address);
+    counter++;
+
+    /* Create the datatype */
+    MPI_Type_create_struct(counter, lengths, displacements, types, &particle_type);
+    MPI_Type_commit(&particle_type);
+
+    return particle_type;
+}
+
+/* The MPI data type of the FOF particle data (in the second exchange) */
+static inline MPI_Datatype mpi_fof_part_second_type() {
+
+    /* Construct an MPI data type from the constituent fields */
+    MPI_Datatype particle_type;
+    MPI_Datatype types[3] = {MPI_INTPOS_TYPE, MPI_LONG, MPI_LONG};
+    int lengths[3];
+    MPI_Aint displacements[3];
+    MPI_Aint base_address;
+    struct fof_part_second_exchange_data temp;
     MPI_Get_address(&temp, &base_address);
 
     int counter = 0;
