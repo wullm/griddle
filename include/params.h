@@ -75,6 +75,7 @@ struct params {
     double HaloFindCellNumber;
     double SphericalOverdensityThreshold;
     double SphericalOverdensityMinLookRadius;
+    double SphericalOverdensityMaxLookRadius;
     int FOFBufferSize;
     int CatalogueMassDScaleCompression;
     int CatalogueRadiusDScaleCompression;

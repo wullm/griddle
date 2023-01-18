@@ -197,7 +197,8 @@ int readParams(struct params *pars, const char *fname) {
     pars->FOFBufferSize =  read_long("HaloFinding", "FOFBufferSize", 10000, fname, f, rank);
     pars->HaloFindCellNumber = read_long("HaloFinding", "CellNumber", 256, fname, f, rank);
     pars->SphericalOverdensityThreshold = read_double("HaloFinding", "SphericalOverdensityThreshold", 200.0, fname, f, rank);
-    pars->SphericalOverdensityMinLookRadius = read_double("HaloFinding", "SphericalOverdensityMinLookRadius", 10.0, fname, f, rank);
+    pars->SphericalOverdensityMinLookRadius = read_double("HaloFinding", "SphericalOverdensityMinLookRadius", 1.0, fname, f, rank);
+    pars->SphericalOverdensityMaxLookRadius = read_double("HaloFinding", "SphericalOverdensityMaxLookRadius", 5.0, fname, f, rank);
     pars->ShrinkingSphereInitialRadius = read_double("HaloFinding", "ShrinkingSphereInitialRadius", 0.9, fname, f, rank);
     pars->ShrinkingSphereRadiusFactorCoarse = read_double("HaloFinding", "ShrinkingSphereRadiusFactorCoarse", 0.75, fname, f, rank);
     pars->ShrinkingSphereRadiusFactor = read_double("HaloFinding", "ShrinkingSphereRadiusFactor", 0.95, fname, f, rank);

@@ -298,7 +298,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                       long int *cell_offsets, double boxlen, long long int Ng,
                       long long int num_localpart, long long int *num_foreignpart,
                       long long int max_partnum, long int num_foreign_fofs,
-                      CellIntType N_cells, double min_radius,
+                      CellIntType N_cells, double min_radius, double max_radius,
                       int exchange_iteration, int max_iterations) {
 
     /* Get the dimensions of the cluster */
@@ -338,7 +338,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                              foreign_fofs[i].x_com_inner[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        const double SO_search_radius = fmax(min_radius, foreign_fofs[i].radius_fof * 1.1);
+        const double SO_search_radius = fmin(max_radius, fmax(min_radius, foreign_fofs[i].radius_fof * 1.1));
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
         find_overlapping_cells(foreign_fofs[i].x_com_inner, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
@@ -387,7 +387,7 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                              foreign_fofs[i].x_com_inner[2] * pos_to_int_fac};
 
         /* Determine all cells that overlap with the search radius */
-        const double SO_search_radius = fmax(min_radius, foreign_fofs[i].radius_fof * 1.1);
+        const double SO_search_radius = fmin(max_radius, fmax(min_radius, foreign_fofs[i].radius_fof * 1.1));
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
         find_overlapping_cells(foreign_fofs[i].x_com_inner, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
@@ -577,7 +577,8 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
                                                boxlen, Ng, num_localpart,
                                                num_foreignpart, max_partnum,
                                                num_foreign_fofs, N_cells, min_radius,
-                                               exchange_iteration + 1, max_iterations);
+                                               max_radius, exchange_iteration + 1,
+                                               max_iterations);
     }
 
     return exchange_iteration;
@@ -619,10 +620,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     struct timepair so_timer;
     timer_start(rank, &so_timer);
     
-    /* Find the maximum necessary search radius for SO particles */
+    /* Find the maximum FOF radius */
     double local_max = 0.0;
     for (long int i = 0; i < num_local_fofs; i++) {
-        double search_radius = (*fofs)[i].radius_fof * 1.01;
+        double search_radius = (*fofs)[i].radius_fof;
         if (search_radius > local_max) {
             local_max = search_radius;
         }
@@ -632,7 +633,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     double global_max;
     MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     
-    message(rank, "Maximum search radius for SO particles: %g U_L\n", global_max);
+    message(rank, "Maximum FOF radius of all halos: %g U_L\n", global_max);
 
     if (max_partnum > pow(2, OFFSET_INT_BYTES)) {
         printf("The number of particles is too large for 32-bit integer offsets in the cell list structure.\n");
@@ -641,7 +642,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Spherical overdensity search radius */
     const double min_radius = pars->SphericalOverdensityMinLookRadius;
-    const double max_radius = global_max;
+    const double max_radius = pars->SphericalOverdensityMaxLookRadius;
 
     /* Compute the critical density */
     const double h = cosmo->h;
@@ -746,7 +747,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
     exchange_so_parts(parts, *fofs + num_local_fofs, cell_list, cell_counts,
                       cell_offsets, boxlen, Ng, num_localpart,
                       &num_foreign_parts, max_partnum, num_foreign_fofs,
-                      N_cells, min_radius, /* iter = */ 0,
+                      N_cells, min_radius, max_radius, /* iter = */ 0,
                       /* max_iter = */ exchange_iterations);
 
     /* Timer */
@@ -1051,7 +1052,7 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         const double dx_com = sqrt(int_to_phys_dist2(centre, fof, int_to_pos_fac));
 
         /* Determine all cells that overlap with the search radius */
-        const double SO_search_radius = fmax(min_radius, (*fofs)[i].radius_fof * 1.1) - dx_com;
+        const double SO_search_radius = fmin(max_radius, fmax(min_radius, (*fofs)[i].radius_fof * 1.1)) - dx_com;
         const double SO_search_radius_2 = SO_search_radius * SO_search_radius;
         find_overlapping_cells(halos[i].x_com_inner, SO_search_radius,
                                pos_to_cell_fac, N_cells, &cells, &num_overlap);
