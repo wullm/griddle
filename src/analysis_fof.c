@@ -729,6 +729,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
             /* Collapse the tree using the global roots */
             for (long int i = 0; i < num_localpart + receive_foreign_count + second_receive_count; i++) {
+                /* Skip disabled particles */
+                if (fof_parts[i].root == -1) continue;
+
                 fof_parts[i].root = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
             }
 
@@ -827,6 +830,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
             /* Collapse the tree using the global roots */
             for (long int i = 0; i < num_localpart + receive_foreign_count + second_receive_count; i++) {
+                /* Skip disabled particles */
+                if (fof_parts[i].root == -1) continue;
+
                 fof_parts[i].root = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
             }
         }
