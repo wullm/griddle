@@ -840,7 +840,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
         assert(is_local(fof_parts[i].root, rank_offset, num_localpart));
 
         /* Check that we have no non-disabled copies of local particles */
-        assert((i == fof_parts[i].global_offset) || !is_local(fof_parts[i].global_offset, rank_offset, num_localpart));
+        assert((fof_parts[i].global_offset == (i + rank_offset)) || !is_local(fof_parts[i].global_offset, rank_offset, num_localpart));
     }
 #endif
 
