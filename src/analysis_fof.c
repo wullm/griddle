@@ -374,7 +374,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     long int max_partnum_global;
     MPI_Allreduce(&max_partnum, &max_partnum_global, 1, MPI_LONG,
                   MPI_SUM, MPI_COMM_WORLD);
-    print_memory_message(rank, MPI_Rank_Count, num_cells, Ng, max_partnum_global, N_cb);
+    print_memory_message(rank, MPI_Rank_Count, Ng, num_cells, max_partnum_global, N_cb);
 
     if ((double) N_cells * N_cells >= pow(2, CELL_INT_BYTES)) {
         printf("The number of cells is large. We should switch to larger ints (TODO).\n");
