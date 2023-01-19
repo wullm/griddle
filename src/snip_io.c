@@ -200,8 +200,8 @@ int writeSnipshotHeader(const struct params *pars, const struct units *us,
 int exportSnipshot(const struct params *pars, const struct units *us,
                    const struct so_halo *halos, const struct physical_consts *pcs,
                    const struct particle *parts, const struct cosmology *cosmo,
-                   const struct so_cell_list *cell_list, long int *cell_counts,
-                   long int *cell_offsets, int output_num, double a_scale_factor,
+                   const struct so_cell_list *cell_list, CellOffsetIntType *cell_counts,
+                   CellOffsetIntType *cell_offsets, int output_num, double a_scale_factor,
                    CellIntType N_cells, double reduce_factor,
                    int min_part_export_per_halo, long long int local_partnum,
                    long long int local_halo_num, double dtau_kick,
@@ -292,11 +292,11 @@ int exportSnipshot(const struct params *pars, const struct units *us,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
             
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 /* Skip non-DM particles */

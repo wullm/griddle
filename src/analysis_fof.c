@@ -108,16 +108,16 @@ long int find_root_global(struct fof_part_data *fof_parts, struct fof_part_data 
 
 /* Link particles within two cells */
 long int link_cells(struct fof_part_data *fof_parts, struct particle *parts,
-                    CellOffsetIntType *cl, long int local_offset1,
-                    long int local_offset2, long int local_count1,
-                    long int local_count2, double int_to_pos_fac,
+                    CellOffsetIntType *cl, CellOffsetIntType local_offset1,
+                    CellOffsetIntType local_offset2, CellOffsetIntType local_count1,
+                    CellOffsetIntType local_count2, double int_to_pos_fac,
                     double linking_length_2) {
 
     if (local_count1 < 1 || local_count2 < 1 || (local_count1 + local_count2 < 2)) return 0;
 
     long int links = 0;
 
-    for (long int a = 0; a < local_count1; a++) {
+    for (CellOffsetIntType a = 0; a < local_count1; a++) {
         const CellOffsetIntType index_a = cl[local_offset1 + a];
         const IntPosType *xa = parts[index_a].x;
 
@@ -125,9 +125,9 @@ long int link_cells(struct fof_part_data *fof_parts, struct particle *parts,
         if (compare_particle_type(&parts[index_a], neutrino_type, 0)) continue;
 
         /* If we are linking within the same cell, only check all pairs once */
-        long int max_check = (local_offset1 == local_offset2) ? a : local_count2;
+        CellOffsetIntType max_check = (local_offset1 == local_offset2) ? a : local_count2;
 
-        for (long int b = 0; b < max_check; b++) {
+        for (CellOffsetIntType b = 0; b < max_check; b++) {
             const CellOffsetIntType index_b = cl[local_offset2 + b];
             const IntPosType *xb = parts[index_b].x;
 
@@ -276,7 +276,7 @@ void print_memory_message(int rank, int MPI_Rank_Count, long int Ng,
                           long int N_cb) {
     /* Compare memory use of FOF structures with that of the PM grid. */
     const double mem_grid = (Ng * Ng * Ng * sizeof(GridFloatType)) / (1.0e9);
-    const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(long int)) / (1.0e9);
+    const double mem_cell_structures = (2 * num_cells * MPI_Rank_Count * sizeof(CellOffsetIntType)) / (1.0e9);
     const double mem_cell_list = (max_partnum_global * sizeof(struct fof_cell_list)) / (1.0e9);
     const double mem_particle_list = (max_partnum_global * sizeof(CellOffsetIntType)) / (1.0e9);
     const double mem_fof_parts = (max_partnum_global * sizeof(struct fof_part_data)) / (1.0e9);
@@ -533,11 +533,15 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
         fof_parts[i].root = i;
     }
 
+    /* Place a barrier to make sure that the memory used for the cell list
+     * is freed on all ranks, before allocating the cell structures below */
+    MPI_Barrier(MPI_COMM_WORLD);
     timer_stop(rank, &fof_timer, "Shrinking cell list took ");
+    MPI_Barrier(MPI_COMM_WORLD);
 
     /* Determine the counts and offsets of particles in each cell */
-    long int *cell_counts = calloc(num_cells, sizeof(long int));
-    long int *cell_offsets = calloc(num_cells, sizeof(long int));
+    CellOffsetIntType *cell_counts = calloc(num_cells, sizeof(CellOffsetIntType));
+    CellOffsetIntType *cell_offsets = calloc(num_cells, sizeof(CellOffsetIntType));
 
     /* Count particles in cells */
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
@@ -562,14 +566,14 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
     for (long int j = 0; j < N_cells; j++) {
         for (long int k = 0; k < N_cells; k++) {
 
-            long int offset = cell_offsets[row_major_cell(j, k, N_cells)];
-            long int count = cell_counts[row_major_cell(j, k, N_cells)];
+            CellOffsetIntType offset = cell_offsets[row_major_cell(j, k, N_cells)];
+            CellOffsetIntType count = cell_counts[row_major_cell(j, k, N_cells)];
 
             /* Loop over the 9 neighbour cells (including itself) */
             for (int v = -1; v <= 1; v++) {
                 for (int w = -1; w <= 1; w++) {
-                    long int j1 = j + v;
-                    long int k1 = k + w;
+                    CellIntType j1 = j + v;
+                    CellIntType k1 = k + w;
 
                     /* Account for periodic boundary conditions */
                     if (j1 >= N_cells) j1 -= N_cells;
@@ -577,8 +581,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                     if (j1 < 0) j1 += N_cells;
                     if (k1 < 0) k1 += N_cells;
 
-                    long int offset1 = cell_offsets[row_major_cell(j1, k1, N_cells)];
-                    long int count1 = cell_counts[row_major_cell(j1, k1, N_cells)];
+                    CellOffsetIntType offset1 = cell_offsets[row_major_cell(j1, k1, N_cells)];
+                    CellOffsetIntType count1 = cell_counts[row_major_cell(j1, k1, N_cells)];
 
                     /* Link cells */
                     total_links += link_cells(fof_parts, parts, particle_list, offset, offset1, count, count1, int_to_pos_fac, linking_length_2);
@@ -587,13 +591,17 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
         }
     }
 
-    timer_stop(rank, &fof_timer, "Linking particles in cells took ");
-    message(rank, "Found %ld links within and across cells on rank %d.\n", total_links, rank);
-
     /* We are done with the cell structures */
     free(cell_counts);
     free(cell_offsets);
     free(particle_list);
+
+    /* Place a barrier to make sure that the memory used for the particle list
+     * is freed on all ranks, before allocating the root structures below */
+    MPI_Barrier(MPI_COMM_WORLD);
+    timer_stop(rank, &fof_timer, "Linking particles in cells took ");
+    message(rank, "Found %ld links within and across cells on rank %d.\n", total_links, rank);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     /* Loop over the roots again to collapse the tree */
     for (long int i = 0; i < num_localpart + receive_foreign_count; i++) {

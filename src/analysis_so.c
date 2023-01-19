@@ -294,8 +294,8 @@ int find_overlapping_cells(const double com[3], double search_radius,
  * with home rank a distance n = (exchange_iteration + 1) from this rank,
  * Iterates to cover all distances */
 int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
-                      struct so_cell_list *cell_list, long int *cell_counts,
-                      long int *cell_offsets, double boxlen, long long int Ng,
+                      struct so_cell_list *cell_list, CellOffsetIntType *cell_counts,
+                      CellOffsetIntType *cell_offsets, double boxlen, long long int Ng,
                       long long int num_localpart, long long int *num_foreignpart,
                       long long int max_partnum, long int num_foreign_fofs,
                       CellIntType N_cells, double min_radius, double max_radius,
@@ -347,11 +347,11 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
@@ -396,11 +396,11 @@ int exchange_so_parts(struct particle *parts, struct fof_halo *foreign_fofs,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
@@ -696,8 +696,8 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
 
     /* Cell domain decomposition */
     const CellIntType num_cells = N_cells * N_cells;
-    long int *cell_counts = calloc(num_cells, sizeof(long int));
-    long int *cell_offsets = calloc(num_cells, sizeof(long int));
+    CellOffsetIntType *cell_counts = calloc(num_cells, sizeof(CellOffsetIntType));
+    CellOffsetIntType *cell_offsets = calloc(num_cells, sizeof(CellOffsetIntType));
 
     /* Now create a new particle-cell correspondence for sorting */
     struct so_cell_list *cell_list = malloc(num_localpart * sizeof(struct so_cell_list));
@@ -849,11 +849,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 /* Skip neutrinos in the shrinking sphere algorithm */
@@ -895,11 +895,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             for (CellIntType c = 0; c < num_overlap; c++) {
                 /* Find the particle count and offset of the cell */
                 CellIntType cell = cells[c];
-                long int local_count = cell_counts[cell];
-                long int local_offset = cell_offsets[cell];
+                CellOffsetIntType local_count = cell_counts[cell];
+                CellOffsetIntType local_offset = cell_offsets[cell];
 
                 /* Loop over particles in cells */
-                for (long int a = 0; a < local_count; a++) {
+                for (CellOffsetIntType a = 0; a < local_count; a++) {
                     const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                     /* Skip neutrinos in the shrinking sphere algorithm */
@@ -953,11 +953,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
             for (CellIntType c = 0; c < num_overlap; c++) {
                 /* Find the particle count and offset of the cell */
                 CellIntType cell = cells[c];
-                long int local_count = cell_counts[cell];
-                long int local_offset = cell_offsets[cell];
+                CellOffsetIntType local_count = cell_counts[cell];
+                CellOffsetIntType local_offset = cell_offsets[cell];
 
                 /* Loop over particles in cells */
-                for (long int a = 0; a < local_count; a++) {
+                for (CellOffsetIntType a = 0; a < local_count; a++) {
                     const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                     /* Skip neutrinos in the shrinking sphere algorithm */
@@ -1069,11 +1069,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
@@ -1098,11 +1098,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
@@ -1257,11 +1257,11 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
         for (CellIntType c = 0; c < num_overlap; c++) {
             /* Find the particle count and offset of the cell */
             CellIntType cell = cells[c];
-            long int local_count = cell_counts[cell];
-            long int local_offset = cell_offsets[cell];
+            CellOffsetIntType local_count = cell_counts[cell];
+            CellOffsetIntType local_offset = cell_offsets[cell];
 
             /* Loop over particles in cells */
-            for (long int a = 0; a < local_count; a++) {
+            for (CellOffsetIntType a = 0; a < local_count; a++) {
                 const CellOffsetIntType index_a = cell_list[local_offset + a].offset;
 
                 const IntPosType *xa = parts[index_a].x;
