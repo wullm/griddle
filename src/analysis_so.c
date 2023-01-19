@@ -1286,8 +1286,10 @@ int analysis_so(struct particle *parts, struct fof_halo **fofs, double boxlen,
                     halos[i].npart_tot++;
                     if (compare_particle_type(&parts[index_a], cdm_type, 1)) {
                         halos[i].mass_dm += mass;
+                        halos[i].npart_dm++;
                     } else if (compare_particle_type(&parts[index_a], neutrino_type, 0)) {
                         halos[i].mass_nu += mass;
+                        halos[i].npart_nu++;
                     }
 
                     /* Compute the offset from the FOF CoM */

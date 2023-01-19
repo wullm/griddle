@@ -73,6 +73,10 @@ struct so_halo {
     double R_half_mass;
     /* Total number of particles within the SO radius */
     int npart_tot;
+    /* Total number of dark matter particles within the SO radius */
+    int npart_dm;
+    /* Total number of neutrino particles within the SO radius */
+    int npart_nu;
     /* Home rank of the halo */
     int rank;
 };

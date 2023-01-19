@@ -373,6 +373,14 @@ int exportCatalogue(const struct params *pars, const struct units *us,
             /* Total particle mass (use scalar space) */
             h_data = H5Dcreate(h_grp, "TotalParticleMass", H5T_NATIVE_FLOAT, h_sspace, H5P_DEFAULT, h_prop_mass, H5P_DEFAULT);
             H5Dclose(h_data);
+
+            /* Numbers of dark matter particles (use scalar space) */
+            h_data = H5Dcreate(h_grp, "DarkMatterParticleNumber", H5T_NATIVE_INT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+            H5Dclose(h_data);
+
+            /* Numbers of neutrino particles (use scalar space) */
+            h_data = H5Dcreate(h_grp, "NeutrinoParticleNumber", H5T_NATIVE_INT, h_sspace, H5P_DEFAULT, h_prop_sca, H5P_DEFAULT);
+            H5Dclose(h_data);
         }
 
         /* Close the group */
@@ -582,6 +590,8 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     float *vmax_radii = malloc(1 * local_num_structures * sizeof(float));
     float *vmaxs = malloc(1 * local_num_structures * sizeof(float));
     int *nparts = malloc(1 * local_num_structures * sizeof(int));
+    int *nparts_dm = malloc(1 * local_num_structures * sizeof(int));
+    int *nparts_nu = malloc(1 * local_num_structures * sizeof(int));
     for (long long i = 0; i < local_num_structures; i++) {
         struct so_halo *h = &so_halos[i];
         /* Unpack the particle IDs */
@@ -622,6 +632,8 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
         vmaxs[i] = h->v_max;
         /* Unpack the particle numbers */
         nparts[i] = h->npart_tot;
+        nparts_dm[i] = h->npart_dm;
+        nparts_nu[i] = h->npart_nu;
     }
 
     /* Open the particle group in the output file */
@@ -732,6 +744,18 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, prop_write, nparts);
     H5Dclose(h_data);
     free(nparts);
+
+    /* Write dark matter particle number data (scalar) */
+    h_data = H5Dopen(h_grp, "DarkMatterParticleNumber", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, prop_write, nparts_dm);
+    H5Dclose(h_data);
+    free(nparts_dm);
+
+    /* Write particle number data (scalar) */
+    h_data = H5Dopen(h_grp, "NeutrinoParticleNumber", H5P_DEFAULT);
+    H5Dwrite(h_data, H5T_NATIVE_INT, h_ch_sspace, h_sspace, prop_write, nparts_nu);
+    H5Dclose(h_data);
+    free(nparts_nu);
 
     /* Close the property list and group */
     H5Pclose(prop_write);
