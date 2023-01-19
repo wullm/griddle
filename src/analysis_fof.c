@@ -523,6 +523,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
     /* Free the sorted list and create a new list with offsets only */
     free(cell_list);
+    MPI_Barrier(MPI_COMM_WORLD);
     CellOffsetIntType *particle_list = malloc((num_localpart + receive_foreign_count) * sizeof(CellOffsetIntType));
     for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
         particle_list[i] = fof_parts[i].root;
