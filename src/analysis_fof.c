@@ -714,14 +714,24 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
             for (long int i = num_localpart + receive_foreign_count; i < num_localpart + receive_foreign_count + second_receive_count; i++) {
                 /* Is this a copy of a local particle? */
                 if (is_local(fof_parts[i].global_offset, rank_offset, num_localpart)) {
-                    /* Attach the trees */
                     long int local_copy = fof_parts[i].global_offset - rank_offset;
                     long int global_root_a = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
                     long int global_root_b = find_root_global(fof_parts, &fof_parts[local_copy], rank_offset, num_localpart);
 
+#ifdef DEBUG_CHECKS
                     if (global_root_a < global_root_b) {
-                        /* If the root of a is local, simply attach and disable the copy */
+                        assert(is_local(global_root_a, rank_offset, num_localpart)
+                           || !is_local(global_root_b, rank_offset, num_localpart));
+                    } else if (global_root_b < global_root_a) {
+                        assert(is_local(global_root_b, rank_offset, num_localpart)
+                           || !is_local(global_root_a, rank_offset, num_localpart));
+                    }
+#endif
+
+                    /* Attach the trees */
+                    if (global_root_a < global_root_b) {
                         if (is_local(global_root_a, rank_offset, num_localpart)) {
+                            /* If the root of a is local, simply attach and disable the copy */
                             fof_parts[global_root_a - rank_offset].root = global_root_b;
                             fof_parts[i].root = -1;
                         } else {
@@ -730,8 +740,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                             fof_parts[i].root = global_root_b;
                         }
                     } else if (global_root_b < global_root_a) {
-                        /* If the root of b is local, simply attach and disable the copy */
                         if (is_local(global_root_b, rank_offset, num_localpart)) {
+                            /* If the root of b is local, simply attach and disable the copy */
                             fof_parts[global_root_b - rank_offset].root = global_root_a;
                             fof_parts[i].root = -1;
                         } else {
@@ -739,6 +749,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                             fof_parts[i].global_offset = global_root_b;
                             fof_parts[i].root = global_root_a;
                         }
+                    } else {
+                        /* No attaching needed, disable the particle */
+                        fof_parts[i].root = -1;
                     }
                 }
             }
@@ -823,32 +836,24 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
             for (long int i = num_localpart + receive_foreign_count; i < num_localpart + receive_foreign_count + second_receive_count; i++) {
                 /* Is this a copy of a local particle? */
                 if (is_local(fof_parts[i].global_offset, rank_offset, num_localpart)) {
-                    /* Attach the trees */
                     long int local_copy = fof_parts[i].global_offset - rank_offset;
-                    long int global_root_a = fof_parts[i].root;
-                    long int global_root_b = fof_parts[local_copy].root;
+                    long int global_root_a = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
+                    long int global_root_b = find_root_global(fof_parts, &fof_parts[local_copy], rank_offset, num_localpart);
 
+#ifdef DEBUG_CHECKS
+                    assert(is_local(global_root_a, rank_offset, num_localpart));
+                    assert(is_local(global_root_b, rank_offset, num_localpart));
+#endif
+
+                    /* Attach the trees */
                     if (global_root_a < global_root_b) {
-                        /* If the root of a is local, simply attach and disable the copy */
-                        if (is_local(global_root_a, rank_offset, num_localpart)) {
-                            fof_parts[global_root_a - rank_offset].root = global_root_b;
-                            fof_parts[i].root = -1;
-                        } else {
-                            /* Otherwise, turn it into a duplicate of the root and attach */
-                            fof_parts[i].global_offset = global_root_a;
-                            fof_parts[i].root = global_root_b;
-                        }
+                        fof_parts[global_root_a - rank_offset].root = global_root_b;
                     } else if (global_root_b < global_root_a) {
-                        /* If the root of b is local, simply attach and disable the copy */
-                        if (is_local(global_root_b, rank_offset, num_localpart)) {
-                            fof_parts[global_root_b - rank_offset].root = global_root_a;
-                            fof_parts[i].root = -1;
-                        } else {
-                            /* Otherwise, turn it into a duplicate of the root and attach */
-                            fof_parts[i].global_offset = global_root_b;
-                            fof_parts[i].root = global_root_a;
-                        }
+                        fof_parts[global_root_b - rank_offset].root = global_root_a;
                     }
+
+                    /* Now disable the particle */
+                    fof_parts[i].root = -1;
                 }
             }
 
