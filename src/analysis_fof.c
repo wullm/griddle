@@ -531,16 +531,21 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
             long int local_offset = i;
             fof_parts[i].global_offset = local_offset + rank_offset;
         } else if (i < num_localpart + first_receive_from_right) {
-            long int local_offset = right_foreign_offsets[i];
+            long int local_offset = right_foreign_offsets[i - num_localpart];
             fof_parts[i].global_offset = local_offset + rank_offsets[rank_right];
         } else {
-            long int local_offset = left_foreign_offsets[i];
+            long int local_offset = left_foreign_offsets[i - num_localpart - first_receive_from_right];
             fof_parts[i].global_offset = local_offset + rank_offsets[rank_left];
         }
     }
 
     free(left_foreign_offsets);
     free(right_foreign_offsets);
+
+    /* Make each particle its own root using the current local offset */
+    for (long long i = 0; i < num_localpart + receive_foreign_count; i++) {
+        fof_parts[i].root = i;
+    }
 
     /* Place a barrier to make sure that the memory used for the offsets
      * is freed on all ranks, before allocating the cell structures below */
