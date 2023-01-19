@@ -708,8 +708,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                 if (is_local(fof_parts[i].global_offset, rank_offset, num_localpart)) {
                     /* Attach the trees */
                     long int local_copy = fof_parts[i].global_offset - rank_offset;
-                    long int global_root_a = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
-                    long int global_root_b = find_root_global(fof_parts, &fof_parts[local_copy], rank_offset, num_localpart);
+                    long int global_root_a = fof_parts[i].root;
+                    long int global_root_b = fof_parts[local_copy].root;
 
 #ifdef DEBUG_CHECKS
                     assert(is_local(global_root_a, rank_offset, num_localpart));
@@ -809,8 +809,8 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                 if (is_local(fof_parts[i].global_offset, rank_offset, num_localpart)) {
                     /* Attach the trees */
                     long int local_copy = fof_parts[i].global_offset - rank_offset;
-                    long int global_root_a = find_root_global(fof_parts, &fof_parts[i], rank_offset, num_localpart);
-                    long int global_root_b = find_root_global(fof_parts, &fof_parts[local_copy], rank_offset, num_localpart);
+                    long int global_root_a = fof_parts[i].root;
+                    long int global_root_b = fof_parts[local_copy].root;
 
 #ifdef DEBUG_CHECKS
                     assert(is_local(global_root_a, rank_offset, num_localpart));
