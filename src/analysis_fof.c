@@ -720,11 +720,9 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
 
 #ifdef DEBUG_CHECKS
                     if (global_root_a < global_root_b) {
-                        assert(is_local(global_root_a, rank_offset, num_localpart)
-                           || !is_local(global_root_b, rank_offset, num_localpart));
+                        assert(is_local(global_root_a, rank_offset, num_localpart) || !is_local(global_root_b, rank_offset, num_localpart));
                     } else if (global_root_b < global_root_a) {
-                        assert(is_local(global_root_b, rank_offset, num_localpart)
-                           || !is_local(global_root_a, rank_offset, num_localpart));
+                        assert(is_local(global_root_b, rank_offset, num_localpart) || !is_local(global_root_a, rank_offset, num_localpart));
                     }
 #endif
 
@@ -736,6 +734,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                             fof_parts[i].root = -1;
                         } else {
                             /* Otherwise, turn it into a duplicate of the root and attach */
+                            bzero(&parts[i], sizeof(struct particle));
                             fof_parts[i].global_offset = global_root_a;
                             fof_parts[i].root = global_root_b;
                         }
@@ -746,6 +745,7 @@ int analysis_fof(struct particle *parts, double boxlen, long int N_cb,
                             fof_parts[i].root = -1;
                         } else {
                             /* Otherwise, turn it into a duplicate of the root and attach */
+                            bzero(&parts[i], sizeof(struct particle));
                             fof_parts[i].global_offset = global_root_b;
                             fof_parts[i].root = global_root_a;
                         }
