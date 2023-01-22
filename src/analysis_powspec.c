@@ -286,8 +286,7 @@ int analysis_powspec(struct distributed_grid *dgrid, int output_num,
             all_power_in_bins[i] /= all_obs_in_bins[i];
             all_power_in_bins[i] /= boxvol;
         }
-        
-        
+
         /* First, let's clean up the data by removing empty bins */
         int nonzero_bins = 0;
         for (int i = 0; i < bins; i++) {

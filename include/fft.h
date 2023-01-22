@@ -77,6 +77,13 @@ static inline void inverse_row_major(long long int id, int *x, int *y, int *z, i
     *x = k;
 }
 
+static inline long long int row_major_padded(long long i, long long j, long long k, long long N) {
+    i = wrap_ll(i,N);
+    j = wrap_ll(j,N);
+    k = wrap_ll(k,N);
+    return (long long int) i*N*2*(N/2+1) + j*2*(N/2+1) + k;
+}
+
 static inline double hypot3(double x, double y, double z) {
     return hypot(x, hypot(y, z));
 }
@@ -96,10 +103,17 @@ void fft_prepare_mpi_plans(FourierPlanType *r2c_mpi, FourierPlanType *c2r_mpi,
 
 /* Functions for ordinary contiguous arrays */
 int fft_normalize_r2c(GridComplexType *arr, int N, double boxlen);
-int fft_normalize_c2r(double *arr, int N, double boxlen);
+int fft_normalize_c2r(GridFloatType *arr, int N, double boxlen);
 int fft_apply_kernel(GridComplexType *write, const GridComplexType *read, int N,
                      double boxlen, void (*compute)(struct kernel* the_kernel),
                      const void *params);
+
+/* Single-precision functions for ordinary contiguous arrays */
+int fftf_normalize_r2c(fftwf_complex *arr, int N, double boxlen);
+int fftf_normalize_c2r(float *arr, int N, double boxlen);
+int fftf_apply_kernel(fftwf_complex *write, const fftwf_complex *read, int N,
+                      double boxlen, void (*compute)(struct kernel* the_kernel),
+                      const void *params);
 
 /* Functions for distributed grids */
 int fft_r2c_dg(struct distributed_grid *dg);

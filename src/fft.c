@@ -48,12 +48,69 @@ int fft_normalize_r2c(GridComplexType *arr, int N, double boxlen) {
 }
 
 /* Normalize the real array after transforming to configuration space */
-int fft_normalize_c2r(double *arr, int N, double boxlen) {
+int fft_normalize_c2r(GridFloatType *arr, int N, double boxlen) {
     const double boxvol = boxlen*boxlen*boxlen;
     for (int x=0; x<N; x++) {
         for (int y=0; y<N; y++) {
             for (int z=0; z<N; z++) {
                 arr[row_major(x, y, z, N)] /= boxvol;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* Normalize the complex array after transforming to momentum space */
+int fftf_normalize_r2c(fftwf_complex *arr, int N, double boxlen) {
+    const double boxvol = boxlen*boxlen*boxlen;
+    for (int x=0; x<N; x++) {
+        for (int y=0; y<N; y++) {
+            for (int z=0; z<=N/2; z++) {
+                arr[row_major_half(x, y, z, N)] *= boxvol/((long long)N*N*N);
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* Normalize the real array after transforming to configuration space */
+int fftf_normalize_c2r(float *arr, int N, double boxlen) {
+    const double boxvol = boxlen*boxlen*boxlen;
+    for (int x=0; x<N; x++) {
+        for (int y=0; y<N; y++) {
+            for (int z=0; z<N; z++) {
+                arr[row_major(x, y, z, N)] /= boxvol;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* Apply a kernel to a 3D array after transforming to momentum space */
+int fftf_apply_kernel(fftwf_complex *write, const fftwf_complex *read, int N,
+                      double boxlen, void (*compute)(struct kernel* the_kernel),
+                      const void *params) {
+    const double dk = 2 * M_PI / boxlen;
+    const double fac = boxlen / N;
+
+    #pragma omp parallel for
+    for (int x=0; x<N; x++) {
+        for (int y=0; y<N; y++) {
+            for (int z=0; z<=N/2; z++) {
+                /* Calculate the wavevector */
+                double kx,ky,kz,k;
+                fft_wavevector(x, y, z, N, dk, &kx, &ky, &kz, &k);
+
+                /* Compute the kernel */
+                struct kernel the_kernel = {kx, ky, kz, k, fac, 0.f, params};
+                compute(&the_kernel);
+
+                /* Apply the kernel */
+                const long long int id = row_major_half(x,y,z,N);
+                write[id] = read[id] * the_kernel.kern;
             }
         }
     }

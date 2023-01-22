@@ -35,7 +35,7 @@
 
 #define DEBUG_CHECKS
 
-void copy_local_grid(GridFloatType *grid, const struct distributed_grid *dgrid,
+void copy_local_grid(float *grid, const struct distributed_grid *dgrid,
                      int N_cells, int N_sub, int cell_i, int cell_j, int cell_k) {
 
     /* The start of the requested cell inside the global grid */
@@ -57,14 +57,14 @@ void copy_local_grid(GridFloatType *grid, const struct distributed_grid *dgrid,
         
         for (int y = y0; y < y0 + N_sub; y++) {
             for (int z = z0; z < z0 + N_sub; z++) {
-                grid[row_major(x - x0, y - y0, z - z0, N_sub)] = *point_row_major_dg(x, y, z, dgrid);
+                grid[row_major_padded(x - x0, y - y0, z - z0, N_sub)] = *point_row_major_dg(x, y, z, dgrid);
             }
         }
     }    
 }
 
-void calc_cross_powerspec(int N, double boxlen, const GridComplexType *box1,
-                          const GridComplexType *box2, int bins,
+void calc_cross_powerspec(int N, double boxlen, const fftwf_complex *box1,
+                          const fftwf_complex *box2, int bins,
                           double *k_in_bins, double *power_in_bins,
                           int *obs_in_bins) {
 
@@ -168,17 +168,15 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
     double *sub_masses = calloc(num_cells, sizeof(double));
 
     /* Memory for local copies of sub-grids */
-    GridFloatType *grid = malloc(N_sub * N_sub * N_sub * sizeof(GridFloatType));
-    GridFloatType *temp = malloc(N_sub * N_sub * N_sub * sizeof(GridFloatType));
+    long int real_size = N_sub * N_sub * 2 * (N_sub / 2 + 1);
+    float *grid = malloc(real_size * sizeof(float));
+    float *temp = malloc(real_size * sizeof(float));
 
-    /* Memory for a complex grid */
-    GridComplexType *fgrid = malloc(N_sub * N_sub * (N_sub / 2 + 1) * sizeof(GridComplexType));
+    /* Memory for a complex grid (always use in place transforms) */
+    fftwf_complex *fgrid = (fftwf_complex*) grid;
 
-#ifdef SINGLE_PRECISION_FFTW
-    fftwf_plan r2c = fftwf_plan_dft_r2c_3d(N_sub, N_sub, N_sub, grid, fgrid, FFTW_ESTIMATE);
-#else
-    fftw_plan r2c = fftw_plan_dft_r2c_3d(N_sub, N_sub, N_sub, grid, fgrid, FFTW_ESTIMATE);
-#endif
+    /* Always use single precision */
+    fftwf_plan r2c = fftwf_plan_dft_r2c_3d(N_sub, N_sub, N_sub, grid, fgrid, PREPARE_FLAG);
 
     /* Loop until all sub-grids have been dealt with */
     for (int i = 0; i < iterations; i++) {
@@ -191,17 +189,32 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
             int cell_i, cell_j, cell_k;
             inverse_row_major(cell, &cell_i, &cell_j, &cell_k, N_cells);
 
-            /* Zero out the temporary grid */
-            for (int l = 0; l < N_sub * N_sub * N_sub; l++) {
-                temp[l] = 0;
+            /* Check if this cell has overlap with the local slice */
+            const int x0 = cell_i * N_sub;
+            int no_overlap = ((x0 < dgrid->X0 && x0 + N_sub < dgrid->X0) ||
+                (x0 >= dgrid->X0 + dgrid->NX && x0 + N_sub >= dgrid->X0 + dgrid->NX));
+            int engaged = !no_overlap || (home_rank == rank);
+
+            /* Create a new communicator with only engaged ranks */
+            int key = (home_rank == rank) ? 0 : 1; // home_rank -> rank 0 in the new comm
+            MPI_Comm comm;
+            MPI_Comm_split(MPI_COMM_WORLD, engaged, key, &comm);
+
+            if (engaged) {
+                /* Zero out the temporary grid */
+                for (int l = 0; l < real_size; l++) {
+                    temp[l] = 0;
+                }
+
+                /* Copy over the local grid */
+                copy_local_grid(temp, dgrid, N_cells, N_sub, cell_i, cell_j, cell_k);
+
+                /* Perform communications */
+                MPI_Reduce(temp, grid, real_size, MPI_FLOAT, MPI_SUM, 0, comm);
             }
 
-            /* Copy over the local grid */
-            copy_local_grid(temp, dgrid, N_cells, N_sub, cell_i, cell_j, cell_k);
-
-            /* Perform communications */
-            MPI_Reduce(temp, grid, N_sub * N_sub * N_sub, MPI_GRID_TYPE,
-                       MPI_SUM, home_rank, MPI_COMM_WORLD);
+            /* Free the communicator */
+            MPI_Comm_free(&comm);
         }
 
         /* Analyse the sub-grids */
@@ -213,19 +226,19 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
 
             /* Compute the total mass in the sub-grid */
             sub_masses[cell] = 0;
-            for (int l = 0; l < N_sub * N_sub * N_sub; l++) {
+            for (int l = 0; l < real_size; l++) {
                 sub_masses[cell] += grid[l];
             }
 
             /* Turn the mass grid into an over-density grid */
             double avg_mass = sub_masses[cell] / (N_sub * N_sub * N_sub);
-            for (int l = 0; l < N_sub * N_sub * N_sub; l++) {
+            for (int l = 0; l < real_size; l++) {
                 grid[l] = grid[l] / avg_mass - 1.0;
             }
 
             /* Fourier transform the sub-grid */
-            fft_execute(r2c);
-            fft_normalize_r2c(fgrid, N_sub, sublen);
+            fftwf_execute(r2c);
+            fftf_normalize_r2c(fgrid, N_sub, sublen);
 
             /* Undo the CIC window function */
             struct Hermite_kern_params Hkp;
@@ -234,7 +247,7 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
             Hkp.boxlen = sublen;
 
             /* Apply the inverse CIC kernel */
-            fft_apply_kernel(fgrid, fgrid, N_sub, sublen, kernel_undo_Hermite_window, &Hkp);
+            fftf_apply_kernel(fgrid, fgrid, N_sub, sublen, kernel_undo_Hermite_window, &Hkp);
 
             /* Compute the power spectrum */
             calc_cross_powerspec(N_sub, sublen, fgrid, fgrid, bins, k_in_bins,
@@ -243,60 +256,26 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
     }
 
     /* Clean up the FFT plan */
-#ifdef SINGLE_PRECISION_FFTW
     fftwf_destroy_plan(r2c);
-#else
-    fftw_destroy_plan(r2c);
-#endif
 
     /* Free the local grid */
     free(grid);
     free(temp);
-    free(fgrid);
 
     message(rank, "Done with position-dependent power spectra.\n");
-
-    /* First, let's clean up the data by removing empty bins */
-    int nonzero_bins = 0;
-    for (int i = 0; i < bins; i++) {
-        if (obs_in_bins[i] > 0) nonzero_bins++;
-    }
-
-    message(rank, "We have %d non-empty bins.\n", nonzero_bins);
-
-    /* Create array with valid wavenumbers and power (from non-empty bins) */
-    double *valid_k = malloc(nonzero_bins * sizeof(double));
-    double *valid_power = malloc(nonzero_bins * num_cells * sizeof(double));
-    int *valid_obs = malloc(nonzero_bins * sizeof(int));
-    int valid_bin = 0;
-    for (int i = 0; i < bins; i++) {
-        if (obs_in_bins[i] > 0) {
-            valid_k[valid_bin] = k_in_bins[i];
-            valid_obs[valid_bin] = obs_in_bins[i];
-            for (int cell = 0; cell < num_cells; cell++) {
-                valid_power[cell * nonzero_bins + valid_bin] = power_in_bins[cell * bins + i];
-            }
-            valid_bin++;
-        }
-    }
-
-    /* Free the old power spectrum arrays */
-    free(k_in_bins);
-    free(power_in_bins);
-    free(obs_in_bins);
 
     /* Prepare memory for reducing the power spectrum data */
     double *all_power_in_bins = NULL;
     double *all_sub_masses = NULL;
     if (rank == 0) {
-        all_power_in_bins  = calloc(num_cells * nonzero_bins, sizeof(double));
+        all_power_in_bins  = calloc(num_cells * bins, sizeof(double));
         all_sub_masses = calloc(num_cells, sizeof(double));
     }
 
     /* Reduce the power spectrum data */
-    MPI_Reduce(valid_power, all_power_in_bins, num_cells * nonzero_bins,
+    MPI_Reduce(power_in_bins, all_power_in_bins, num_cells * bins,
                MPI_DOUBLE, MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
-    free(valid_power);
+    free(power_in_bins);
 
     /* Reduce the mass array */
     MPI_Reduce(sub_masses, all_sub_masses, num_cells, MPI_DOUBLE,
@@ -304,6 +283,30 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
     free(sub_masses);
 
     if (rank == 0) {
+        /* First, let's clean up the data by removing empty bins */
+        int nonzero_bins = 0;
+        for (int i = 0; i < bins; i++) {
+            if (obs_in_bins[i] > 0) nonzero_bins++;
+        }
+
+        message(rank, "We have %d non-empty bins.\n", nonzero_bins);
+
+        /* Create array with valid wavenumbers and power (from non-empty bins) */
+        double *valid_k = malloc(nonzero_bins * sizeof(double));
+        double *valid_power = malloc(nonzero_bins * num_cells * sizeof(double));
+        int *valid_obs = malloc(nonzero_bins * sizeof(int));
+        int valid_bin = 0;
+        for (int i = 0; i < bins; i++) {
+            if (obs_in_bins[i] > 0) {
+                valid_k[valid_bin] = k_in_bins[i];
+                valid_obs[valid_bin] = obs_in_bins[i];
+                for (int cell = 0; cell < num_cells; cell++) {
+                    valid_power[cell * nonzero_bins + valid_bin] = all_power_in_bins[cell * bins + i];
+                }
+                valid_bin++;
+            }
+        }
+
         /* Compute the total mass across all grids */
         double total_mass = 0.0;
         for (int i = 0; i < num_cells; i++) {
@@ -325,7 +328,7 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         double *isocymatic_power  = calloc(num_cells * nonzero_bins, sizeof(double));
         for (int i = 0; i < num_cells; i++) {
             for (int j = 0; j < nonzero_bins; j++) {
-                isocymatic_power[i * nonzero_bins + j] = strooklat_interp(&spline_k, all_power_in_bins + (i * nonzero_bins), valid_k[j] * cbrt(1.0 + deltas[i]));
+                isocymatic_power[i * nonzero_bins + j] = strooklat_interp(&spline_k, valid_power + (i * nonzero_bins), valid_k[j] * cbrt(1.0 + deltas[i]));
             }
         }
 
@@ -351,8 +354,8 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         double dd = 0.;
         for (int i = 0; i < num_cells; i++) {
             for (int j = 0; j < nonzero_bins; j++) {
-                Pd[j] += all_power_in_bins[i * nonzero_bins + j] * deltas[i] / num_cells;
-                P[j] += all_power_in_bins[i * nonzero_bins + j] / num_cells;
+                Pd[j] += valid_power[i * nonzero_bins + j] * deltas[i] / num_cells;
+                P[j] += valid_power[i * nonzero_bins + j] / num_cells;
                 Pid[j] += isocymatic_power[i * nonzero_bins + j] * deltas[i] / num_cells;
                 Pi[j] += isocymatic_power[i * nonzero_bins + j] / num_cells;
             }
@@ -414,7 +417,7 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
             fprintf(f, "%d ", i);
             fprintf(f, "%.8g ", all_sub_masses[i]);
             for (int j = 0; j < nonzero_bins; j++) {
-                fprintf(f, "%.8g ", all_power_in_bins[i * nonzero_bins + j]);
+                fprintf(f, "%.8g ", valid_power[i * nonzero_bins + j]);
             }
             fprintf(f, "\n");
         }
@@ -429,13 +432,15 @@ int analysis_posdep(struct distributed_grid *dgrid, int output_num,
         free(Bi);
         free(deltas);
         free(isocymatic_power);
-        free(all_power_in_bins);
+        free(valid_power);
+        free(valid_k);
+        free(valid_obs);
         free(all_sub_masses);
     }
 
     /* Free the cleaned up arrays */
-    free(valid_k);
-    free(valid_obs);
+    free(k_in_bins);
+    free(obs_in_bins);
 
     return 0;
 }
