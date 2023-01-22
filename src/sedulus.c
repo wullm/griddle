@@ -426,6 +426,22 @@ int main(int argc, char *argv[]) {
         struct timepair powspec_timer;
         timer_start(rank, &powspec_timer);
 
+        /* The grid size for the power spectrum calculation */
+        const long int N_PS = pars.PowerSpectrumGridSize;
+
+        /* If the grid size is different than the main PM size */
+        if (N_PS != M) {
+            /* Free the main grid */
+            free_local_grid(&mass);
+
+            /* Re-allocate with a different size */
+            alloc_local_grid_with_buffers(&mass, N_PS, boxlen, buffer_width, MPI_COMM_WORLD);
+
+            /* Re-create the FFT plans */
+            fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+            timer_stop(rank, &powspec_timer, "Creating Fourier structures took ");
+        }
+
         for (int i = 0; i < powspec_types_num; i++) {
             message(rank, "Starting power spectrum calculation (%s).\n",
                           grid_type_names[powspec_types[i]]);
@@ -454,6 +470,16 @@ int main(int argc, char *argv[]) {
             timer_stop(rank, &powspec_timer, "Global power spectra took ");
 
             message(rank, "\n");
+        }
+
+        /* If the grid size is different than the main PM size */
+        if (N_PS != M) {
+            /* Re-allocate the main grid with the original PM size */
+            alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+
+            /* Re-create the FFT plans */
+            fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+            timer_stop(rank, &powspec_timer, "Recreating Fourier structures took ");
         }
     }
 
@@ -691,6 +717,23 @@ int main(int argc, char *argv[]) {
                 timer_stop(rank, &run_timer, "Computing checksum took ");
 #endif
 
+                /* The grid size for the power spectrum calculation */
+                long int N_PS = pars.PowerSpectrumGridSize;
+
+                /* If the grid size is different than the main PM size */
+                if (N_PS != M) {
+                    /* Free the main grid */
+                    free_local_grid(&mass);
+
+                    /* Re-allocate with a different size */
+                    alloc_local_grid_with_buffers(&mass, N_PS, boxlen, buffer_width, MPI_COMM_WORLD);
+                    mass.momentum_space = 0;
+
+                    /* Re-create the FFT plans */
+                    fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+                    timer_stop(rank, &run_timer, "Creating Fourier structures took ");
+                }
+
                 /* Reversibly drift the particles to the correct time */
                 drift_particles(particles, local_partnum, a, power_drift_dtau, pos_to_int_fac, &pcs);
                 timer_stop(rank, &run_timer, "Drifting particles to output time took ");
@@ -738,6 +781,18 @@ int main(int argc, char *argv[]) {
                 message(rank, "Checksum: %u -> %u\n", checksum_global_before, checksum_global_after);
                 if (rank == 0) assert(checksum_global_before == checksum_global_after);
 #endif
+
+                /* If the grid size is different than the main PM size */
+                if (N_PS != M) {
+                    /* Re-allocate the main grid with the original PM size */
+                    alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
+                    mass.momentum_space = 0;
+
+                    /* Re-create the FFT plans */
+                    fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
+                    timer_stop(rank, &run_timer, "Recreating Fourier structures took ");
+                }
+                message(rank, "\n");
             }
         }
 

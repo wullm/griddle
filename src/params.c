@@ -184,6 +184,7 @@ int readParams(struct params *pars, const char *fname) {
     begin_section("PowerSpectra", f, rank);
     read_string("PowerSpectra", "OutputTimes", "", pars->PowerSpectrumTimesString, len, fname, f, rank);
     read_string("PowerSpectra", "Types", "all", pars->PowerSpectrumTypes, len, fname, f, rank);
+    pars->PowerSpectrumGridSize = read_long("PowerSpectra", "GridSize", 256, fname, f, rank);
     pars->PowerSpectrumBins = read_long("PowerSpectra", "PowerSpectrumBins", 50, fname, f, rank);
     pars->PositionDependentSplits = read_long("PowerSpectra", "PositionDependentSplits", 8, fname, f, rank);
 

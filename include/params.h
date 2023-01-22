@@ -96,6 +96,7 @@ struct params {
     int SnipshotZipCompressionLevel;
 
     /* Power spectrum (for on-the-fly analysis) parameters */
+    long long PowerSpectrumGridSize;
     int PowerSpectrumBins;
     int PositionDependentSplits;
     char *PowerSpectrumTypes;
