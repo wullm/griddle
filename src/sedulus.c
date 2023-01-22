@@ -474,6 +474,9 @@ int main(int argc, char *argv[]) {
 
         /* If the grid size is different than the main PM size */
         if (N_PS != M) {
+            /* Free the main grid */
+            free_local_grid(&mass);
+
             /* Re-allocate the main grid with the original PM size */
             alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
 
@@ -784,6 +787,9 @@ int main(int argc, char *argv[]) {
 
                 /* If the grid size is different than the main PM size */
                 if (N_PS != M) {
+                    /* Free the main grid */
+                    free_local_grid(&mass);
+
                     /* Re-allocate the main grid with the original PM size */
                     alloc_local_grid_with_buffers(&mass, M, boxlen, buffer_width, MPI_COMM_WORLD);
                     mass.momentum_space = 0;
