@@ -483,6 +483,7 @@ int main(int argc, char *argv[]) {
             /* Re-create the FFT plans */
             fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
             timer_stop(rank, &powspec_timer, "Recreating Fourier structures took ");
+            message(rank, "\n");
         }
     }
 
@@ -797,8 +798,8 @@ int main(int argc, char *argv[]) {
                     /* Re-create the FFT plans */
                     fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
                     timer_stop(rank, &run_timer, "Recreating Fourier structures took ");
+                    message(rank, "\n");
                 }
-                message(rank, "\n");
             }
         }
 
