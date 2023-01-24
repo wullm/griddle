@@ -105,6 +105,8 @@ int main(int argc, char *argv[]) {
     const double a_end = pars.ScaleFactorEnd;
     const double a_target = pars.ScaleFactorTarget;
     const double a_step = 1.0 + pars.ScaleFactorStep;
+    const double a_fine = pars.ScaleFactorStartFine;
+    const double a_step_fine = 1.0 + pars.ScaleFactorStepFine;
     const double z_start = 1.0 / a_begin - 1.0;
     const double z_target = 1.0 / a_target - 1.0;
 
@@ -543,22 +545,38 @@ int main(int argc, char *argv[]) {
     double a = a_begin;
 
     /* Prepare integration */
-    const int MAX_ITER = (log(a_end) - log(a_begin))/log(a_step) + 1;
-    const double a_factor = exp(log(a_end / a_begin) / MAX_ITER);
+    const int EARLY_ITER =  (log(a_fine) - log(a_begin))/log(a_step) + 1;
+    const int FINE_ITER =  (log(a_end) - log(a_fine))/log(a_step_fine) + 1;
+    const int MAX_ITER = EARLY_ITER + FINE_ITER;
+    const double a_factor_early = exp(log(a_fine / a_begin) / EARLY_ITER);
+    const double a_factor_fine = exp(log(a_end / a_fine) / FINE_ITER);
 
     /* The main loop */
     for (int ITER = 0; ITER < MAX_ITER; ITER++) {
+
+        /* Determine the previous and next scale factor steps */
+        double a_factor_prev, a_factor_next;
+        if (ITER < EARLY_ITER) {
+            a_factor_prev = a_factor_early;
+            a_factor_next = a_factor_early;
+        } else if (ITER == EARLY_ITER) {
+            a_factor_prev = a_factor_early;
+            a_factor_next = a_factor_fine;
+        } else {
+            a_factor_prev = a_factor_fine;
+            a_factor_next = a_factor_fine;
+        }
 
         /* Determine the previous and next scale factor */
         double a_prev, a_next;
         if (ITER == 0) {
             a_prev = a;
-            a_next = a * a_factor;
+            a_next = a * a_factor_next;
         } else if (ITER < MAX_ITER - 1) {
-            a_prev = a / a_factor;
-            a_next = a * a_factor;
+            a_prev = a / a_factor_prev;
+            a_next = a * a_factor_next;
         } else {
-            a_prev = a / a_factor;
+            a_prev = a / a_factor_prev;
             a_next = a_end;
         }
 

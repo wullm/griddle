@@ -50,6 +50,8 @@ struct params {
     double ScaleFactorBegin;
     double ScaleFactorEnd;
     double ScaleFactorStep;
+    double ScaleFactorStartFine;
+    double ScaleFactorStepFine;
     double ScaleFactorTarget;
     int DerivativeOrder;
 

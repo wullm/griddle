@@ -166,6 +166,8 @@ int readParams(struct params *pars, const char *fname) {
     pars->ScaleFactorBegin = read_double("Simulation", "ScaleFactorBegin", 0.03125, fname, f, rank);
     pars->ScaleFactorEnd = read_double("Simulation", "ScaleFactorEnd", 1.0, fname, f, rank);
     pars->ScaleFactorStep = read_double("Simulation", "ScaleFactorStep", 0.05, fname, f, rank);
+    pars->ScaleFactorStartFine = read_double("Simulation", "ScaleFactorStartFine", 0.25, fname, f, rank);
+    pars->ScaleFactorStepFine = read_double("Simulation", "ScaleFactorStepFine", 0.01, fname, f, rank);
     pars->ScaleFactorTarget = read_double("Simulation", "ScaleFactorTarget", 1.0, fname, f, rank);
     pars->DerivativeOrder = read_long("Simulation", "DerivativeOrder", 4, fname, f, rank);
 
