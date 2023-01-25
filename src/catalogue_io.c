@@ -272,31 +272,31 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Pset_chunk(h_prop_radius, srank, schunk);
 
     /* Set lossy filter (keep "digits" digits after the decimal point) */
-    // const int digits_pos = pars->SnipshotPositionDScaleCompression;
-    // const int digits_vel = pars->SnipshotVelocityDScaleCompression;
-    // const int digits_mass = pars->CatalogueMassDScaleCompression;
-    // const int digits_radius = pars->CatalogueRadiusDScaleCompression;
-    // if (digits_pos > 0)
-    //     H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
-    // if (digits_vel > 0)
-    //     H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
-    // if (digits_mass > 0)
-    //     H5Pset_scaleoffset(h_prop_mass, H5Z_SO_FLOAT_DSCALE, digits_mass);
-    // if (digits_radius > 0)
-    //     H5Pset_scaleoffset(h_prop_radius, H5Z_SO_FLOAT_DSCALE, digits_radius);
+    const int digits_pos = pars->SnipshotPositionDScaleCompression;
+    const int digits_vel = pars->SnipshotVelocityDScaleCompression;
+    const int digits_mass = pars->CatalogueMassDScaleCompression;
+    const int digits_radius = pars->CatalogueRadiusDScaleCompression;
+    if (digits_pos > 0)
+        H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
+    if (digits_vel > 0)
+        H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
+    if (digits_mass > 0)
+        H5Pset_scaleoffset(h_prop_mass, H5Z_SO_FLOAT_DSCALE, digits_mass);
+    if (digits_radius > 0)
+        H5Pset_scaleoffset(h_prop_radius, H5Z_SO_FLOAT_DSCALE, digits_radius);
 
     /* Set shuffle and lossless compression filters (GZIP level 4) */
-    // const int gzip_level = pars->SnipshotZipCompressionLevel;
-    // if (gzip_level > 0) {
-    //     H5Pset_shuffle(h_prop_pos);
-    //     H5Pset_shuffle(h_prop_vel);
-    //     H5Pset_shuffle(h_prop_mass);
-    //     H5Pset_shuffle(h_prop_radius);
-    //     H5Pset_deflate(h_prop_pos, gzip_level);
-    //     H5Pset_deflate(h_prop_vel, gzip_level);
-    //     H5Pset_deflate(h_prop_mass, gzip_level);
-    //     H5Pset_deflate(h_prop_radius, gzip_level);
-    // }
+    const int gzip_level = pars->SnipshotZipCompressionLevel;
+    if (gzip_level > 0) {
+        H5Pset_shuffle(h_prop_pos);
+        H5Pset_shuffle(h_prop_vel);
+        H5Pset_shuffle(h_prop_mass);
+        H5Pset_shuffle(h_prop_radius);
+        H5Pset_deflate(h_prop_pos, gzip_level);
+        H5Pset_deflate(h_prop_vel, gzip_level);
+        H5Pset_deflate(h_prop_mass, gzip_level);
+        H5Pset_deflate(h_prop_radius, gzip_level);
+    }
 
     /* For each halo type, prepare the group and data sets */
     for (int t = 0; t < num_types; t++) {
