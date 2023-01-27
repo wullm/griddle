@@ -272,31 +272,31 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     H5Pset_chunk(h_prop_radius, srank, schunk);
 
     /* Set lossy filter (keep "digits" digits after the decimal point) */
-    const int digits_pos = pars->SnipshotPositionDScaleCompression;
-    const int digits_vel = pars->SnipshotVelocityDScaleCompression;
-    const int digits_mass = pars->CatalogueMassDScaleCompression;
-    const int digits_radius = pars->CatalogueRadiusDScaleCompression;
-    if (digits_pos > 0)
-        H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
-    if (digits_vel > 0)
-        H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
-    if (digits_mass > 0)
-        H5Pset_scaleoffset(h_prop_mass, H5Z_SO_FLOAT_DSCALE, digits_mass);
-    if (digits_radius > 0)
-        H5Pset_scaleoffset(h_prop_radius, H5Z_SO_FLOAT_DSCALE, digits_radius);
-
-    /* Set shuffle and lossless compression filters (GZIP level 4) */
-    const int gzip_level = pars->SnipshotZipCompressionLevel;
-    if (gzip_level > 0) {
-        H5Pset_shuffle(h_prop_pos);
-        H5Pset_shuffle(h_prop_vel);
-        H5Pset_shuffle(h_prop_mass);
-        H5Pset_shuffle(h_prop_radius);
-        H5Pset_deflate(h_prop_pos, gzip_level);
-        H5Pset_deflate(h_prop_vel, gzip_level);
-        H5Pset_deflate(h_prop_mass, gzip_level);
-        H5Pset_deflate(h_prop_radius, gzip_level);
-    }
+    // const int digits_pos = pars->SnipshotPositionDScaleCompression;
+    // const int digits_vel = pars->SnipshotVelocityDScaleCompression;
+    // const int digits_mass = pars->CatalogueMassDScaleCompression;
+    // const int digits_radius = pars->CatalogueRadiusDScaleCompression;
+    // if (digits_pos > 0)
+    //     H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
+    // if (digits_vel > 0)
+    //     H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
+    // if (digits_mass > 0)
+    //     H5Pset_scaleoffset(h_prop_mass, H5Z_SO_FLOAT_DSCALE, digits_mass);
+    // if (digits_radius > 0)
+    //     H5Pset_scaleoffset(h_prop_radius, H5Z_SO_FLOAT_DSCALE, digits_radius);
+    // 
+    // /* Set shuffle and lossless compression filters (GZIP level 4) */
+    // const int gzip_level = pars->SnipshotZipCompressionLevel;
+    // if (gzip_level > 0) {
+    //     H5Pset_shuffle(h_prop_pos);
+    //     H5Pset_shuffle(h_prop_vel);
+    //     H5Pset_shuffle(h_prop_mass);
+    //     H5Pset_shuffle(h_prop_radius);
+    //     H5Pset_deflate(h_prop_pos, gzip_level);
+    //     H5Pset_deflate(h_prop_vel, gzip_level);
+    //     H5Pset_deflate(h_prop_mass, gzip_level);
+    //     H5Pset_deflate(h_prop_radius, gzip_level);
+    // }
 
     /* For each halo type, prepare the group and data sets */
     for (int t = 0; t < num_types; t++) {
@@ -448,8 +448,9 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     h_grp = H5Gopen(h_out_file, ExportNames[0], H5P_DEFAULT);
 
     /* Property list for collective MPI write */
-    hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
-    H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    // hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
+    // H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    hid_t prop_write = H5P_DEFAULT;
 
     /* Write halo id data (scalar) */
     h_data = H5Dopen(h_grp, "ID", H5P_DEFAULT);
@@ -488,7 +489,7 @@ int exportCatalogue(const struct params *pars, const struct units *us,
     free(masses);
 
     /* Close the property list and group */
-    H5Pclose(prop_write);
+    // H5Pclose(prop_write);
     H5Gclose(h_grp);
 
     /* Close the file */
@@ -640,8 +641,9 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     hid_t h_grp = H5Gopen(h_out_file, ExportName, H5P_DEFAULT);
 
     /* Property list for collective MPI write */
-    hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
-    H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    // hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
+    // H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    hid_t prop_write = H5P_DEFAULT;
 
     /* Write halo id data (scalar) */
     hid_t h_data = H5Dopen(h_grp, "ID", H5P_DEFAULT);
@@ -758,7 +760,7 @@ int exportSOCatalogue(const struct params *pars, const struct units *us,
     free(nparts_nu);
 
     /* Close the property list and group */
-    H5Pclose(prop_write);
+    // H5Pclose(prop_write);
     H5Gclose(h_grp);
 
     /* Close the file */

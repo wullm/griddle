@@ -394,22 +394,22 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     hid_t h_prop_vel = H5Pcreate(H5P_DATASET_CREATE);
     H5Pset_chunk(h_prop_vel, vrank, vchunk);
 
-    /* Set lossy filter (keep "digits" digits after the decimal point) */
-    const int digits_pos = pars->SnipshotPositionDScaleCompression;
-    const int digits_vel = pars->SnipshotVelocityDScaleCompression;
-    if (digits_pos > 0)
-        H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
-    if (digits_vel > 0)
-        H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
-
-    /* Set shuffle and lossless compression filters (GZIP level 4) */
-    const int gzip_level = pars->SnipshotZipCompressionLevel;
-    if (gzip_level > 0) {
-        H5Pset_shuffle(h_prop_pos);
-        H5Pset_shuffle(h_prop_vel);
-        H5Pset_deflate(h_prop_pos, gzip_level);
-        H5Pset_deflate(h_prop_vel, gzip_level);
-    }
+    // /* Set lossy filter (keep "digits" digits after the decimal point) */
+    // const int digits_pos = pars->SnipshotPositionDScaleCompression;
+    // const int digits_vel = pars->SnipshotVelocityDScaleCompression;
+    // if (digits_pos > 0)
+    //     H5Pset_scaleoffset(h_prop_pos, H5Z_SO_FLOAT_DSCALE, digits_pos);
+    // if (digits_vel > 0)
+    //     H5Pset_scaleoffset(h_prop_vel, H5Z_SO_FLOAT_DSCALE, digits_vel);
+    // 
+    // /* Set shuffle and lossless compression filters (GZIP level 4) */
+    // const int gzip_level = pars->SnipshotZipCompressionLevel;
+    // if (gzip_level > 0) {
+    //     H5Pset_shuffle(h_prop_pos);
+    //     H5Pset_shuffle(h_prop_vel);
+    //     H5Pset_deflate(h_prop_pos, gzip_level);
+    //     H5Pset_deflate(h_prop_vel, gzip_level);
+    // }
 
     /* Create vector datapsace for chunks of data */
     const hsize_t ch_vdims[2] = {particles_total, 3};
@@ -532,8 +532,9 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     H5Sselect_hyperslab(h_vspace, H5S_SELECT_SET, vstart, NULL, ch_vdims, NULL);
 
     /* Property list for collective MPI write */
-    hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
-    H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    // hid_t prop_write = H5Pcreate(H5P_DATASET_XFER);
+    // H5Pset_dxpl_mpio(prop_write, H5FD_MPIO_COLLECTIVE);
+    hid_t prop_write = H5P_DEFAULT;
 
     /* Open the particle group in the output file */
     hid_t h_grp = H5Gopen(h_out_file, "PartType1", H5P_DEFAULT);
@@ -551,7 +552,7 @@ int exportSnipshot(const struct params *pars, const struct units *us,
     free(vels);
 
     /* Close the property list and group */
-    H5Pclose(prop_write);
+    // H5Pclose(prop_write);
     H5Gclose(h_grp);
     
     /* Open the halo group in the output file */
