@@ -159,10 +159,14 @@ int compute_potential(struct distributed_grid *dgrid,
     /* Carry out the forward Fourier transform */
     // fft_r2c_dg(dgrid);
 
-    /* Execute the Fourier transform */
-    fft_execute(r2c);
+#if defined(DOUBLE_MASS_SINGLE_FFTW)
+    /* If the mass grid uses double precision, but we wish to use
+     * single-precision FFTs, convert the array to single precision */
+    map_double_to_single(dgrid);
+#endif
 
-    timer_stop(rank, &run_timer, "FFT (1) took ");
+    /* Execute the Fourier transform */
+    // fft_execute(r2c);
 
     /* The local slice of the real array is NX * N * (2*(N/2 + 1)). The x-index
      * runs over [X0, X0 + NX]. After the FFT, the complex is array is transposed
@@ -170,6 +174,35 @@ int compute_potential(struct distributed_grid *dgrid,
      * [Y0, Y0 + NY]. Note that the complex array has half the size. */
     const long int N = dgrid->N;
     const long int Nz_half = N/2 + 1;
+
+
+#ifdef USE_IN_PLACE_FFTS
+    int fftws_flag_in = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_IN;
+    int fftws_flag_out = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_OUT;
+#else
+    int fftws_flag_in = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_IN | FFTW_DESTROY_INPUT;
+    int fftws_flag_out = PREPARE_FLAG | FFTW_MPI_TRANSPOSED_OUT | FFTW_DESTROY_INPUT;
+#endif
+#if defined(SINGLE_PRECISION_FFTW)
+    FourierPlanType r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(N, N, N, dgrid->box, dgrid->fbox, MPI_COMM_WORLD, fftws_flag_out);
+    FourierPlanType c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(N, N, N, dgrid->fbox, dgrid->box, MPI_COMM_WORLD, fftws_flag_in);
+#elif defined(DOUBLE_MASS_SINGLE_FFTW)
+    fftwf_plan r2c_mpi = fftwf_mpi_plan_dft_r2c_3d(N, N, N, (float*) dgrid->box, (fftwf_complex*) dgrid->fbox, MPI_COMM_WORLD, fftws_flag_out);
+    fftwf_plan c2r_mpi = fftwf_mpi_plan_dft_c2r_3d(N, N, N, (fftwf_complex*) dgrid->fbox, (float*) dgrid->box, MPI_COMM_WORLD, fftws_flag_in);
+#else
+    FourierPlanType r2c_mpi = fftw_mpi_plan_dft_r2c_3d(N, N, N, dgrid->box, dgrid->fbox, MPI_COMM_WORLD, fftws_flag_out);
+    FourierPlanType c2r_mpi = fftw_mpi_plan_dft_c2r_3d(N, N, N, dgrid->fbox, dgrid->box, MPI_COMM_WORLD, fftws_flag_in);
+#endif
+
+#if defined(SINGLE_PRECISION_FFTW) || defined(DOUBLE_MASS_SINGLE_FFTW)
+    fftwf_execute(r2c_mpi);
+    fftwf_destroy_plan(r2c_mpi);
+#else
+    fftw_execute(r2c_mpi);
+    fftw_destroy_plan(r2c_mpi);
+#endif
+
+    timer_stop(rank, &run_timer, "FFT (1) took ");
 
     /* Get the local portion of the transposed array */
     long int NX, X0, NY, Y0;
@@ -189,7 +222,13 @@ int compute_potential(struct distributed_grid *dgrid,
     const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
     const double fft_factor = 1.0 / ((double) N * N * N);
     const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
+#if defined(SINGLE_PRECISION_FFTW)
     GridComplexType *fbox = dgrid->fbox;
+#elif defined(DOUBLE_MASS_SINGLE_FFTW)
+    GridComplexType *fbox = (fftwf_complex*) dgrid->fbox;
+#else
+    GridComplexType *fbox = dgrid->fbox;
+#endif
 
     /* Make look-up tables for the cosines and inverse sincs */
     double *cos_tab = malloc(N * sizeof(double));
@@ -242,9 +281,22 @@ int compute_potential(struct distributed_grid *dgrid,
     // fft_c2r_dg(dgrid);
 
     /* Execute the Fourier transform */
-    fft_execute(c2r);
+    // fft_execute(c2r);
+
+#if defined(SINGLE_PRECISION_FFTW) || defined(DOUBLE_MASS_SINGLE_FFTW)
+    fftwf_execute(c2r_mpi);
+    fftwf_destroy_plan(c2r_mpi);
+#else
+    fftw_execute(c2r_mpi);
+    fftw_destroy_plan(c2r_mpi);
+#endif
 
     timer_stop(rank, &run_timer, "FFT (2) took ");
+
+#if defined(DOUBLE_MASS_SINGLE_FFTW)
+    /* Once we are done with the Fourier transforms, map back to double precision */
+    map_single_to_double(dgrid);
+#endif
 
     return 0;
 }

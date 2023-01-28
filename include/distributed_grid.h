@@ -86,6 +86,9 @@ int free_local_buffers(struct distributed_grid *dg);
 int create_local_buffers(struct distributed_grid *dg);
 int add_local_buffers(struct distributed_grid *dg);
 
+int map_double_to_single(struct distributed_grid *dg);
+int map_single_to_double(struct distributed_grid *dg);
+
 static inline GridFloatType* point_row_major_dg(int i, int j, int k, const struct distributed_grid *dg) {
     /* Wrap global coordinates */
     i = wrap(i,dg->N);

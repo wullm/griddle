@@ -103,6 +103,26 @@ int alloc_local_grid_with_buffers(struct distributed_grid *dg, int N, double box
     return 0;
 }
 
+/* Map the local portion of the real grid from double precision to
+ * single precision, using half the memory */
+int map_double_to_single(struct distributed_grid *dg) {
+    float *float_box = (float*) dg->box;
+    for (long int i = 0; i < dg->local_real_size; i++) {
+        float_box[i] = dg->box[i];
+    }
+    return 0;
+}
+
+/* Map the local portion of the real grid from single precision to double
+ * precision. This requires running backwards to  avoid overwriting. */
+int map_single_to_double(struct distributed_grid *dg) {
+    float *float_box = (float*) dg->box;
+    for (long int i = dg->local_real_size; i >= 0; i--) {
+        dg->box[i] = float_box[i];
+    }
+    return 0;
+}
+
 int free_local_grid(struct distributed_grid *dg) {
     free_local_real_grid(dg);
     free_local_complex_grid(dg);

@@ -21,7 +21,8 @@
 #define CONFIG_H
 
 /* Grid and Fourier transform options */
-#define SINGLE_PRECISION_FFTW           /* Use single or double precision for the grids  */
+// #define SINGLE_PRECISION_FFTW           /* Use single or double precision for the grids  */
+#define DOUBLE_MASS_SINGLE_FFTW         /* Use double precision in the mass accumulation stage, but single precision FTs */
 #define MEASURED_FFTW_PLANS             /* Use measured FFTW plans */
 #define USE_IN_PLACE_FFTS               /* Use in-place Fourier transforms */
 
