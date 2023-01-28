@@ -117,7 +117,7 @@ int map_double_to_single(struct distributed_grid *dg) {
  * precision. This requires running backwards to  avoid overwriting. */
 int map_single_to_double(struct distributed_grid *dg) {
     float *float_box = (float*) dg->box;
-    for (long int i = dg->local_real_size; i >= 0; i--) {
+    for (long int i = dg->local_real_size - 1; i >= 0; i--) {
         dg->box[i] = float_box[i];
     }
     return 0;
