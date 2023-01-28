@@ -357,7 +357,7 @@ int main(int argc, char *argv[]) {
         /* Create the file */
         if (rank == 0) {
             FILE *f = fopen(fname_nu_info, "w");
-            fprintf(f, "# Step a z <w> <w^2> <q> number\n");
+            fprintf(f, "# Step a z <w> <w^2> <q> <q^2> number\n");
             fclose(f);
         }
 
@@ -599,6 +599,7 @@ int main(int argc, char *argv[]) {
         double weights_sum_local = 0.;
         double weights_sq_sum_local = 0.;
         double neutrino_q_sum_local = 0.;
+        double neutrino_q_sq_sum_local = 0.;
 #endif
 
         message(rank, "Step %d at z = %g\n", ITER, z);
@@ -679,6 +680,7 @@ int main(int argc, char *argv[]) {
                 weights_sum_local += w;
                 weights_sq_sum_local += w * w;
                 neutrino_q_sum_local += q;
+                neutrino_q_sq_sum_local += q * q;
             }
         }
 
@@ -689,13 +691,14 @@ int main(int argc, char *argv[]) {
         if (N_nu > 0) {
             /* Collect neutrino weight information from all ranks */
             long int neutrino_count_global;
-            double local_quantities[3] = {weights_sum_local,
+            double local_quantities[4] = {weights_sum_local,
                                           weights_sq_sum_local,
-                                          neutrino_q_sum_local};
-            double global_quantities[3];
+                                          neutrino_q_sum_local,
+                                          neutrino_q_sq_sum_local};
+            double global_quantities[4];
             MPI_Reduce(&neutrino_count_local, &neutrino_count_global, 1,
                        MPI_LONG, MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
-            MPI_Reduce(local_quantities, global_quantities, 3, MPI_DOUBLE,
+            MPI_Reduce(local_quantities, global_quantities, 4, MPI_DOUBLE,
                        MPI_SUM, /* root = */ 0, MPI_COMM_WORLD);
 
             /* Print it to a file */
@@ -703,11 +706,12 @@ int main(int argc, char *argv[]) {
                 double weights_mean = global_quantities[0] / neutrino_count_global;
                 double weights_sq_mean = global_quantities[1] / neutrino_count_global;
                 double neutrino_q_mean = global_quantities[2] / neutrino_count_global;
+                double neutrino_q_sq_mean = global_quantities[3] / neutrino_count_global;
 
                 neutrino_weights_sq_mean = weights_sq_mean;
 
                 FILE *f = fopen(fname_nu_info, "a");
-                fprintf(f, "%d %g %g %g %g %g %ld\n", ITER, a, z, weights_mean, weights_sq_mean, neutrino_q_mean, neutrino_count_global);
+                fprintf(f, "%d %g %g %g %g %g %g %ld\n", ITER, a, z, weights_mean, weights_sq_mean, neutrino_q_mean, neutrino_q_sq_mean, neutrino_count_global);
                 fclose(f);
             }
 
