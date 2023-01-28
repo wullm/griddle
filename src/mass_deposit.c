@@ -225,7 +225,7 @@ int compute_potential(struct distributed_grid *dgrid,
 #if defined(SINGLE_PRECISION_FFTW)
     GridComplexType *fbox = dgrid->fbox;
 #elif defined(DOUBLE_MASS_SINGLE_FFTW)
-    GridComplexType *fbox = (fftwf_complex*) dgrid->fbox;
+    fftwf_complex *fbox = (fftwf_complex*) dgrid->fbox;
 #else
     GridComplexType *fbox = dgrid->fbox;
 #endif
