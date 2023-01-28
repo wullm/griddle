@@ -24,6 +24,7 @@
 #define SINGLE_PRECISION_FFTW           /* Use single or double precision for the grids  */
 #define MEASURED_FFTW_PLANS             /* Use measured FFTW plans */
 #define USE_IN_PLACE_FFTS               /* Use in-place Fourier transforms */
+#define USE_CLASSIC_POISSON_KERNEL      /* Use the classic -1/k^2 Poisson kernel */
 
 /* Particle type options */
 #define SINGLE_PRECISION_IDS            /* Use single or double precision particle IDs */

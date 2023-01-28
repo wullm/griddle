@@ -188,15 +188,24 @@ int compute_potential(struct distributed_grid *dgrid,
     const double grid_fac = boxlen / N;
     const double gravity_factor = -4.0 * M_PI * pcs->GravityG;
     const double fft_factor = 1.0 / ((double) N * N * N);
+#ifdef USE_CLASSIC_POISSON_KERNEL
+    const double overall_fac = gravity_factor * fft_factor;
+#else
     const double overall_fac = 0.5 * grid_fac * grid_fac * gravity_factor * fft_factor;
+#endif
     GridComplexType *fbox = dgrid->fbox;
 
-    /* Make look-up tables for the cosines and inverse sincs */
-    double *cos_tab = malloc(N * sizeof(double));
+    /* Make look-up tables for the inverse Poisson and CIC kernels */
+    double *pois_tab = malloc(N * sizeof(double));
     double *sinc_tab = malloc(N * sizeof(double));
     for (int x = 0; x < N; x++) {
         double kx = (x > N/2) ? (x - N) * dk : x * dk;
-        cos_tab[x] = cos(kx * grid_fac);
+
+#ifdef USE_CLASSIC_POISSON_KERNEL
+        pois_tab[x] = - kx * kx;
+#else
+        pois_tab[x] = cos(kx * grid_fac);
+#endif
 
         double inv_sinc = 1.0 / sinc(0.5 * kx * grid_fac);
         double inv_sinc2 = inv_sinc * inv_sinc;
@@ -207,27 +216,31 @@ int compute_potential(struct distributed_grid *dgrid,
 
     /* Apply the inverse Poisson and CIC kernels (note that x and y are now
      * transposed) */
-    double cx, cy, cz, ctot;
+    double px, py, pz, ptot;
     double sx, sy, sz, stot;
     for (int y = Y0; y < Y0 + NY; y++) {
-        cy = cos_tab[y]; // Poisson
+        py = pois_tab[y]; // Poisson
         sy = sinc_tab[y]; // CIC
 
         for (int x = 0; x < N; x++) {
-            cx = cos_tab[x]; // Poisson
+            px = pois_tab[x]; // Poisson
             sx = sinc_tab[x]; // CIC
 
             for (int z = 0; z <= N / 2; z++) {
-                cz = cos_tab[z]; // Poisson
+                pz = pois_tab[z]; // Poisson
                 sz = sinc_tab[z]; // CIC
 
-                ctot = cx + cy + cz; // Poisson
+                ptot = px + py + pz; // Poisson
                 stot = sx * sy * sz; // CIC
 
-                if (ctot != 3.0) {
-                    double kern = overall_fac / (ctot - 3.0) * stot;
-                    fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
-                }
+                double kern = 0.;
+#ifdef USE_CLASSIC_POISSON_KERNEL
+                if (ptot != 0.0) kern = overall_fac / ptot * stot;
+#else
+                if (ptot != 3.0) kern = overall_fac / (ptot - 3.0) * stot;
+#endif
+
+                fbox[row_major_half_transposed(x, y - Y0, z, N, Nz_half)] *= kern;
             }
         }
     }
@@ -235,7 +248,7 @@ int compute_potential(struct distributed_grid *dgrid,
     timer_stop(rank, &run_timer, "Inverse poisson kernel took ");
 
     /* Free the look-up tables */
-    free(cos_tab);
+    free(pois_tab);
     free(sinc_tab);
 
     /* Carry out the backward Fourier transform */
