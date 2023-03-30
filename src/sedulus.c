@@ -442,6 +442,10 @@ int main(int argc, char *argv[]) {
             /* Re-create the FFT plans */
             fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
             timer_stop(rank, &powspec_timer, "Creating Fourier structures took ");
+
+            /* Exchange particles to accommodate the new grid size */
+            exchange_particles(particles, boxlen, N_PS, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+            timer_stop(rank, &powspec_timer, "Exchanging particles took ");
         }
 
         for (int i = 0; i < powspec_types_num; i++) {
@@ -485,6 +489,11 @@ int main(int argc, char *argv[]) {
             /* Re-create the FFT plans */
             fft_prepare_mpi_plans(&r2c_mpi, &c2r_mpi, &mass);
             timer_stop(rank, &powspec_timer, "Recreating Fourier structures took ");
+
+            /* Exchange particles to accommodate the new grid size */
+            exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+            timer_stop(rank, &powspec_timer, "Exchanging particles took ");
+
             message(rank, "\n");
         }
     }
@@ -770,7 +779,7 @@ int main(int argc, char *argv[]) {
                                   output_list_power[j], grid_type_names[powspec_types[i]]);
 
                     /* Exchange particles before attempting a mass deposition */
-                    exchange_particles(particles, boxlen, M, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
+                    exchange_particles(particles, boxlen, N_PS, &local_partnum, max_partnum, /* iteration = */ 0, 0, 0, 0, 0);
                     timer_stop(rank, &run_timer, "Exchanging particles took ");
 
                     /* Initiate mass deposition */
